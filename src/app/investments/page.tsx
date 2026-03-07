@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
+import SideNav from "@/components/side-nav";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -371,7 +372,9 @@ export default function InvestmentsPage() {
   };
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2">
+    <>
+      <SideNav />
+      <main className="mx-auto grid max-w-6xl gap-6 p-6 md:pl-60 md:grid-cols-2">
       <section className="rounded-lg border bg-white p-4">
         <h1 className="mb-4 text-2xl font-semibold">Portfolio Tracker</h1>
         {toast ? (
@@ -547,6 +550,7 @@ export default function InvestmentsPage() {
           </div>
         ) : null}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

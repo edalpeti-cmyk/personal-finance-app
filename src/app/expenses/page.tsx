@@ -13,6 +13,7 @@ import {
 import { Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
+import SideNav from "@/components/side-nav";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -259,7 +260,9 @@ export default function ExpensesPage() {
   };
 
   return (
-    <main className="mx-auto grid max-w-5xl gap-6 p-6 md:grid-cols-2">
+    <>
+      <SideNav />
+      <main className="mx-auto grid max-w-5xl gap-6 p-6 md:pl-60 md:grid-cols-2">
       <section className="rounded-lg border bg-white p-4">
         <h1 className="mb-4 text-2xl font-semibold">Gastos</h1>
         {toast ? (
@@ -415,6 +418,7 @@ export default function ExpensesPage() {
           </div>
         ) : null}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

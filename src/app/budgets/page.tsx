@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import SideNav from "@/components/side-nav";
 
 type BudgetRow = {
   id: string;
@@ -443,7 +444,9 @@ export default function BudgetsPage() {
   };
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2">
+    <>
+      <SideNav />
+      <main className="mx-auto grid max-w-6xl gap-6 p-6 md:pl-60 md:grid-cols-2">
       <section className="rounded-lg border bg-white p-4">
         <h1 className="mb-4 text-2xl font-semibold">Presupuesto mensual</h1>
 
@@ -707,6 +710,7 @@ export default function BudgetsPage() {
           </ul>
         )}
       </section>
-    </main>
+      </main>
+    </>
   );
 }

@@ -11,6 +11,7 @@ import {
   Legend
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import SideNav from "@/components/side-nav";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -173,7 +174,9 @@ export default function FirePage() {
   };
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2">
+    <>
+      <SideNav />
+      <main className="mx-auto grid max-w-6xl gap-6 p-6 md:pl-60 md:grid-cols-2">
       <section className="rounded-lg border bg-white p-4">
         <h1 className="mb-4 text-2xl font-semibold">Calculadora FIRE</h1>
         <p className="mb-4 text-sm text-slate-600">capital necesario = gastos anuales / 0.04</p>
@@ -304,6 +307,7 @@ export default function FirePage() {
           </div>
         )}
       </section>
-    </main>
+      </main>
+    </>
   );
 }
