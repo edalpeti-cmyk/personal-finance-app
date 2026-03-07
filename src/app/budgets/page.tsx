@@ -17,6 +17,8 @@ type ExpenseRow = {
 
 type IncomeRow = {
   amount: number;
+  source: string;
+  income_date: string;
 };
 
 type BudgetWithActual = {
@@ -111,6 +113,7 @@ export default function BudgetsPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [incomeSaving, setIncomeSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -119,9 +122,14 @@ export default function BudgetsPage() {
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
 
+  const [incomeSource, setIncomeSource] = useState("");
+  const [incomeAmount, setIncomeAmount] = useState("");
+  const [incomeDate, setIncomeDate] = useState(new Date().toISOString().slice(0, 10));
+
   const [rows, setRows] = useState<BudgetWithActual[]>([]);
   const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
   const [unbudgetedExpenses, setUnbudgetedExpenses] = useState<Array<{ category: string; actual: number }>>([]);
+  const [currentIncomeEntries, setCurrentIncomeEntries] = useState<IncomeRow[]>([]);
   const [incomeSummary, setIncomeSummary] = useState<IncomeSavingsSummary>({
     currentIncome: 0,
     currentExpenses: 0,
@@ -156,10 +164,11 @@ export default function BudgetsPage() {
             .lte("expense_date", currentRange.end),
           supabase
             .from("income")
-            .select("amount")
+            .select("amount, source, income_date")
             .eq("user_id", uid)
             .gte("income_date", currentRange.start)
             .lte("income_date", currentRange.end)
+            .order("income_date", { ascending: false })
         ]),
         Promise.all([
           supabase
@@ -209,7 +218,11 @@ export default function BudgetsPage() {
       const currentExpenseRows = (currentExpenses.data as ExpenseRow[]) ?? [];
       const prevExpenseRows = (previousExpenses.data as ExpenseRow[]) ?? [];
       const currentIncomeRows = (currentIncome.data as IncomeRow[]) ?? [];
-      const prevIncomeRows = (previousIncome.data as IncomeRow[]) ?? [];
+      const prevIncomeRows = ((previousIncome.data as Array<{ amount: number }>) ?? []).map((r) => ({
+        amount: r.amount,
+        source: "",
+        income_date: ""
+      }));
 
       const builtCurrent = buildMonthlyRows((currentBudgets.data as BudgetRow[]) ?? [], currentExpenseRows);
       const builtPrevious = buildMonthlyRows((previousBudgets.data as BudgetRow[]) ?? [], prevExpenseRows);
@@ -226,6 +239,7 @@ export default function BudgetsPage() {
       setRows(builtCurrent.rows);
       setUnbudgetedExpenses(builtCurrent.unbudgeted);
       setPrevRows(builtPrevious.rows);
+      setCurrentIncomeEntries(currentIncomeRows);
       setIncomeSummary({
         currentIncome: currentIncomeTotal,
         currentExpenses: currentExpenseTotal,
@@ -323,6 +337,59 @@ export default function BudgetsPage() {
     window.setTimeout(() => setToast(null), 2500);
   };
 
+  const handleSaveIncome = async (e: FormEvent) => {
+    e.preventDefault();
+    setToast(null);
+
+    if (!userId) {
+      setToast({ type: "error", text: "Debes iniciar sesion para guardar ingresos." });
+      return;
+    }
+
+    const source = incomeSource.trim();
+    const parsedAmount = Number(incomeAmount);
+
+    if (source.length < 2 || source.length > 80) {
+      setToast({ type: "error", text: "La fuente del ingreso debe tener entre 2 y 80 caracteres." });
+      return;
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setToast({ type: "error", text: "El importe del ingreso debe ser mayor que 0." });
+      return;
+    }
+
+    if (incomeDate.slice(0, 7) !== selectedMonth) {
+      setToast({ type: "error", text: "La fecha del ingreso debe pertenecer al mes seleccionado." });
+      return;
+    }
+
+    setIncomeSaving(true);
+
+    const { error } = await supabase.from("income").insert({
+      user_id: userId,
+      source,
+      amount: parsedAmount,
+      income_date: incomeDate,
+      description: null,
+      recurring: false
+    });
+
+    if (error) {
+      setToast({ type: "error", text: error.message });
+      setIncomeSaving(false);
+      return;
+    }
+
+    setIncomeSource("");
+    setIncomeAmount("");
+    setToast({ type: "success", text: "Ingreso guardado correctamente." });
+    window.setTimeout(() => setToast(null), 3000);
+
+    await loadData(userId, selectedMonth);
+    setIncomeSaving(false);
+  };
+
   const handleSaveBudget = async (e: FormEvent) => {
     e.preventDefault();
     setToast(null);
@@ -386,7 +453,10 @@ export default function BudgetsPage() {
             className="rounded border border-slate-300 p-2"
             type="month"
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            onChange={(e) => {
+              setSelectedMonth(e.target.value);
+              setIncomeDate(`${e.target.value}-01`);
+            }}
           />
         </label>
 
@@ -454,6 +524,39 @@ export default function BudgetsPage() {
 
       <section className="rounded-lg border bg-white p-4 md:col-span-2">
         <h2 className="mb-4 text-xl font-semibold">Ingresos y ahorro ({selectedMonth})</h2>
+
+        <form onSubmit={handleSaveIncome} className="mb-4 grid gap-3 md:grid-cols-4" noValidate>
+          <input
+            className="rounded border border-slate-300 p-2"
+            type="text"
+            placeholder="Fuente de ingreso"
+            value={incomeSource}
+            onChange={(e) => setIncomeSource(e.target.value)}
+            maxLength={80}
+            required
+          />
+          <input
+            className="rounded border border-slate-300 p-2"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Importe"
+            value={incomeAmount}
+            onChange={(e) => setIncomeAmount(e.target.value)}
+            required
+          />
+          <input
+            className="rounded border border-slate-300 p-2"
+            type="date"
+            value={incomeDate}
+            onChange={(e) => setIncomeDate(e.target.value)}
+            required
+          />
+          <button className="rounded bg-emerald-700 px-3 py-2 text-white disabled:opacity-50" disabled={incomeSaving || loading} type="submit">
+            {incomeSaving ? "Guardando..." : "Guardar ingreso"}
+          </button>
+        </form>
+
         <div className="grid gap-2 text-sm md:grid-cols-2">
           <p>
             <strong>Ingresos del mes:</strong> {incomeSummary.currentIncome.toFixed(2)} EUR
@@ -475,6 +578,35 @@ export default function BudgetsPage() {
           <p>
             <strong>Delta ahorro vs mes anterior:</strong> {incomeComparison.savingsDelta.toFixed(2)} EUR
           </p>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50 text-left">
+                <th className="p-2">Fecha</th>
+                <th className="p-2">Fuente</th>
+                <th className="p-2 text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentIncomeEntries.length === 0 ? (
+                <tr>
+                  <td className="p-2 text-slate-500" colSpan={3}>
+                    Aun no hay ingresos registrados para este mes.
+                  </td>
+                </tr>
+              ) : (
+                currentIncomeEntries.map((entry, idx) => (
+                  <tr key={`${entry.income_date}-${entry.source}-${idx}`} className="border-b">
+                    <td className="p-2">{entry.income_date}</td>
+                    <td className="p-2">{entry.source}</td>
+                    <td className="p-2 text-right">{Number(entry.amount).toFixed(2)} EUR</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
