@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
+import { ensureActiveUser } from "@/lib/supabase/auth-client";
 import SideNav from "@/components/side-nav";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -105,14 +106,14 @@ export default function InvestmentsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session?.user) {
+      const activeUser = await ensureActiveUser(supabase);
+      if (!activeUser) {
         setMessage("No hay sesion activa. Inicia sesion para gestionar inversiones.");
         setLoading(false);
         return;
       }
 
-      const uid = sessionData.session.user.id;
+      const uid = activeUser.id;
       setUserId(uid);
       await loadInvestments(uid);
       setLoading(false);
@@ -555,3 +556,4 @@ export default function InvestmentsPage() {
     </>
   );
 }
+

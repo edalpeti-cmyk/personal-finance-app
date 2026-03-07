@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ensureActiveUser } from "@/lib/supabase/auth-client";
 import SideNav from "@/components/side-nav";
 
 type ExpenseRow = { amount: number; expense_date: string };
@@ -91,14 +92,14 @@ export default function DashboardPage() {
       setLoading(true);
       setMessage(null);
 
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session?.user) {
+      const activeUser = await ensureActiveUser(supabase);
+      if (!activeUser) {
         setMessage("No hay sesion activa. Inicia sesion para ver el dashboard.");
         setLoading(false);
         return;
       }
 
-      const userId = sessionData.session.user.id;
+      const userId = activeUser.id;
 
       const [{ data: expenses, error: expensesError }, { data: income, error: incomeError }, { data: investments, error: invError }] =
         await Promise.all([
@@ -271,3 +272,4 @@ export default function DashboardPage() {
     </>
   );
 }
+

@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
+import { ensureActiveUser } from "@/lib/supabase/auth-client";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
 import SideNav from "@/components/side-nav";
 
@@ -87,14 +88,14 @@ export default function ExpensesPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session?.user) {
+      const activeUser = await ensureActiveUser(supabase);
+      if (!activeUser) {
         setMessage("No hay sesion activa. Inicia sesion para gestionar gastos.");
         setLoading(false);
         return;
       }
 
-      const uid = sessionData.session.user.id;
+      const uid = activeUser.id;
       setUserId(uid);
       await loadExpenses(uid);
       setLoading(false);
@@ -423,3 +424,4 @@ export default function ExpensesPage() {
     </>
   );
 }
+

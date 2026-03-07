@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ensureActiveUser } from "@/lib/supabase/auth-client";
 import SideNav from "@/components/side-nav";
 
 type BudgetRow = {
@@ -257,14 +258,14 @@ export default function BudgetsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session?.user) {
+      const activeUser = await ensureActiveUser(supabase);
+      if (!activeUser) {
         setMessage("No hay sesion activa. Inicia sesion para gestionar presupuestos.");
         setLoading(false);
         return;
       }
 
-      const uid = sessionData.session.user.id;
+      const uid = activeUser.id;
       setUserId(uid);
       await loadData(uid, selectedMonth);
       setLoading(false);
@@ -715,3 +716,4 @@ export default function BudgetsPage() {
     </>
   );
 }
+
