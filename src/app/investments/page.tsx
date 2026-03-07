@@ -105,15 +105,16 @@ export default function InvestmentsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.user) {
         setMessage("No hay sesion activa. Inicia sesion para gestionar inversiones.");
         setLoading(false);
         return;
       }
 
-      setUserId(data.user.id);
-      await loadInvestments(data.user.id);
+      const uid = sessionData.session.user.id;
+      setUserId(uid);
+      await loadInvestments(uid);
       setLoading(false);
     };
 

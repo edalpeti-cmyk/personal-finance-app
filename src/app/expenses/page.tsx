@@ -87,15 +87,16 @@ export default function ExpensesPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.user) {
         setMessage("No hay sesion activa. Inicia sesion para gestionar gastos.");
         setLoading(false);
         return;
       }
 
-      setUserId(data.user.id);
-      await loadExpenses(data.user.id);
+      const uid = sessionData.session.user.id;
+      setUserId(uid);
+      await loadExpenses(uid);
       setLoading(false);
     };
 

@@ -257,15 +257,16 @@ export default function BudgetsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.user) {
         setMessage("No hay sesion activa. Inicia sesion para gestionar presupuestos.");
         setLoading(false);
         return;
       }
 
-      setUserId(data.user.id);
-      await loadData(data.user.id, selectedMonth);
+      const uid = sessionData.session.user.id;
+      setUserId(uid);
+      await loadData(uid, selectedMonth);
       setLoading(false);
     };
 

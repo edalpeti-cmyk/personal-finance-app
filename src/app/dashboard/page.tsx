@@ -91,14 +91,14 @@ export default function DashboardPage() {
       setLoading(true);
       setMessage(null);
 
-      const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session?.user) {
         setMessage("No hay sesion activa. Inicia sesion para ver el dashboard.");
         setLoading(false);
         return;
       }
 
-      const userId = authData.user.id;
+      const userId = sessionData.session.user.id;
 
       const [{ data: expenses, error: expensesError }, { data: income, error: incomeError }, { data: investments, error: invError }] =
         await Promise.all([
