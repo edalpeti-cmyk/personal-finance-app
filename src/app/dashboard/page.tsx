@@ -70,7 +70,11 @@ export default function DashboardPage() {
     setAiError(null);
 
     try {
-      const response = await fetch("/api/ai-insights", { method: "POST" });
+      const response = await fetch("/api/ai-insights", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store"
+      });
       if (!response.ok) {
         setAiError("No se pudieron generar insights en este momento.");
         setAiLoading(false);
@@ -272,4 +276,7 @@ export default function DashboardPage() {
     </>
   );
 }
+
+
+
 
