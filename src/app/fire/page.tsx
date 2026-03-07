@@ -22,7 +22,19 @@ type ProjectionPoint = {
   growth: number;
 };
 
+type FireFormErrors = {
+  annualExpenses?: string;
+  currentNetWorth?: string;
+  annualContribution?: string;
+  expectedReturn?: string;
+  currentAge?: string;
+};
+
 const MAX_YEARS = 60;
+
+function inputClass(hasError: boolean) {
+  return `rounded border p-2 ${hasError ? "border-red-600" : "border-slate-300"}`;
+}
 
 export default function FirePage() {
   const [annualExpenses, setAnnualExpenses] = useState("24000");
@@ -30,6 +42,44 @@ export default function FirePage() {
   const [annualContribution, setAnnualContribution] = useState("12000");
   const [expectedReturn, setExpectedReturn] = useState("6");
   const [currentAge, setCurrentAge] = useState("30");
+  const [errors, setErrors] = useState<FireFormErrors>({});
+
+  const validateField = (field: keyof FireFormErrors) => {
+    const next: FireFormErrors = {};
+
+    const expenses = Number(annualExpenses);
+    const netWorth = Number(currentNetWorth);
+    const contribution = Number(annualContribution);
+    const expected = Number(expectedReturn);
+    const age = Number(currentAge);
+
+    if (field === "annualExpenses") {
+      if (!Number.isFinite(expenses) || expenses <= 0) next.annualExpenses = "Introduce un gasto anual mayor que 0.";
+      else if (expenses > 10_000_000) next.annualExpenses = "Valor demasiado alto.";
+    }
+
+    if (field === "currentNetWorth") {
+      if (!Number.isFinite(netWorth) || netWorth < 0) next.currentNetWorth = "El patrimonio debe ser >= 0.";
+    }
+
+    if (field === "annualContribution") {
+      if (!Number.isFinite(contribution) || contribution < 0) next.annualContribution = "El ahorro anual debe ser >= 0.";
+    }
+
+    if (field === "expectedReturn") {
+      if (!Number.isFinite(expected) || expected < -20 || expected > 30) {
+        next.expectedReturn = "Usa un valor entre -20% y 30%.";
+      }
+    }
+
+    if (field === "currentAge") {
+      if (!Number.isFinite(age) || age < 18 || age > 100) {
+        next.currentAge = "Introduce una edad entre 18 y 100 anos.";
+      }
+    }
+
+    setErrors((prev) => ({ ...prev, [field]: next[field] }));
+  };
 
   const fireNumber = useMemo(() => {
     const expenses = Number(annualExpenses);
@@ -132,60 +182,70 @@ export default function FirePage() {
           <label className="grid gap-1 text-sm">
             Gastos anuales (EUR)
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.annualExpenses))}
               type="number"
               min="0"
               step="0.01"
               value={annualExpenses}
               onChange={(e) => setAnnualExpenses(e.target.value)}
+              onBlur={() => validateField("annualExpenses")}
             />
+            {errors.annualExpenses ? <span className="text-xs text-red-700">{errors.annualExpenses}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Patrimonio actual (EUR)
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.currentNetWorth))}
               type="number"
               min="0"
               step="0.01"
               value={currentNetWorth}
               onChange={(e) => setCurrentNetWorth(e.target.value)}
+              onBlur={() => validateField("currentNetWorth")}
             />
+            {errors.currentNetWorth ? <span className="text-xs text-red-700">{errors.currentNetWorth}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Ahorro/inversion anual (EUR)
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.annualContribution))}
               type="number"
               min="0"
               step="0.01"
               value={annualContribution}
               onChange={(e) => setAnnualContribution(e.target.value)}
+              onBlur={() => validateField("annualContribution")}
             />
+            {errors.annualContribution ? <span className="text-xs text-red-700">{errors.annualContribution}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Rentabilidad esperada anual (%)
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.expectedReturn))}
               type="number"
               step="0.1"
               value={expectedReturn}
               onChange={(e) => setExpectedReturn(e.target.value)}
+              onBlur={() => validateField("expectedReturn")}
             />
+            {errors.expectedReturn ? <span className="text-xs text-red-700">{errors.expectedReturn}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Edad actual
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.currentAge))}
               type="number"
               min="1"
               step="1"
               value={currentAge}
               onChange={(e) => setCurrentAge(e.target.value)}
+              onBlur={() => validateField("currentAge")}
             />
+            {errors.currentAge ? <span className="text-xs text-red-700">{errors.currentAge}</span> : null}
           </label>
         </div>
       </section>

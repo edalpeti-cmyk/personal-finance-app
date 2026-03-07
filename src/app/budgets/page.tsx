@@ -15,6 +15,10 @@ type ExpenseRow = {
   amount: number;
 };
 
+type IncomeRow = {
+  amount: number;
+};
+
 type BudgetWithActual = {
   id: string;
   category: string;
@@ -24,8 +28,27 @@ type BudgetWithActual = {
   spentPercent: number;
 };
 
+type IncomeSavingsSummary = {
+  currentIncome: number;
+  currentExpenses: number;
+  currentSavings: number;
+  currentSavingsRate: number | null;
+  prevIncome: number;
+  prevExpenses: number;
+  prevSavings: number;
+};
+
 function monthToDate(month: string) {
   return `${month}-01`;
+}
+
+function getPreviousMonth(month: string) {
+  const [year, monthRaw] = month.split("-").map(Number);
+  const current = new Date(year, monthRaw - 1, 1);
+  current.setMonth(current.getMonth() - 1);
+  const y = current.getFullYear();
+  const m = String(current.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
 }
 
 function monthDateRange(month: string) {
@@ -37,6 +60,50 @@ function monthDateRange(month: string) {
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10)
   };
+}
+
+function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[]) {
+  const expenseByCategory = new Map<string, number>();
+  for (const item of expenseRows) {
+    const key = item.category || "Sin categoria";
+    expenseByCategory.set(key, (expenseByCategory.get(key) ?? 0) + Number(item.amount));
+  }
+
+  const rows: BudgetWithActual[] = budgetRows.map((budget) => {
+    const actual = expenseByCategory.get(budget.category) ?? 0;
+    const remaining = Number(budget.budget_amount) - actual;
+    const spentPercent = Number(budget.budget_amount) > 0 ? (actual / Number(budget.budget_amount)) * 100 : 0;
+
+    return {
+      id: budget.id,
+      category: budget.category,
+      budget: Number(budget.budget_amount),
+      actual,
+      remaining,
+      spentPercent
+    };
+  });
+
+  const budgetCategories = new Set(budgetRows.map((b) => b.category));
+  const unbudgeted = Array.from(expenseByCategory.entries())
+    .filter(([cat]) => !budgetCategories.has(cat))
+    .map(([cat, actual]) => ({ category: cat, actual }))
+    .sort((a, b) => b.actual - a.actual);
+
+  return { rows, unbudgeted };
+}
+
+function toCsv(rows: BudgetWithActual[], month: string) {
+  const header = ["mes", "categoria", "presupuesto", "gasto_real", "restante", "consumo_pct"];
+  const data = rows.map((row) => [
+    month,
+    row.category,
+    row.budget.toFixed(2),
+    row.actual.toFixed(2),
+    row.remaining.toFixed(2),
+    row.spentPercent.toFixed(1)
+  ]);
+  return [header, ...data].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");
 }
 
 export default function BudgetsPage() {
@@ -53,65 +120,121 @@ export default function BudgetsPage() {
   const [amount, setAmount] = useState("");
 
   const [rows, setRows] = useState<BudgetWithActual[]>([]);
+  const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
   const [unbudgetedExpenses, setUnbudgetedExpenses] = useState<Array<{ category: string; actual: number }>>([]);
+  const [incomeSummary, setIncomeSummary] = useState<IncomeSavingsSummary>({
+    currentIncome: 0,
+    currentExpenses: 0,
+    currentSavings: 0,
+    currentSavingsRate: null,
+    prevIncome: 0,
+    prevExpenses: 0,
+    prevSavings: 0
+  });
 
   const loadData = useCallback(
     async (uid: string, month: string) => {
-      const monthDate = monthToDate(month);
-      const range = monthDateRange(month);
+      const currentMonthDate = monthToDate(month);
+      const currentRange = monthDateRange(month);
+      const prevMonth = getPreviousMonth(month);
+      const prevMonthDate = monthToDate(prevMonth);
+      const prevRange = monthDateRange(prevMonth);
 
-      const [{ data: budgets, error: budgetError }, { data: expenses, error: expenseError }] = await Promise.all([
-        supabase
-          .from("monthly_budgets")
-          .select("id, month, category, budget_amount")
-          .eq("user_id", uid)
-          .eq("month", monthDate)
-          .order("category", { ascending: true }),
-        supabase
-          .from("expenses")
-          .select("category, amount")
-          .eq("user_id", uid)
-          .gte("expense_date", range.start)
-          .lte("expense_date", range.end)
+      const [currentData, prevData] = await Promise.all([
+        Promise.all([
+          supabase
+            .from("monthly_budgets")
+            .select("id, month, category, budget_amount")
+            .eq("user_id", uid)
+            .eq("month", currentMonthDate)
+            .order("category", { ascending: true }),
+          supabase
+            .from("expenses")
+            .select("category, amount")
+            .eq("user_id", uid)
+            .gte("expense_date", currentRange.start)
+            .lte("expense_date", currentRange.end),
+          supabase
+            .from("income")
+            .select("amount")
+            .eq("user_id", uid)
+            .gte("income_date", currentRange.start)
+            .lte("income_date", currentRange.end)
+        ]),
+        Promise.all([
+          supabase
+            .from("monthly_budgets")
+            .select("id, month, category, budget_amount")
+            .eq("user_id", uid)
+            .eq("month", prevMonthDate)
+            .order("category", { ascending: true }),
+          supabase
+            .from("expenses")
+            .select("category, amount")
+            .eq("user_id", uid)
+            .gte("expense_date", prevRange.start)
+            .lte("expense_date", prevRange.end),
+          supabase
+            .from("income")
+            .select("amount")
+            .eq("user_id", uid)
+            .gte("income_date", prevRange.start)
+            .lte("income_date", prevRange.end)
+        ])
       ]);
 
-      if (budgetError || expenseError) {
-        setMessage(budgetError?.message || expenseError?.message || "No se pudo cargar el presupuesto mensual.");
+      const [currentBudgets, currentExpenses, currentIncome] = currentData;
+      const [previousBudgets, previousExpenses, previousIncome] = prevData;
+
+      if (
+        currentBudgets.error ||
+        currentExpenses.error ||
+        currentIncome.error ||
+        previousBudgets.error ||
+        previousExpenses.error ||
+        previousIncome.error
+      ) {
+        setMessage(
+          currentBudgets.error?.message ||
+            currentExpenses.error?.message ||
+            currentIncome.error?.message ||
+            previousBudgets.error?.message ||
+            previousExpenses.error?.message ||
+            previousIncome.error?.message ||
+            "No se pudo cargar el presupuesto mensual."
+        );
         return;
       }
 
-      const budgetRows = (budgets as BudgetRow[]) ?? [];
-      const expenseRows = (expenses as ExpenseRow[]) ?? [];
+      const currentExpenseRows = (currentExpenses.data as ExpenseRow[]) ?? [];
+      const prevExpenseRows = (previousExpenses.data as ExpenseRow[]) ?? [];
+      const currentIncomeRows = (currentIncome.data as IncomeRow[]) ?? [];
+      const prevIncomeRows = (previousIncome.data as IncomeRow[]) ?? [];
 
-      const expenseByCategory = new Map<string, number>();
-      for (const item of expenseRows) {
-        const key = item.category || "Sin categoria";
-        expenseByCategory.set(key, (expenseByCategory.get(key) ?? 0) + Number(item.amount));
-      }
+      const builtCurrent = buildMonthlyRows((currentBudgets.data as BudgetRow[]) ?? [], currentExpenseRows);
+      const builtPrevious = buildMonthlyRows((previousBudgets.data as BudgetRow[]) ?? [], prevExpenseRows);
 
-      const merged: BudgetWithActual[] = budgetRows.map((budget) => {
-        const actual = expenseByCategory.get(budget.category) ?? 0;
-        const remaining = Number(budget.budget_amount) - actual;
-        const spentPercent = Number(budget.budget_amount) > 0 ? (actual / Number(budget.budget_amount)) * 100 : 0;
+      const currentIncomeTotal = currentIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const currentExpenseTotal = currentExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const prevIncomeTotal = prevIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const prevExpenseTotal = prevExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
 
-        return {
-          id: budget.id,
-          category: budget.category,
-          budget: Number(budget.budget_amount),
-          actual,
-          remaining,
-          spentPercent
-        };
+      const currentSavings = currentIncomeTotal - currentExpenseTotal;
+      const prevSavings = prevIncomeTotal - prevExpenseTotal;
+      const currentSavingsRate = currentIncomeTotal > 0 ? (currentSavings / currentIncomeTotal) * 100 : null;
+
+      setRows(builtCurrent.rows);
+      setUnbudgetedExpenses(builtCurrent.unbudgeted);
+      setPrevRows(builtPrevious.rows);
+      setIncomeSummary({
+        currentIncome: currentIncomeTotal,
+        currentExpenses: currentExpenseTotal,
+        currentSavings,
+        currentSavingsRate,
+        prevIncome: prevIncomeTotal,
+        prevExpenses: prevExpenseTotal,
+        prevSavings
       });
-
-      const budgetCategories = new Set(budgetRows.map((b) => b.category));
-      const unbudgeted = Array.from(expenseByCategory.entries())
-        .filter(([cat]) => !budgetCategories.has(cat))
-        .map(([cat, actual]) => ({ category: cat, actual }))
-        .sort((a, b) => b.actual - a.actual);
-
-      setRows(merged);
-      setUnbudgetedExpenses(unbudgeted);
     },
     [supabase]
   );
@@ -142,6 +265,63 @@ export default function BudgetsPage() {
 
     return { totalBudget, totalActual, totalRemaining, totalSpentPercent };
   }, [rows]);
+
+  const prevTotals = useMemo(() => {
+    const totalBudget = prevRows.reduce((acc, row) => acc + row.budget, 0);
+    const totalActual = prevRows.reduce((acc, row) => acc + row.actual, 0);
+    return { totalBudget, totalActual };
+  }, [prevRows]);
+
+  const monthOverMonth = useMemo(() => {
+    const budgetDelta = totals.totalBudget - prevTotals.totalBudget;
+    const actualDelta = totals.totalActual - prevTotals.totalActual;
+    const actualDeltaPct = prevTotals.totalActual > 0 ? (actualDelta / prevTotals.totalActual) * 100 : null;
+    return { budgetDelta, actualDelta, actualDeltaPct };
+  }, [totals, prevTotals]);
+
+  const incomeComparison = useMemo(() => {
+    const incomeDelta = incomeSummary.currentIncome - incomeSummary.prevIncome;
+    const expensesDelta = incomeSummary.currentExpenses - incomeSummary.prevExpenses;
+    const savingsDelta = incomeSummary.currentSavings - incomeSummary.prevSavings;
+    return { incomeDelta, expensesDelta, savingsDelta };
+  }, [incomeSummary]);
+
+  const categoryComparison = useMemo(() => {
+    const currentMap = new Map(rows.map((row) => [row.category, row]));
+    const prevMap = new Map(prevRows.map((row) => [row.category, row]));
+    const categories = Array.from(new Set([...currentMap.keys(), ...prevMap.keys()])).sort();
+
+    return categories.map((cat) => {
+      const current = currentMap.get(cat);
+      const previous = prevMap.get(cat);
+      const currentActual = current?.actual ?? 0;
+      const previousActual = previous?.actual ?? 0;
+      return {
+        category: cat,
+        currentActual,
+        previousActual,
+        delta: currentActual - previousActual
+      };
+    });
+  }, [rows, prevRows]);
+
+  const handleExportCsv = () => {
+    if (rows.length === 0) {
+      setToast({ type: "error", text: "No hay datos para exportar en el mes seleccionado." });
+      return;
+    }
+
+    const csv = toCsv(rows, selectedMonth);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `presupuesto_${selectedMonth}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setToast({ type: "success", text: "CSV exportado correctamente." });
+    window.setTimeout(() => setToast(null), 2500);
+  };
 
   const handleSaveBudget = async (e: FormEvent) => {
     e.preventDefault();
@@ -266,6 +446,35 @@ export default function BudgetsPage() {
           <p>
             <strong>Consumo del presupuesto:</strong> {totals.totalSpentPercent.toFixed(1)}%
           </p>
+          <button className="mt-2 rounded bg-slate-800 px-3 py-2 text-sm text-white" type="button" onClick={handleExportCsv}>
+            Exportar CSV
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-lg border bg-white p-4 md:col-span-2">
+        <h2 className="mb-4 text-xl font-semibold">Ingresos y ahorro ({selectedMonth})</h2>
+        <div className="grid gap-2 text-sm md:grid-cols-2">
+          <p>
+            <strong>Ingresos del mes:</strong> {incomeSummary.currentIncome.toFixed(2)} EUR
+          </p>
+          <p>
+            <strong>Gasto total del mes:</strong> {incomeSummary.currentExpenses.toFixed(2)} EUR
+          </p>
+          <p>
+            <strong>Ahorro del mes:</strong>{" "}
+            <span className={incomeSummary.currentSavings < 0 ? "text-red-700" : "text-emerald-700"}>{incomeSummary.currentSavings.toFixed(2)} EUR</span>
+          </p>
+          <p>
+            <strong>Tasa de ahorro:</strong>{" "}
+            {incomeSummary.currentSavingsRate === null ? "Sin ingresos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}
+          </p>
+          <p>
+            <strong>Delta ingresos vs mes anterior:</strong> {incomeComparison.incomeDelta.toFixed(2)} EUR
+          </p>
+          <p>
+            <strong>Delta ahorro vs mes anterior:</strong> {incomeComparison.savingsDelta.toFixed(2)} EUR
+          </p>
         </div>
       </section>
 
@@ -304,6 +513,52 @@ export default function BudgetsPage() {
             </table>
           </div>
         ) : null}
+      </section>
+
+      <section className="rounded-lg border bg-white p-4 md:col-span-2">
+        <h2 className="mb-4 text-xl font-semibold">Comparativa mensual ({selectedMonth} vs {getPreviousMonth(selectedMonth)})</h2>
+        {categoryComparison.length === 0 ? (
+          <p>Sin datos suficientes para comparar meses.</p>
+        ) : (
+          <>
+            <div className="mb-3 grid gap-1 text-sm md:grid-cols-3">
+              <p>
+                <strong>Delta presupuesto total:</strong> {monthOverMonth.budgetDelta.toFixed(2)} EUR
+              </p>
+              <p>
+                <strong>Delta gasto real total:</strong> {monthOverMonth.actualDelta.toFixed(2)} EUR
+              </p>
+              <p>
+                <strong>Delta gasto real %:</strong>{" "}
+                {monthOverMonth.actualDeltaPct === null ? "Sin base" : `${monthOverMonth.actualDeltaPct.toFixed(1)}%`}
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50 text-left">
+                    <th className="p-2">Categoria</th>
+                    <th className="p-2 text-right">Gasto actual</th>
+                    <th className="p-2 text-right">Gasto mes anterior</th>
+                    <th className="p-2 text-right">Delta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categoryComparison.map((item) => (
+                    <tr key={item.category} className="border-b">
+                      <td className="p-2">{item.category}</td>
+                      <td className="p-2 text-right">{item.currentActual.toFixed(2)} EUR</td>
+                      <td className="p-2 text-right">{item.previousActual.toFixed(2)} EUR</td>
+                      <td className={`p-2 text-right ${item.delta > 0 ? "text-red-700" : item.delta < 0 ? "text-emerald-700" : "text-slate-700"}`}>
+                        {item.delta.toFixed(2)} EUR
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="rounded-lg border bg-white p-4 md:col-span-2">

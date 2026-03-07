@@ -24,6 +24,13 @@ type ExpenseRow = {
   expense_date: string;
 };
 
+type ExpenseFormErrors = {
+  amount?: string;
+  category?: string;
+  expenseDate?: string;
+  description?: string;
+};
+
 const PRESET_CATEGORIES = [
   "Vivienda",
   "Comida",
@@ -36,6 +43,10 @@ const PRESET_CATEGORIES = [
 ];
 
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function inputClass(hasError: boolean) {
+  return `rounded border p-2 ${hasError ? "border-red-600" : "border-slate-300"}`;
+}
 
 export default function ExpensesPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -51,6 +62,8 @@ export default function ExpensesPage() {
   const [customCategory, setCustomCategory] = useState("");
   const [description, setDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [errors, setErrors] = useState<ExpenseFormErrors>({});
+  const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const loadExpenses = useCallback(
     async (uid: string) => {
@@ -128,24 +141,92 @@ export default function ExpensesPage() {
     }
   };
 
+  const validateForm = () => {
+    const nextErrors: ExpenseFormErrors = {};
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      nextErrors.amount = "El importe debe ser mayor que 0.";
+    } else if (parsedAmount > 1_000_000) {
+      nextErrors.amount = "El importe no puede superar 1.000.000.";
+    }
+
+    const selectedCategory = category === "Otros" ? customCategory.trim() : category;
+    if (!selectedCategory) {
+      nextErrors.category = "Selecciona una categoria valida.";
+    } else if (selectedCategory.length < 2 || selectedCategory.length > 40) {
+      nextErrors.category = "La categoria debe tener entre 2 y 40 caracteres.";
+    }
+
+    const parsedDate = new Date(`${expenseDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      nextErrors.expenseDate = "La fecha es obligatoria.";
+    } else if (parsedDate > today) {
+      nextErrors.expenseDate = "La fecha no puede estar en el futuro.";
+    }
+
+    if (description.trim().length > 140) {
+      nextErrors.description = "La descripcion no puede superar 140 caracteres.";
+    }
+
+    setErrors(nextErrors);
+
+    return {
+      isValid: Object.keys(nextErrors).length === 0,
+      parsedAmount,
+      selectedCategory
+    };
+  };
+
+  const validateField = (field: keyof ExpenseFormErrors) => {
+    const parsedAmount = Number(amount);
+    const selectedCategory = category === "Otros" ? customCategory.trim() : category;
+    const parsedDate = new Date(`${expenseDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let error: string | undefined;
+
+    if (field === "amount") {
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) error = "El importe debe ser mayor que 0.";
+      else if (parsedAmount > 1_000_000) error = "El importe no puede superar 1.000.000.";
+    }
+
+    if (field === "category") {
+      if (!selectedCategory) error = "Selecciona una categoria valida.";
+      else if (selectedCategory.length < 2 || selectedCategory.length > 40) {
+        error = "La categoria debe tener entre 2 y 40 caracteres.";
+      }
+    }
+
+    if (field === "expenseDate") {
+      if (Number.isNaN(parsedDate.getTime())) error = "La fecha es obligatoria.";
+      else if (parsedDate > today) error = "La fecha no puede estar en el futuro.";
+    }
+
+    if (field === "description") {
+      if (description.trim().length > 140) error = "La descripcion no puede superar 140 caracteres.";
+    }
+
+    setErrors((prev) => ({ ...prev, [field]: error }));
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    setToast(null);
 
     if (!userId) {
       setMessage("Debes iniciar sesion para anadir gastos.");
       return;
     }
 
-    const parsedAmount = Number(amount);
-    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      setMessage("El importe debe ser mayor que 0.");
-      return;
-    }
-
-    const selectedCategory = category === "Otros" ? customCategory.trim() : category;
-    if (!selectedCategory) {
-      setMessage("Selecciona una categoria valida.");
+    const validation = validateForm();
+    if (!validation.isValid) {
+      setToast({ type: "error", text: "Revisa los campos marcados en rojo." });
       return;
     }
 
@@ -153,14 +234,15 @@ export default function ExpensesPage() {
 
     const { error } = await supabase.from("expenses").insert({
       user_id: userId,
-      amount: parsedAmount,
-      category: selectedCategory,
+      amount: validation.parsedAmount,
+      category: validation.selectedCategory,
       description: description.trim() || null,
       expense_date: expenseDate
     });
 
     if (error) {
       setMessage(error.message);
+      setToast({ type: "error", text: "No se pudo guardar el gasto." });
       setSaving(false);
       return;
     }
@@ -168,6 +250,10 @@ export default function ExpensesPage() {
     setAmount("");
     setDescription("");
     setCustomCategory("");
+    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setErrors({});
+    setToast({ type: "success", text: "Gasto guardado correctamente." });
+    window.setTimeout(() => setToast(null), 3000);
     await loadExpenses(userId);
     setSaving(false);
   };
@@ -176,26 +262,34 @@ export default function ExpensesPage() {
     <main className="mx-auto grid max-w-5xl gap-6 p-6 md:grid-cols-2">
       <section className="rounded-lg border bg-white p-4">
         <h1 className="mb-4 text-2xl font-semibold">Gastos</h1>
-        <form onSubmit={handleSubmit} className="grid gap-3">
+        {toast ? (
+          <p className={`mb-3 rounded p-2 text-sm ${toast.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+            {toast.text}
+          </p>
+        ) : null}
+        <form onSubmit={handleSubmit} className="grid gap-3" noValidate>
           <label className="grid gap-1 text-sm">
             Importe
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.amount))}
               type="number"
               step="0.01"
               min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onBlur={() => validateField("amount")}
               required
             />
+            {errors.amount ? <span className="text-xs text-red-700">{errors.amount}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Categoria
             <select
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.category))}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              onBlur={() => validateField("category")}
             >
               {PRESET_CATEGORIES.map((item) => (
                 <option key={item} value={item}>
@@ -203,16 +297,18 @@ export default function ExpensesPage() {
                 </option>
               ))}
             </select>
+            {errors.category ? <span className="text-xs text-red-700">{errors.category}</span> : null}
           </label>
 
           {category === "Otros" ? (
             <label className="grid gap-1 text-sm">
               Categoria personalizada
               <input
-                className="rounded border p-2"
+                className={inputClass(Boolean(errors.category))}
                 type="text"
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
+                onBlur={() => validateField("category")}
                 placeholder="Ej: Mascotas"
                 required
               />
@@ -222,23 +318,29 @@ export default function ExpensesPage() {
           <label className="grid gap-1 text-sm">
             Fecha
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.expenseDate))}
               type="date"
               value={expenseDate}
               onChange={(e) => setExpenseDate(e.target.value)}
+              onBlur={() => validateField("expenseDate")}
               required
             />
+            {errors.expenseDate ? <span className="text-xs text-red-700">{errors.expenseDate}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Descripcion
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.description))}
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => validateField("description")}
               placeholder="Opcional"
+              maxLength={140}
             />
+            <span className="text-xs text-slate-500">{description.length}/140</span>
+            {errors.description ? <span className="text-xs text-red-700">{errors.description}</span> : null}
           </label>
 
           <button

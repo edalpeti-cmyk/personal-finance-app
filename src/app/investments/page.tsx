@@ -28,6 +28,15 @@ type InvestmentRow = {
   purchase_date: string | null;
 };
 
+type InvestmentFormErrors = {
+  assetName?: string;
+  assetSymbol?: string;
+  quantity?: string;
+  averageBuyPrice?: string;
+  currentPrice?: string;
+  purchaseDate?: string;
+};
+
 const ASSET_TYPES: Array<{ value: AssetType; label: string }> = [
   { value: "stock", label: "Accion" },
   { value: "etf", label: "ETF" },
@@ -50,6 +59,10 @@ const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   loan: "Prestamo"
 };
 
+function inputClass(hasError: boolean) {
+  return `rounded border p-2 ${hasError ? "border-red-600" : "border-slate-300"}`;
+}
+
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
 
@@ -66,6 +79,8 @@ export default function InvestmentsPage() {
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [errors, setErrors] = useState<InvestmentFormErrors>({});
+  const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const loadInvestments = useCallback(
     async (uid: string) => {
@@ -199,26 +214,125 @@ export default function InvestmentsPage() {
     }
   };
 
+  const validateForm = () => {
+    const nextErrors: InvestmentFormErrors = {};
+
+    const cleanName = assetName.trim();
+    if (cleanName.length < 2 || cleanName.length > 80) {
+      nextErrors.assetName = "El nombre debe tener entre 2 y 80 caracteres.";
+    }
+
+    const cleanSymbol = assetSymbol.trim();
+    if (cleanSymbol.length > 15) {
+      nextErrors.assetSymbol = "El ticker no puede superar 15 caracteres.";
+    } else if (cleanSymbol && !/^[A-Z0-9.-]+$/.test(cleanSymbol)) {
+      nextErrors.assetSymbol = "El ticker solo admite A-Z, 0-9, punto y guion.";
+    }
+
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      nextErrors.quantity = "La cantidad debe ser mayor que 0.";
+    } else if (qty > 1_000_000_000) {
+      nextErrors.quantity = "La cantidad es demasiado alta.";
+    }
+
+    const avg = Number(averageBuyPrice);
+    if (!Number.isFinite(avg) || avg < 0) {
+      nextErrors.averageBuyPrice = "El precio medio debe ser un numero valido >= 0.";
+    } else if (avg > 1_000_000_000) {
+      nextErrors.averageBuyPrice = "El precio medio es demasiado alto.";
+    }
+
+    const curr = currentPrice ? Number(currentPrice) : avg;
+    if (!Number.isFinite(curr) || curr < 0) {
+      nextErrors.currentPrice = "El precio actual debe ser un numero valido >= 0.";
+    } else if (curr > 1_000_000_000) {
+      nextErrors.currentPrice = "El precio actual es demasiado alto.";
+    }
+
+    const parsedDate = new Date(`${purchaseDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      nextErrors.purchaseDate = "La fecha de compra es obligatoria.";
+    } else if (parsedDate > today) {
+      nextErrors.purchaseDate = "La fecha de compra no puede estar en el futuro.";
+    }
+
+    setErrors(nextErrors);
+
+    return {
+      isValid: Object.keys(nextErrors).length === 0,
+      qty,
+      avg,
+      curr,
+      cleanName,
+      cleanSymbol
+    };
+  };
+
+  const validateField = (field: keyof InvestmentFormErrors) => {
+    const cleanName = assetName.trim();
+    const cleanSymbol = assetSymbol.trim();
+    const qty = Number(quantity);
+    const avg = Number(averageBuyPrice);
+    const curr = currentPrice ? Number(currentPrice) : avg;
+    const parsedDate = new Date(`${purchaseDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let error: string | undefined;
+
+    if (field === "assetName") {
+      if (cleanName.length < 2 || cleanName.length > 80) {
+        error = "El nombre debe tener entre 2 y 80 caracteres.";
+      }
+    }
+
+    if (field === "assetSymbol") {
+      if (cleanSymbol.length > 15) error = "El ticker no puede superar 15 caracteres.";
+      else if (cleanSymbol && !/^[A-Z0-9.-]+$/.test(cleanSymbol)) {
+        error = "El ticker solo admite A-Z, 0-9, punto y guion.";
+      }
+    }
+
+    if (field === "quantity") {
+      if (!Number.isFinite(qty) || qty <= 0) error = "La cantidad debe ser mayor que 0.";
+      else if (qty > 1_000_000_000) error = "La cantidad es demasiado alta.";
+    }
+
+    if (field === "averageBuyPrice") {
+      if (!Number.isFinite(avg) || avg < 0) error = "El precio medio debe ser un numero valido >= 0.";
+      else if (avg > 1_000_000_000) error = "El precio medio es demasiado alto.";
+    }
+
+    if (field === "currentPrice") {
+      if (!Number.isFinite(curr) || curr < 0) error = "El precio actual debe ser un numero valido >= 0.";
+      else if (curr > 1_000_000_000) error = "El precio actual es demasiado alto.";
+    }
+
+    if (field === "purchaseDate") {
+      if (Number.isNaN(parsedDate.getTime())) error = "La fecha de compra es obligatoria.";
+      else if (parsedDate > today) error = "La fecha de compra no puede estar en el futuro.";
+    }
+
+    setErrors((prev) => ({ ...prev, [field]: error }));
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    setToast(null);
 
     if (!userId) {
       setMessage("Debes iniciar sesion para anadir inversiones.");
       return;
     }
 
-    const qty = Number(quantity);
-    const avg = Number(averageBuyPrice);
-    const curr = currentPrice ? Number(currentPrice) : avg;
-
-    if (!assetName.trim()) {
-      setMessage("El nombre del activo es obligatorio.");
-      return;
-    }
-
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(avg) || avg < 0 || !Number.isFinite(curr) || curr < 0) {
-      setMessage("Revisa cantidad y precios. Deben ser valores validos.");
+    const validation = validateForm();
+    if (!validation.isValid) {
+      setToast({ type: "error", text: "Revisa los campos marcados en rojo." });
       return;
     }
 
@@ -226,17 +340,18 @@ export default function InvestmentsPage() {
 
     const { error } = await supabase.from("investments").insert({
       user_id: userId,
-      asset_name: assetName.trim(),
-      asset_symbol: assetSymbol.trim() || null,
+      asset_name: validation.cleanName,
+      asset_symbol: validation.cleanSymbol || null,
       asset_type: assetType,
-      quantity: qty,
-      average_buy_price: avg,
-      current_price: curr,
+      quantity: validation.qty,
+      average_buy_price: validation.avg,
+      current_price: validation.curr,
       purchase_date: purchaseDate
     });
 
     if (error) {
       setMessage(error.message);
+      setToast({ type: "error", text: "No se pudo guardar la inversion." });
       setSaving(false);
       return;
     }
@@ -247,6 +362,9 @@ export default function InvestmentsPage() {
     setAverageBuyPrice("");
     setCurrentPrice("");
     setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setErrors({});
+    setToast({ type: "success", text: "Inversion guardada correctamente." });
+    window.setTimeout(() => setToast(null), 3000);
 
     await loadInvestments(userId);
     setSaving(false);
@@ -256,10 +374,15 @@ export default function InvestmentsPage() {
     <main className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2">
       <section className="rounded-lg border bg-white p-4">
         <h1 className="mb-4 text-2xl font-semibold">Portfolio Tracker</h1>
-        <form onSubmit={handleSubmit} className="grid gap-3">
+        {toast ? (
+          <p className={`mb-3 rounded p-2 text-sm ${toast.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+            {toast.text}
+          </p>
+        ) : null}
+        <form onSubmit={handleSubmit} className="grid gap-3" noValidate>
           <label className="grid gap-1 text-sm">
             Tipo de activo
-            <select className="rounded border p-2" value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
+            <select className={inputClass(false)} value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
               {ASSET_TYPES.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -271,74 +394,88 @@ export default function InvestmentsPage() {
           <label className="grid gap-1 text-sm">
             Nombre
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.assetName))}
               type="text"
               value={assetName}
               onChange={(e) => setAssetName(e.target.value)}
+              onBlur={() => validateField("assetName")}
               placeholder="Ej: Apple, SP500 ETF, Bitcoin"
               required
+              maxLength={80}
             />
+            {errors.assetName ? <span className="text-xs text-red-700">{errors.assetName}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Ticker / Simbolo
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.assetSymbol))}
               type="text"
               value={assetSymbol}
               onChange={(e) => setAssetSymbol(e.target.value.toUpperCase())}
+              onBlur={() => validateField("assetSymbol")}
               placeholder="Ej: AAPL, VOO, BTC"
+              maxLength={15}
             />
+            {errors.assetSymbol ? <span className="text-xs text-red-700">{errors.assetSymbol}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Cantidad
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.quantity))}
               type="number"
               step="0.00000001"
               min="0"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
+              onBlur={() => validateField("quantity")}
               required
             />
+            {errors.quantity ? <span className="text-xs text-red-700">{errors.quantity}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Precio medio de compra
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.averageBuyPrice))}
               type="number"
               step="0.0001"
               min="0"
               value={averageBuyPrice}
               onChange={(e) => setAverageBuyPrice(e.target.value)}
+              onBlur={() => validateField("averageBuyPrice")}
               required
             />
+            {errors.averageBuyPrice ? <span className="text-xs text-red-700">{errors.averageBuyPrice}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Precio actual
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.currentPrice))}
               type="number"
               step="0.0001"
               min="0"
               value={currentPrice}
               onChange={(e) => setCurrentPrice(e.target.value)}
+              onBlur={() => validateField("currentPrice")}
               placeholder="Si lo dejas vacio, usa precio medio"
             />
+            {errors.currentPrice ? <span className="text-xs text-red-700">{errors.currentPrice}</span> : null}
           </label>
 
           <label className="grid gap-1 text-sm">
             Fecha de compra
             <input
-              className="rounded border p-2"
+              className={inputClass(Boolean(errors.purchaseDate))}
               type="date"
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
+              onBlur={() => validateField("purchaseDate")}
               required
             />
+            {errors.purchaseDate ? <span className="text-xs text-red-700">{errors.purchaseDate}</span> : null}
           </label>
 
           <button className="rounded bg-blue-700 px-3 py-2 text-white disabled:opacity-50" disabled={saving || loading} type="submit">
