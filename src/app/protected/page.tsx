@@ -18,6 +18,9 @@ export default async function ProtectedPage() {
         <Link href="/dashboard">Ir al dashboard</Link>
       </p>
       <p>
+        <Link href="/budgets">Ir a presupuesto mensual</Link>
+      </p>
+      <p>
         <Link href="/expenses">Ir al gestor de gastos</Link>
       </p>
       <p>
