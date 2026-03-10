@@ -49,6 +49,10 @@ function estimateYearsToFire(current: number, target: number, annualContribution
   return null;
 }
 
+function formatCurrency(value: number) {
+  return `${value.toFixed(2)} EUR`;
+}
+
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -77,6 +81,7 @@ export default function DashboardPage() {
         credentials: "include",
         cache: "no-store"
       });
+
       if (!response.ok) {
         setAiError("No se pudieron generar insights en este momento.");
         setAiLoading(false);
@@ -102,23 +107,27 @@ export default function DashboardPage() {
         return;
       }
 
-      const [{ data: expenses, error: expensesError }, { data: income, error: incomeError }, { data: investments, error: invError }] =
-        await Promise.all([
-          supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
-          supabase.from("income").select("amount, income_date").eq("user_id", userId),
-          supabase.from("investments").select("quantity, average_buy_price, current_price").eq("user_id", userId)
-        ]);
+      const [expensesResult, incomeResult, investmentsResult] = await Promise.all([
+        supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
+        supabase.from("income").select("amount, income_date").eq("user_id", userId),
+        supabase.from("investments").select("quantity, average_buy_price, current_price").eq("user_id", userId)
+      ]);
 
-      if (expensesError || incomeError || invError) {
-        setMessage(expensesError?.message || incomeError?.message || invError?.message || "Error al cargar datos.");
+      if (expensesResult.error || incomeResult.error || investmentsResult.error) {
+        setMessage(
+          expensesResult.error?.message ||
+            incomeResult.error?.message ||
+            investmentsResult.error?.message ||
+            "Error al cargar datos."
+        );
         setLoading(false);
         return;
       }
 
       const now = new Date();
-      const expenseRows = (expenses as ExpenseRow[]) ?? [];
-      const incomeRows = (income as IncomeRow[]) ?? [];
-      const investmentRows = (investments as InvestmentRow[]) ?? [];
+      const expenseRows = (expensesResult.data as ExpenseRow[]) ?? [];
+      const incomeRows = (incomeResult.data as IncomeRow[]) ?? [];
+      const investmentRows = (investmentsResult.data as InvestmentRow[]) ?? [];
 
       const totalNetWorth = investmentRows.reduce((acc, row) => {
         const qty = Number(row.quantity) || 0;
@@ -170,123 +179,169 @@ export default function DashboardPage() {
     return (
       <>
         <SideNav />
-        <main className="mx-auto max-w-6xl p-6 md:pl-60">
+        <main className="mx-auto max-w-6xl p-6 md:pl-72">
           <AuthLoadingState title="Preparando dashboard" description="Estamos validando tu sesion y cargando tu resumen financiero." />
         </main>
       </>
     );
   }
+
   return (
     <>
       <SideNav />
-      <main className="mx-auto grid max-w-6xl gap-6 p-6 md:pl-60 md:grid-cols-2">
-      <section className="rounded-lg border bg-white p-4">
-        <h1 className="mb-4 text-2xl font-semibold">Dashboard financiero</h1>
-        <p className="text-sm text-slate-600">Resumen automatico con datos de ingresos, gastos e inversiones.</p>
-      </section>
-
-      {loading ? (
-        <section className="rounded-lg border bg-white p-4 md:col-span-2">
-          <p>Cargando metricas...</p>
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 md:grid-cols-2 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-6 md:p-8 md:col-span-2 xl:col-span-7">
+          <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-teal-700">Vista general</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Tu sistema financiero, de un vistazo</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
+            Patrimonio, ahorro, progreso FIRE e ideas accionables en una sola pantalla para decidir con rapidez.
+          </p>
         </section>
-      ) : null}
 
-      {message ? (
-        <section className="rounded-lg border bg-white p-4 md:col-span-2">
-          <p className="text-red-700">{message}</p>
+        <section className="rounded-[30px] bg-[linear-gradient(135deg,#134e4a_0%,#0f766e_55%,#14b8a6_100%)] p-6 text-white shadow-[0_24px_60px_rgba(15,118,110,0.26)] md:col-span-2 xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-100/80">Momentum actual</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
+          <p className="mt-2 max-w-sm text-sm text-emerald-50/88">Patrimonio estimado con tus posiciones registradas y una lectura rápida del avance hacia independencia.</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Tasa de ahorro</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics && metrics.savingsRate !== null ? `${metrics.savingsRate.toFixed(2)}%` : "Sin datos"}</p>
+            </div>
+            <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Anos estimados</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics && metrics.yearsToFire !== null ? metrics.yearsToFire : "--"}</p>
+            </div>
+          </div>
         </section>
-      ) : null}
 
-      {!loading && !message && metrics ? (
-        <>
-          {!hasFinancialData ? (
-            <section className="rounded-lg border bg-amber-50 p-4 text-amber-800 md:col-span-2">
-              Aun no hay datos suficientes para analisis completo. Anade ingresos, gastos o inversiones para activar todas las metricas.
-            </section>
-          ) : null}
-
-          <section className="rounded-lg border bg-white p-4">
-            <h2 className="mb-2 text-lg font-semibold">Patrimonio total</h2>
-            <p className="text-2xl font-bold">{metrics.totalNetWorth.toFixed(2)} EUR</p>
+        {loading ? (
+          <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-12">
+            <p className="text-sm text-slate-600">Cargando metricas financieras...</p>
           </section>
+        ) : null}
 
-          <section className="rounded-lg border bg-white p-4">
-            <h2 className="mb-2 text-lg font-semibold">Tasa de ahorro (mes actual)</h2>
-            <p className="text-2xl font-bold">
-              {metrics.savingsRate === null ? "Sin datos de ingresos" : `${metrics.savingsRate.toFixed(2)}%`}
-            </p>
+        {message ? (
+          <section className="panel rounded-[28px] border-red-200 bg-red-50/90 p-6 text-red-800 md:col-span-2 xl:col-span-12">
+            {message}
           </section>
+        ) : null}
 
-          <section className="rounded-lg border bg-white p-4 md:col-span-2">
-            <h2 className="mb-3 text-lg font-semibold">Progreso hacia libertad financiera</h2>
-            <div className="mb-2 h-4 w-full rounded bg-slate-200">
-              <div className="h-4 rounded bg-teal-600" style={{ width: `${metrics.fireProgress.toFixed(2)}%` }} />
-            </div>
-            <p className="text-sm">
-              {metrics.fireProgress.toFixed(2)}% completado
-              {metrics.fireTarget > 0 ? ` (objetivo FIRE: ${metrics.fireTarget.toFixed(2)} EUR)` : ""}
-            </p>
-          </section>
-
-          <section className="rounded-lg border bg-white p-4 md:col-span-2">
-            <h2 className="mb-2 text-lg font-semibold">Anos estimados para independencia</h2>
-            <p className="text-2xl font-bold">
-              {metrics.fireTarget <= 0
-                ? "No calculable (faltan gastos anuales)"
-                : metrics.yearsToFire === null
-                  ? "No alcanzable con el ahorro actual"
-                  : `${metrics.yearsToFire} anos`}
-            </p>
-            <p className="mt-2 text-sm text-slate-600">
-              Supuestos: regla del 4%, ahorro anual reciente y rentabilidad esperada del 5%.
-            </p>
-            <p className="mt-1 text-sm text-slate-600">Ahorro anual estimado: {metrics.annualSavings.toFixed(2)} EUR.</p>
-          </section>
-
-          <section className="rounded-lg border bg-white p-4 md:col-span-2">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">IA financiera</h2>
-              <button
-                className="rounded bg-indigo-700 px-3 py-2 text-sm text-white disabled:opacity-50"
-                onClick={generateInsights}
-                disabled={aiLoading || !hasFinancialData}
-                type="button"
-              >
-                {aiLoading ? "Analizando..." : "Regenerar insights IA"}
-              </button>
-            </div>
-
+        {!loading && !message && metrics ? (
+          <>
             {!hasFinancialData ? (
-              <p className="text-sm text-slate-600">Sin datos financieros suficientes para generar insights utiles.</p>
-            ) : null}
-            {aiError ? <p className="text-sm text-red-700">{aiError}</p> : null}
-            {!aiError && aiInsights.length === 0 && hasFinancialData ? (
-              <p className="text-sm text-slate-600">Generando recomendaciones personalizadas...</p>
+              <section className="rounded-[28px] border border-amber-200 bg-amber-50/95 p-6 text-amber-900 md:col-span-2 xl:col-span-12">
+                Aun no hay datos suficientes para un analisis completo. Registra ingresos, gastos o inversiones para activar todas las metricas.
+              </section>
             ) : null}
 
-            {aiInsights.length > 0 ? (
-              <>
-                <ul className="ml-5 list-disc text-sm">
-                  {aiInsights.map((insight) => (
-                    <li key={insight}>{insight}</li>
-                  ))}
-                </ul>
-                <p className="mt-3 text-xs text-slate-500">
-                  Fuente: {aiSource === "openai" ? "modelo OpenAI" : "motor local de reglas"}. No es consejo financiero profesional.
-                </p>
-              </>
-            ) : null}
-          </section>
-        </>
-      ) : null}
+            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Patrimonio total</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(metrics.totalNetWorth)}</p>
+              <p className="mt-3 text-sm text-slate-600">Suma estimada de tus inversiones registradas.</p>
+            </section>
+
+            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Tasa de ahorro</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">
+                {metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}
+              </p>
+              <p className="mt-3 text-sm text-slate-600">Basada en ingresos y gastos del mes actual.</p>
+            </section>
+
+            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ahorro anual</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(metrics.annualSavings)}</p>
+              <p className="mt-3 text-sm text-slate-600">Ingresos anuales recientes menos gastos anuales recientes.</p>
+            </section>
+
+            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Objetivo FIRE</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">
+                {metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}
+              </p>
+              <p className="mt-3 text-sm text-slate-600">Calculado con la regla del 4% sobre tus gastos anuales.</p>
+            </section>
+
+            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Progreso FIRE</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Camino hacia libertad financiera</h2>
+                </div>
+                <p className="rounded-full bg-teal-700 px-3 py-1 text-sm font-medium text-white">{metrics.fireProgress.toFixed(2)}%</p>
+              </div>
+
+              <div className="mt-6 h-5 overflow-hidden rounded-full bg-slate-200/80">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)] transition-all duration-500"
+                  style={{ width: `${metrics.fireProgress.toFixed(2)}%` }}
+                />
+              </div>
+
+              <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
+                <p>Objetivo estimado: <span className="font-medium text-slate-900">{metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}</span></p>
+                <p>Rentabilidad asumida: <span className="font-medium text-slate-900">5% anual</span></p>
+              </div>
+            </section>
+
+            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Horizonte</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Anos estimados para independencia</h2>
+              <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-slate-950">
+                {metrics.fireTarget <= 0
+                  ? "No calculable"
+                  : metrics.yearsToFire === null
+                    ? "No alcanzable"
+                    : `${metrics.yearsToFire} anos`}
+              </p>
+              <p className="mt-4 text-sm leading-6 text-slate-600">
+                La estimacion usa tus gastos anuales recientes, ahorro anual positivo y una rentabilidad esperada del 5%.
+              </p>
+            </section>
+
+            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-12">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-teal-700">IA financiera</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Lectura automatica de tus habitos</h2>
+                </div>
+                <button
+                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={generateInsights}
+                  disabled={aiLoading || !hasFinancialData}
+                  type="button"
+                >
+                  {aiLoading ? "Analizando..." : "Regenerar insights IA"}
+                </button>
+              </div>
+
+              {!hasFinancialData ? (
+                <p className="mt-4 text-sm text-slate-600">Sin datos financieros suficientes para generar insights utiles.</p>
+              ) : null}
+              {aiError ? <p className="mt-4 text-sm text-red-700">{aiError}</p> : null}
+              {!aiError && aiInsights.length === 0 && hasFinancialData ? (
+                <p className="mt-4 text-sm text-slate-600">Generando recomendaciones personalizadas...</p>
+              ) : null}
+
+              {aiInsights.length > 0 ? (
+                <>
+                  <div className="mt-6 grid gap-3 md:grid-cols-3">
+                    {aiInsights.map((insight) => (
+                      <article key={insight} className="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm">
+                        <p className="text-sm leading-6 text-slate-700">{insight}</p>
+                      </article>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-xs text-slate-500">
+                    Fuente: {aiSource === "openai" ? "modelo OpenAI" : "motor local de reglas"}. No es consejo financiero profesional.
+                  </p>
+                </>
+              ) : null}
+            </section>
+          </>
+        ) : null}
       </main>
     </>
   );
 }
-
-
-
-
-
-
 

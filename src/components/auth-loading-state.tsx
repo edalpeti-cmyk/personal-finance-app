@@ -10,12 +10,15 @@ export default function AuthLoadingState({
   description = "Estamos validando tu acceso para mostrar los datos financieros."
 }: AuthLoadingStateProps) {
   return (
-    <section className="rounded-lg border bg-white p-6">
-      <div className="flex items-center gap-3">
-        <div className="h-3 w-3 animate-pulse rounded-full bg-teal-600" />
+    <section className="panel page-enter rounded-[28px] p-6 md:p-8">
+      <div className="flex items-start gap-4">
+        <div className="mt-1 flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-700/10 text-teal-800">
+          <div className="h-3 w-3 animate-pulse rounded-full bg-teal-600" />
+        </div>
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-          <p className="text-sm text-slate-600">{description}</p>
+          <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.24em] text-teal-700">Sesion</p>
+          <h1 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-900">{title}</h1>
+          <p className="mt-2 max-w-xl text-sm text-slate-600">{description}</p>
         </div>
       </div>
     </section>
