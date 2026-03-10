@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -149,6 +149,28 @@ export default function InvestmentsPage() {
 
     void init();
   }, [authLoading, loadInvestments, userId]);
+
+  useEffect(() => {
+    if (loading || investments.length === 0 || typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (!editId) {
+      return;
+    }
+
+    const row = investments.find((item) => item.id === editId);
+    if (!row) {
+      return;
+    }
+
+    handleEdit(row);
+    params.delete("edit");
+    const nextQuery = params.toString();
+    window.history.replaceState({}, "", nextQuery ? '?' + nextQuery : window.location.pathname);
+  }, [investments, loading]);
 
   const metrics = useMemo(() => {
     return investments.reduce(
@@ -597,9 +619,9 @@ export default function InvestmentsPage() {
                         <td className="px-3 py-4 text-right font-medium text-slate-900">{formatCurrency(value)}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => handleEdit(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                            <a href={`?edit=${row.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
                               Editar
-                            </button>
+                            </a>
                             <button
                               type="button"
                               onClick={() => void handleRefreshPrices(row.id)}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -124,6 +124,28 @@ export default function ExpensesPage() {
 
     void init();
   }, [authLoading, loadExpenses, userId]);
+
+  useEffect(() => {
+    if (loading || expenses.length === 0 || typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (!editId) {
+      return;
+    }
+
+    const expense = expenses.find((item) => item.id === editId);
+    if (!expense) {
+      return;
+    }
+
+    handleEdit(expense);
+    params.delete("edit");
+    const nextQuery = params.toString();
+    window.history.replaceState({}, "", nextQuery ? '?' + nextQuery : window.location.pathname);
+  }, [expenses, loading]);
 
   const monthlyTotals = useMemo(() => {
     const year = new Date().getFullYear();
@@ -462,9 +484,9 @@ export default function ExpensesPage() {
                       <td className="px-3 py-4 text-right font-medium text-slate-900">{formatCurrency(Number(expense.amount))}</td>
                       <td className="rounded-r-2xl px-3 py-4">
                         <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => handleEdit(expense)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                          <a href={`?edit=${expense.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
                             Editar
-                          </button>
+                          </a>
                           <button type="button" onClick={() => void handleDelete(expense.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">
                             Borrar
                           </button>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -249,6 +249,37 @@ export default function BudgetsPage() {
 
     void init();
   }, [authLoading, loadData, selectedMonth, userId]);
+
+  useEffect(() => {
+    if (loading || typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const budgetId = params.get("editBudget");
+    const incomeId = params.get("editIncome");
+
+    if (budgetId) {
+      const row = rows.find((item) => item.id === budgetId);
+      if (row) {
+        handleEditBudget(row);
+      }
+      params.delete("editBudget");
+      const nextQuery = params.toString();
+      window.history.replaceState({}, "", nextQuery ? '?' + nextQuery : window.location.pathname);
+      return;
+    }
+
+    if (incomeId) {
+      const row = currentIncomeEntries.find((item) => item.id === incomeId);
+      if (row) {
+        handleEditIncome(row);
+      }
+      params.delete("editIncome");
+      const nextQuery = params.toString();
+      window.history.replaceState({}, "", nextQuery ? '?' + nextQuery : window.location.pathname);
+    }
+  }, [currentIncomeEntries, loading, rows]);
 
   const totals = useMemo(() => {
     const totalBudget = rows.reduce((acc, row) => acc + row.budget, 0);
@@ -558,7 +589,7 @@ export default function BudgetsPage() {
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(row.actual)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-700" : "text-emerald-700"}`}>{formatCurrency(row.remaining)}</td>
                       <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-700" : row.spentPercent > 85 ? "text-amber-700" : "text-slate-700"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><a href={`?editBudget=${row.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</a><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -583,7 +614,7 @@ export default function BudgetsPage() {
                       <td className="rounded-l-2xl px-3 py-4 text-slate-600">{entry.income_date}</td>
                       <td className="px-3 py-4 font-medium text-slate-900">{entry.source}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(Number(entry.amount))}</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><a href={`?editIncome=${entry.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</a><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
                     </tr>
                   ))
                 )}
