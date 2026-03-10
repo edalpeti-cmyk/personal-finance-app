@@ -392,6 +392,8 @@ export default function BudgetsPage() {
     setEditingBudgetId(row.id);
     setCategory(row.category);
     setAmount(String(row.budget));
+    budgetFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast({ type: "success", text: "Editando presupuesto seleccionado." });
   };
 
   const handleDeleteBudget = async (id: string) => {
@@ -411,6 +413,8 @@ export default function BudgetsPage() {
     setIncomeSource(row.source);
     setIncomeAmount(String(row.amount));
     setIncomeDate(row.income_date);
+    incomeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast({ type: "success", text: "Editando ingreso seleccionado." });
   };
 
   const handleDeleteIncome = async (id: string) => {
@@ -455,7 +459,7 @@ export default function BudgetsPage() {
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={budgetFormRef} className="panel rounded-[28px] p-6 xl:col-span-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Categorias</p>
@@ -491,7 +495,7 @@ export default function BudgetsPage() {
           <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-teal-700">Tasa de ahorro</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p><p className="mt-3 text-sm text-slate-600">Se calcula sobre ingresos del mes.</p></article>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-6">
+        <section ref={incomeFormRef} className="panel rounded-[28px] p-6 xl:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ingresos</p>
@@ -513,7 +517,7 @@ export default function BudgetsPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-6">
+        <section ref={incomeFormRef} className="panel rounded-[28px] p-6 xl:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Resumen</p>
@@ -563,7 +567,7 @@ export default function BudgetsPage() {
           ) : null}
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={budgetFormRef} className="panel rounded-[28px] p-6 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ingresos del mes</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Listado editable</h2>
 
@@ -613,7 +617,7 @@ export default function BudgetsPage() {
           )}
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={budgetFormRef} className="panel rounded-[28px] p-6 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Gasto sin asignar</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Categorias no presupuestadas</h2>
           {unbudgetedExpenses.length === 0 ? (
