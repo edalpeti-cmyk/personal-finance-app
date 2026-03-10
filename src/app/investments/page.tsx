@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -98,6 +98,7 @@ export default function InvestmentsPage() {
   const [currentPrice, setCurrentPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
   const [errors, setErrors] = useState<InvestmentFormErrors>({});
+  const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -409,7 +410,7 @@ export default function InvestmentsPage() {
           <p className="text-xs uppercase tracking-[0.26em] text-teal-700">Portfolio tracker</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Cartera con seguimiento real</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-            Añade activos, edita posiciones, borra movimientos y actualiza precios reales para acciones, ETF, cripto, fondos y materias primas.
+            AÃƒÆ’Ã‚Â±ade activos, edita posiciones, borra movimientos y actualiza precios reales para acciones, ETF, cripto, fondos y materias primas.
           </p>
         </section>
 
@@ -437,7 +438,7 @@ export default function InvestmentsPage() {
           <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section>
         ) : null}
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={formRef} className="panel rounded-[28px] p-6 xl:col-span-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Formulario</p>
@@ -509,7 +510,7 @@ export default function InvestmentsPage() {
               disabled={saving || loading}
               type="submit"
             >
-              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Añadir activo"}
+              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "AÃƒÆ’Ã‚Â±adir activo"}
             </button>
           </form>
         </section>

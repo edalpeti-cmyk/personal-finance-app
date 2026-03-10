@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -76,6 +76,7 @@ export default function ExpensesPage() {
   const [description, setDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
+  const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -313,7 +314,7 @@ export default function ExpensesPage() {
 
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={formRef} className="panel rounded-[28px] p-6 xl:col-span-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Formulario</p>
@@ -366,7 +367,7 @@ export default function ExpensesPage() {
             </label>
 
             <button className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
-              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Añadir gasto"}
+              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "AÃƒÆ’Ã‚Â±adir gasto"}
             </button>
           </form>
         </section>
@@ -397,7 +398,7 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={formRef} className="panel rounded-[28px] p-6 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Analisis mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Lectura rapida</h2>
           <div className="mt-6 grid gap-4 text-sm text-slate-700">
@@ -419,7 +420,7 @@ export default function ExpensesPage() {
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Recomendaciones</p>
               <ul className="mt-2 grid gap-2 text-slate-700">
                 {monthlyAnalysis.recommendations.map((item) => (
-                  <li key={item}>• {item}</li>
+                  <li key={item}>ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {item}</li>
                 ))}
               </ul>
             </div>

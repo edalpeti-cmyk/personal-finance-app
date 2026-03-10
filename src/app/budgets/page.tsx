@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
@@ -146,6 +146,8 @@ export default function BudgetsPage() {
     prevExpenses: 0,
     prevSavings: 0
   });
+  const budgetFormRef = useRef<HTMLElement | null>(null);
+  const incomeFormRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
