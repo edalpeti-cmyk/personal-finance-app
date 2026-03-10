@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -10,8 +10,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/dashboard";
 
   const onLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -26,6 +24,11 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+
+    const nextPath =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("next") || "/dashboard"
+        : "/dashboard";
 
     router.push(nextPath);
     router.refresh();
