@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -22,6 +21,7 @@ import SideNav from "@/components/side-nav";
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
 type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null };
+type SnapshotRow = { snapshot_date: string; total_net_worth: number };
 type CashflowEvent = { date: string; delta: number };
 type TimelinePoint = { label: string; value: number };
 type ChartRange = "daily" | "monthly" | "annual" | "six_months" | "current_year";
@@ -34,6 +34,8 @@ type DashboardMetrics = {
   yearsToFire: number | null;
   annualExpenses: number;
   annualSavings: number;
+  cashPosition: number;
+  investmentsValue: number;
 };
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
@@ -115,34 +117,8 @@ function normalizeDate(dateString: string) {
   return new Date(`${dateString}T00:00:00`);
 }
 
-function buildCashflowEvents(incomeRows: IncomeRow[], expenseRows: ExpenseRow[]) {
-  const incomeEvents: CashflowEvent[] = incomeRows.map((row) => ({
-    date: row.income_date,
-    delta: Number(row.amount) || 0
-  }));
-
-  const expenseEvents: CashflowEvent[] = expenseRows.map((row) => ({
-    date: row.expense_date,
-    delta: -(Number(row.amount) || 0)
-  }));
-
-  return [...incomeEvents, ...expenseEvents].sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function buildTimelinePoints(events: CashflowEvent[], range: ChartRange) {
-  if (events.length === 0) {
-    return [] as TimelinePoint[];
-  }
-
-  const deltasByDate = new Map<string, number>();
-  for (const event of events) {
-    deltasByDate.set(event.date, (deltasByDate.get(event.date) ?? 0) + event.delta);
-  }
-
+function getRangeCheckpoints(range: ChartRange, firstDate: Date) {
   const now = new Date();
-  const sortedDates = Array.from(deltasByDate.keys()).sort();
-  const firstEventDate = normalizeDate(sortedDates[0]);
-
   const checkpoints: Array<{ date: Date; label: string }> = [];
 
   if (range === "daily") {
@@ -174,13 +150,37 @@ function buildTimelinePoints(events: CashflowEvent[], range: ChartRange) {
   }
 
   if (range === "annual") {
-    const startYear = Math.max(firstEventDate.getFullYear(), now.getFullYear() - 4);
+    const startYear = Math.max(firstDate.getFullYear(), now.getFullYear() - 4);
     for (let year = startYear; year <= now.getFullYear(); year++) {
       const date = endOfYear(new Date(year, 0, 1));
       checkpoints.push({ date, label: formatYear(date) });
     }
   }
 
+  return checkpoints;
+}
+
+function buildCashflowEvents(incomeRows: IncomeRow[], expenseRows: ExpenseRow[]) {
+  const incomeEvents: CashflowEvent[] = incomeRows.map((row) => ({
+    date: row.income_date,
+    delta: Number(row.amount) || 0
+  }));
+
+  const expenseEvents: CashflowEvent[] = expenseRows.map((row) => ({
+    date: row.expense_date,
+    delta: -(Number(row.amount) || 0)
+  }));
+
+  return [...incomeEvents, ...expenseEvents].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function buildCashflowTimeline(events: CashflowEvent[], range: ChartRange) {
+  if (events.length === 0) {
+    return [] as TimelinePoint[];
+  }
+
+  const firstDate = normalizeDate(events[0].date);
+  const checkpoints = getRangeCheckpoints(range, firstDate);
   let runningValue = 0;
   let eventIndex = 0;
 
@@ -191,10 +191,30 @@ function buildTimelinePoints(events: CashflowEvent[], range: ChartRange) {
       eventIndex += 1;
     }
 
-    points.push({
-      label: checkpoint.label,
-      value: Number(runningValue.toFixed(2))
-    });
+    points.push({ label: checkpoint.label, value: Number(runningValue.toFixed(2)) });
+  }
+
+  return points;
+}
+
+function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange) {
+  if (snapshots.length === 0) {
+    return [] as TimelinePoint[];
+  }
+
+  const firstDate = normalizeDate(snapshots[0].snapshot_date);
+  const checkpoints = getRangeCheckpoints(range, firstDate);
+  let snapshotIndex = 0;
+  let latestValue = Number(snapshots[0].total_net_worth) || 0;
+
+  const points: TimelinePoint[] = [];
+  for (const checkpoint of checkpoints) {
+    while (snapshotIndex < snapshots.length && normalizeDate(snapshots[snapshotIndex].snapshot_date) <= checkpoint.date) {
+      latestValue = Number(snapshots[snapshotIndex].total_net_worth) || 0;
+      snapshotIndex += 1;
+    }
+
+    points.push({ label: checkpoint.label, value: Number(latestValue.toFixed(2)) });
   }
 
   return points;
@@ -209,6 +229,7 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [snapshotRows, setSnapshotRows] = useState<SnapshotRow[]>([]);
   const [chartRange, setChartRange] = useState<ChartRange>("monthly");
 
   const [aiLoading, setAiLoading] = useState(false);
@@ -222,15 +243,21 @@ export default function DashboardPage() {
   );
 
   const cashflowEvents = useMemo(() => buildCashflowEvents(incomeRows, expenseRows), [incomeRows, expenseRows]);
-  const netWorthTimeline = useMemo(() => buildTimelinePoints(cashflowEvents, chartRange), [cashflowEvents, chartRange]);
+  const timelinePoints = useMemo(() => {
+    if (snapshotRows.length > 1) {
+      return buildSnapshotTimeline(snapshotRows, chartRange);
+    }
+
+    return buildCashflowTimeline(cashflowEvents, chartRange);
+  }, [cashflowEvents, chartRange, snapshotRows]);
 
   const timelineChartData = useMemo(
     () => ({
-      labels: netWorthTimeline.map((point: TimelinePoint) => point.label),
+      labels: timelinePoints.map((point: TimelinePoint) => point.label),
       datasets: [
         {
-          label: "Patrimonio estimado",
-          data: netWorthTimeline.map((point: TimelinePoint) => point.value),
+          label: snapshotRows.length > 1 ? "Patrimonio real guardado" : "Patrimonio estimado",
+          data: timelinePoints.map((point: TimelinePoint) => point.value),
           borderColor: "#0f766e",
           backgroundColor: "rgba(15, 118, 110, 0.16)",
           fill: true,
@@ -241,7 +268,7 @@ export default function DashboardPage() {
         }
       ]
     }),
-    [chartRange, netWorthTimeline]
+    [chartRange, snapshotRows.length, timelinePoints]
   );
 
   const timelineChartOptions = useMemo(
@@ -334,11 +361,16 @@ export default function DashboardPage() {
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
 
-      const totalNetWorth = investmentRows.reduce((acc, row) => {
+      const investmentsValue = investmentRows.reduce((acc, row) => {
         const qty = Number(row.quantity) || 0;
         const price = Number(row.current_price ?? row.average_buy_price) || 0;
         return acc + qty * price;
       }, 0);
+
+      const totalIncomeAllTime = nextIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const totalExpensesAllTime = nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const cashPosition = totalIncomeAllTime - totalExpensesAllTime;
+      const totalNetWorth = cashPosition + investmentsValue;
 
       const monthExpenses = nextExpenseRows.reduce(
         (acc, row) => (isSameMonth(row.expense_date, now) ? acc + Number(row.amount) : acc),
@@ -371,8 +403,36 @@ export default function DashboardPage() {
         fireProgress,
         yearsToFire,
         annualExpenses,
-        annualSavings
+        annualSavings,
+        cashPosition,
+        investmentsValue
       });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const snapshotPayload = {
+        user_id: userId,
+        snapshot_date: today,
+        total_net_worth: Number(totalNetWorth.toFixed(2)),
+        cash_position: Number(cashPosition.toFixed(2)),
+        investments_value: Number(investmentsValue.toFixed(2))
+      };
+
+      const upsertResult = await supabase.from("net_worth_snapshots").upsert(snapshotPayload, {
+        onConflict: "user_id,snapshot_date"
+      });
+
+      if (!upsertResult.error) {
+        const snapshotsResult = await supabase
+          .from("net_worth_snapshots")
+          .select("snapshot_date, total_net_worth")
+          .eq("user_id", userId)
+          .order("snapshot_date", { ascending: true });
+
+        if (!snapshotsResult.error) {
+          setSnapshotRows((snapshotsResult.data as SnapshotRow[]) ?? []);
+        }
+      }
+
       setLoading(false);
     };
 
@@ -412,15 +472,15 @@ export default function DashboardPage() {
         <section className="rounded-[30px] bg-[linear-gradient(135deg,#134e4a_0%,#0f766e_55%,#14b8a6_100%)] p-6 text-white shadow-[0_24px_60px_rgba(15,118,110,0.26)] md:col-span-2 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-100/80">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-emerald-50/88">Patrimonio estimado con tus posiciones registradas y una lectura rapida del avance hacia independencia.</p>
+          <p className="mt-2 max-w-sm text-sm text-emerald-50/88">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Tasa de ahorro</p>
-              <p className="mt-2 text-2xl font-semibold">{metrics && metrics.savingsRate !== null ? `${metrics.savingsRate.toFixed(2)}%` : "Sin datos"}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Caja estimada</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.cashPosition) : "--"}</p>
             </div>
             <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Anos estimados</p>
-              <p className="mt-2 text-2xl font-semibold">{metrics && metrics.yearsToFire !== null ? metrics.yearsToFire : "--"}</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Inversiones</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.investmentsValue) : "--"}</p>
             </div>
           </div>
         </section>
@@ -448,7 +508,7 @@ export default function DashboardPage() {
             <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Patrimonio total</p>
               <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(metrics.totalNetWorth)}</p>
-              <p className="mt-3 text-sm text-slate-600">Suma estimada de tus inversiones registradas.</p>
+              <p className="mt-3 text-sm text-slate-600">Caja neta acumulada mas valor actual de inversiones.</p>
             </section>
 
             <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
@@ -477,9 +537,11 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Evolucion del patrimonio</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Patrimonio estimado por periodos</h2>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Patrimonio guardado por periodos</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    Estimacion basada en ingresos menos gastos acumulados. Sirve como lectura rapida de tendencia diaria, mensual y anual.
+                    {snapshotRows.length > 1
+                      ? "Grafico basado en snapshots diarios guardados en tu base de datos."
+                      : "Aun no hay suficiente historico guardado. Mientras tanto mostramos una estimacion basada en cashflow acumulado."}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -502,11 +564,11 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-6 h-[320px]">
-                {netWorthTimeline.length > 0 ? (
+                {timelinePoints.length > 0 ? (
                   <Line data={timelineChartData} options={timelineChartOptions} />
                 ) : (
                   <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/60 text-sm text-slate-500">
-                    Aun no hay suficientes ingresos y gastos registrados para dibujar la evolucion del patrimonio.
+                    Aun no hay suficientes datos para dibujar la evolucion del patrimonio.
                   </div>
                 )}
               </div>
@@ -594,9 +656,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-
-
-
-
-
