@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateRuleBasedInsights, type FinancialSnapshot } from "@/lib/ai-insights";
 
@@ -102,9 +102,11 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   };
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+  const { data: authData, error: authError } = await supabase.auth.getUser(bearerToken);
 
   if (authError || !authData.user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -124,7 +126,7 @@ export async function POST() {
       "Analiza estos datos y genera 3-5 insights accionables en espanol.",
       "Incluye recomendaciones de ahorro e inversion y una accion concreta para esta semana.",
       "No des consejo legal/fiscal. Usa lenguaje claro.",
-      "Devuelve solo JSON valido con formato: {\"insights\": [\"...\"]}",
+      'Devuelve solo JSON valido con formato: {"insights": ["..."]}',
       `Datos: ${JSON.stringify(snapshot)}`
     ].join("\n");
 
