@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -16,6 +16,8 @@
   --warn: #b45309;
   --danger: #b42318;
   --shadow: 0 24px 60px rgba(30, 41, 59, 0.10);
+  --font-heading: "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-body: "Segoe UI", Tahoma, Geneva, sans-serif;
 }
 
 * {
@@ -31,7 +33,7 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--text);
-  font-family: var(--font-body), "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   background:
     radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 28%),
     radial-gradient(circle at top right, rgba(217, 119, 6, 0.12), transparent 22%),

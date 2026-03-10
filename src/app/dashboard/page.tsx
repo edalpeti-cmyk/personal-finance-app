@@ -1,4 +1,4 @@
-"use client";
+ï»¿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -189,8 +189,8 @@ export default function DashboardPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 md:grid-cols-2 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 md:p-8 md:col-span-2 xl:col-span-7">
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-6 md:col-span-2 md:p-8 xl:col-span-7">
           <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-teal-700">Vista general</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Tu sistema financiero, de un vistazo</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
@@ -201,7 +201,7 @@ export default function DashboardPage() {
         <section className="rounded-[30px] bg-[linear-gradient(135deg,#134e4a_0%,#0f766e_55%,#14b8a6_100%)] p-6 text-white shadow-[0_24px_60px_rgba(15,118,110,0.26)] md:col-span-2 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-100/80">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-emerald-50/88">Patrimonio estimado con tus posiciones registradas y una lectura rápida del avance hacia independencia.</p>
+          <p className="mt-2 max-w-sm text-sm text-emerald-50/88">Patrimonio estimado con tus posiciones registradas y una lectura rapida del avance hacia independencia.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Tasa de ahorro</p>
@@ -344,4 +344,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
