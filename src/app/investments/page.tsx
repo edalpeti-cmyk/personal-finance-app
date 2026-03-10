@@ -12,7 +12,8 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
-import { ensureActiveUser } from "@/lib/supabase/auth-client";
+import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
+import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -67,11 +68,11 @@ function inputClass(hasError: boolean) {
 
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { userId, authLoading } = useAuthGuard();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
 
   const [assetName, setAssetName] = useState("");
@@ -106,21 +107,16 @@ export default function InvestmentsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const activeUser = await ensureActiveUser(supabase);
-      if (!activeUser) {
-        setMessage("No hay sesion activa. Inicia sesion para gestionar inversiones.");
-        setLoading(false);
+      if (authLoading || !userId) {
         return;
       }
 
-      const uid = activeUser.id;
-      setUserId(uid);
-      await loadInvestments(uid);
+      await loadInvestments(userId);
       setLoading(false);
     };
 
     void init();
-  }, [loadInvestments, supabase]);
+  }, [authLoading, loadInvestments, supabase, userId]);
 
   const metrics = useMemo(() => {
     const totals = investments.reduce(
@@ -373,6 +369,16 @@ export default function InvestmentsPage() {
     setSaving(false);
   };
 
+  if (authLoading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-6xl p-6 md:pl-60">
+          <AuthLoadingState title="Preparando inversiones" description="Estamos validando tu sesion antes de abrir el portfolio tracker." />
+        </main>
+      </>
+    );
+  }
   return (
     <>
       <SideNav />
@@ -556,4 +562,7 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
+
+
 

@@ -2,7 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ensureActiveUser } from "@/lib/supabase/auth-client";
+import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
+import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 
 type BudgetRow = {
@@ -112,13 +113,13 @@ function toCsv(rows: BudgetWithActual[], month: string) {
 
 export default function BudgetsPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { userId, authLoading } = useAuthGuard();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [incomeSaving, setIncomeSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [category, setCategory] = useState("");
@@ -258,21 +259,16 @@ export default function BudgetsPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const activeUser = await ensureActiveUser(supabase);
-      if (!activeUser) {
-        setMessage("No hay sesion activa. Inicia sesion para gestionar presupuestos.");
-        setLoading(false);
+      if (authLoading || !userId) {
         return;
       }
 
-      const uid = activeUser.id;
-      setUserId(uid);
-      await loadData(uid, selectedMonth);
+      await loadData(userId, selectedMonth);
       setLoading(false);
     };
 
     void init();
-  }, [loadData, selectedMonth, supabase]);
+  }, [authLoading, loadData, selectedMonth, supabase, userId]);
 
   const totals = useMemo(() => {
     const totalBudget = rows.reduce((acc, row) => acc + row.budget, 0);
@@ -445,6 +441,16 @@ export default function BudgetsPage() {
     setSaving(false);
   };
 
+  if (authLoading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-6xl p-6 md:pl-60">
+          <AuthLoadingState title="Preparando presupuestos" description="Estamos comprobando tu sesion antes de cargar el presupuesto mensual." />
+        </main>
+      </>
+    );
+  }
   return (
     <>
       <SideNav />
@@ -716,4 +722,7 @@ export default function BudgetsPage() {
     </>
   );
 }
+
+
+
 

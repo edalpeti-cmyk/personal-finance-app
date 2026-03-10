@@ -12,7 +12,8 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
-import { ensureActiveUser } from "@/lib/supabase/auth-client";
+import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
+import AuthLoadingState from "@/components/auth-loading-state";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
 import SideNav from "@/components/side-nav";
 
@@ -52,11 +53,11 @@ function inputClass(hasError: boolean) {
 
 export default function ExpensesPage() {
   const supabase = useMemo(() => createClient(), []);
+  const { userId, authLoading } = useAuthGuard();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
 
   const [amount, setAmount] = useState("");
@@ -88,21 +89,16 @@ export default function ExpensesPage() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const activeUser = await ensureActiveUser(supabase);
-      if (!activeUser) {
-        setMessage("No hay sesion activa. Inicia sesion para gestionar gastos.");
-        setLoading(false);
+      if (authLoading || !userId) {
         return;
       }
 
-      const uid = activeUser.id;
-      setUserId(uid);
-      await loadExpenses(uid);
+      await loadExpenses(userId);
       setLoading(false);
     };
 
     void init();
-  }, [loadExpenses, supabase]);
+  }, [authLoading, loadExpenses, supabase, userId]);
 
   const monthlyTotals = useMemo(() => {
     const year = new Date().getFullYear();
@@ -261,6 +257,16 @@ export default function ExpensesPage() {
     setSaving(false);
   };
 
+  if (authLoading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-5xl p-6 md:pl-60">
+          <AuthLoadingState title="Preparando gastos" description="Estamos comprobando tu sesion antes de cargar el gestor de gastos." />
+        </main>
+      </>
+    );
+  }
   return (
     <>
       <SideNav />
@@ -424,4 +430,7 @@ export default function ExpensesPage() {
     </>
   );
 }
+
+
+
 
