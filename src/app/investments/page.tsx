@@ -1,3 +1,5 @@
+﻿"use client";
+
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
@@ -622,4 +624,5 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
 
