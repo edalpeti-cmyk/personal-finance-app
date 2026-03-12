@@ -326,6 +326,7 @@ export default function InvestmentsPage() {
     setPurchaseDate(row.purchase_date ?? new Date().toISOString().slice(0, 10));
     setErrors({});
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast({ type: "success", text: "Modo edicion activado para esta posicion." });
   };
   const handleDelete = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta posicion. Deseas continuar?")) {
@@ -437,7 +438,7 @@ export default function InvestmentsPage() {
           <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section>
         ) : null}
 
-        <section ref={formRef} className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={formRef} className={`panel rounded-[28px] p-6 xl:col-span-5 ${editingId ? "ring-2 ring-teal-200" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Formulario</p>

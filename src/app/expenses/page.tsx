@@ -257,6 +257,7 @@ export default function ExpensesPage() {
     setExpenseDate(expense.expense_date);
     setErrors({});
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast({ type: "success", text: "Modo edicion activado para este gasto." });
   };
   const handleDelete = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara este gasto. Deseas continuar?")) {
@@ -314,7 +315,7 @@ export default function ExpensesPage() {
 
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section ref={formRef} className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section ref={formRef} className={`panel rounded-[28px] p-6 xl:col-span-5 ${editingId ? "ring-2 ring-teal-200" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Formulario</p>
@@ -398,7 +399,7 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section ref={formRef} className="panel rounded-[28px] p-6 xl:col-span-5">
+        <section className="panel rounded-[28px] p-6 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Analisis mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Lectura rapida</h2>
           <div className="mt-6 grid gap-4 text-sm text-slate-700">
