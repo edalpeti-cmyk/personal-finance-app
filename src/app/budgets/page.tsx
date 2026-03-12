@@ -44,6 +44,17 @@ type IncomeSavingsSummary = {
   prevSavings: number;
 };
 
+type BudgetInlineDraft = {
+  category: string;
+  amount: string;
+};
+
+type IncomeInlineDraft = {
+  source: string;
+  amount: string;
+  incomeDate: string;
+};
+
 type ToastState = { type: "success" | "error"; text: string } | null;
 
 function monthToDate(month: string) {
@@ -661,7 +672,7 @@ export default function BudgetsPage() {
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(row.actual)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-700" : "text-emerald-700"}`}>{formatCurrency(row.remaining)}</td>
                       <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-700" : row.spentPercent > 85 ? "text-amber-700" : "text-slate-700"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><a href={`?editBudget=${row.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</a><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -686,7 +697,7 @@ export default function BudgetsPage() {
                       <td className="rounded-l-2xl px-3 py-4 text-slate-600">{entry.income_date}</td>
                       <td className="px-3 py-4 font-medium text-slate-900">{entry.source}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(Number(entry.amount))}</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><a href={`?editIncome=${entry.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</a><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
                     </tr>
                   ))
                 )}
@@ -737,3 +748,4 @@ export default function BudgetsPage() {
     </>
   );
 }
+
