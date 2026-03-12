@@ -1,5 +1,3 @@
-﻿"use client";
-
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
@@ -410,7 +408,7 @@ export default function InvestmentsPage() {
           <p className="text-xs uppercase tracking-[0.26em] text-teal-700">Portfolio tracker</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Cartera con seguimiento real</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-            AÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±ade activos, edita posiciones, borra movimientos y actualiza precios reales para acciones, ETF, cripto, fondos y materias primas.
+            Anade activos, edita posiciones, borra movimientos y actualiza precios reales para acciones, ETF, cripto, fondos y materias primas.
           </p>
         </section>
 
@@ -510,7 +508,7 @@ export default function InvestmentsPage() {
               disabled={saving || loading}
               type="submit"
             >
-              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "AÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±adir activo"}
+              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Anadir activo"}
             </button>
           </form>
         </section>
