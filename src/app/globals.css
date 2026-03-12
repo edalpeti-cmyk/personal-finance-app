@@ -7,7 +7,7 @@
   --bg-strong: #e8ddcc;
   --surface: rgba(255, 252, 247, 0.86);
   --surface-strong: #fffdf9;
-  --surface-dark: #1f2a2a;
+  --surface-dark: #0f1720;
   --line: rgba(39, 52, 52, 0.12);
   --text: #182222;
   --muted: #5f6d69;
@@ -15,7 +15,7 @@
   --accent-strong: #134e4a;
   --warn: #b45309;
   --danger: #b42318;
-  --shadow: 0 24px 60px rgba(30, 41, 59, 0.10);
+  --shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
   --font-heading: "Trebuchet MS", "Segoe UI", sans-serif;
   --font-body: "Segoe UI", Tahoma, Geneva, sans-serif;
 }
@@ -37,7 +37,7 @@ body {
   background:
     radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 28%),
     radial-gradient(circle at top right, rgba(217, 119, 6, 0.12), transparent 22%),
-    linear-gradient(180deg, #f8f5ef 0%, var(--bg) 42%, #efe6d8 100%);
+    linear-gradient(180deg, #f6f2ea 0%, var(--bg) 42%, #ebe1d2 100%);
 }
 
 a {

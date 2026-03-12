@@ -459,8 +459,8 @@ export default function BudgetsPage() {
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
         </section>
 
-        <section className="rounded-[30px] bg-[linear-gradient(135deg,#14532d_0%,#0f766e_55%,#14b8a6_100%)] p-6 text-white shadow-[0_24px_60px_rgba(20,83,45,0.22)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-white/70">Mes activo</p>
+        <section className="rounded-[30px] bg-[linear-gradient(135deg,#052e2b_0%,#0f3d3a_48%,#115e59_100%)] p-6 text-white shadow-[0_24px_60px_rgba(5,46,43,0.34)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-white/82">Mes activo</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{selectedMonth}</p>
           <p className="mt-3 text-sm leading-6 text-white/80">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
         </section>

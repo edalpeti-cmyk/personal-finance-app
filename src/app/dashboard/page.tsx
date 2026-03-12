@@ -498,17 +498,17 @@ export default function DashboardPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] bg-[linear-gradient(135deg,#134e4a_0%,#0f766e_55%,#14b8a6_100%)] p-6 text-white shadow-[0_24px_60px_rgba(15,118,110,0.26)] md:col-span-2 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.26em] text-emerald-100/80">Momentum actual</p>
+        <section className="rounded-[30px] bg-[linear-gradient(135deg,#020617_0%,#0f172a_40%,#115e59_100%)] p-6 text-white shadow-[0_24px_60px_rgba(2,6,23,0.42)] md:col-span-2 xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.26em] text-white/78">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-emerald-50/88">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
+          <p className="mt-2 max-w-sm text-sm text-white/92">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Caja estimada</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-white/70">Caja estimada</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.cashPosition) : "--"}</p>
             </div>
             <div className="rounded-2xl border border-white/12 bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/70">Inversiones</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-white/70">Inversiones</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.investmentsValue) : "--"}</p>
             </div>
           </div>
@@ -570,7 +570,7 @@ export default function DashboardPage() {
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                     {snapshotRows.length > 1
                       ? "Grafico basado en snapshots diarios guardados en tu base de datos."
-                      : "Aun no hay suficiente historico guardado. Mientras tanto mostramos una estimacion basada en cashflow acumulado."}
+                      : "Aun no hay suficiente historico guardado. Mientras tanto mostramos una estimacion basada en flujo de caja acumulado."}
                   </p>
                 </div>
                 <div className="flex flex-col items-start gap-3 lg:items-end">
