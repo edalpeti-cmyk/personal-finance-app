@@ -150,28 +150,6 @@ export default function InvestmentsPage() {
     void init();
   }, [authLoading, loadInvestments, userId]);
 
-  useEffect(() => {
-    if (loading || investments.length === 0 || typeof window === "undefined") {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const editId = params.get("edit");
-    if (!editId) {
-      return;
-    }
-
-    const row = investments.find((item) => item.id === editId);
-    if (!row) {
-      return;
-    }
-
-    handleEdit(row);
-    params.delete("edit");
-    const nextQuery = params.toString();
-    window.history.replaceState({}, "", nextQuery ? '?' + nextQuery : window.location.pathname);
-  }, [investments, loading]);
-
   const metrics = useMemo(() => {
     return investments.reduce(
       (acc, row) => {
@@ -337,77 +315,18 @@ export default function InvestmentsPage() {
     setSaving(false);
   };
 
-  const handleEdit = async (row: InvestmentRow) => {
-    if (!userId) {
-      showToast({ type: "error", text: "Debes iniciar sesion para editar inversiones." });
-      return;
-    }
-
-    const nextName = window.prompt("Nombre del activo", row.asset_name);
-    if (nextName === null) return;
-    const nextSymbol = window.prompt("Ticker / simbolo", row.asset_symbol ?? "");
-    if (nextSymbol === null) return;
-    const nextQuantityRaw = window.prompt("Cantidad", String(row.quantity));
-    if (nextQuantityRaw === null) return;
-    const nextAvgRaw = window.prompt("Precio medio", String(row.average_buy_price));
-    if (nextAvgRaw === null) return;
-    const nextCurrentRaw = window.prompt("Precio actual", row.current_price === null ? "" : String(row.current_price));
-    if (nextCurrentRaw === null) return;
-    const nextDate = window.prompt("Fecha de compra (YYYY-MM-DD)", row.purchase_date ?? new Date().toISOString().slice(0, 10));
-    if (nextDate === null) return;
-
-    const nextQuantity = Number(nextQuantityRaw);
-    const nextAvg = Number(nextAvgRaw);
-    const nextCurrent = nextCurrentRaw.trim() ? Number(nextCurrentRaw) : null;
-
-    if (nextName.trim().length < 2 || nextName.trim().length > 80) {
-      showToast({ type: "error", text: "El nombre debe tener entre 2 y 80 caracteres." });
-      return;
-    }
-
-    if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) {
-      showToast({ type: "error", text: "La cantidad debe ser mayor que 0." });
-      return;
-    }
-
-    if (!Number.isFinite(nextAvg) || nextAvg < 0) {
-      showToast({ type: "error", text: "El precio medio no es valido." });
-      return;
-    }
-
-    if (nextCurrent !== null && (!Number.isFinite(nextCurrent) || nextCurrent < 0)) {
-      showToast({ type: "error", text: "El precio actual no es valido." });
-      return;
-    }
-
-    const parsedDate = new Date(`${nextDate}T00:00:00`);
-    if (Number.isNaN(parsedDate.getTime())) {
-      showToast({ type: "error", text: "La fecha no es valida." });
-      return;
-    }
-
-    const { error } = await supabase
-      .from("investments")
-      .update({
-        asset_name: nextName.trim(),
-        asset_symbol: nextSymbol.trim().toUpperCase() || null,
-        quantity: nextQuantity,
-        average_buy_price: nextAvg,
-        current_price: nextCurrent,
-        purchase_date: nextDate
-      })
-      .eq("id", row.id)
-      .eq("user_id", userId);
-
-    if (error) {
-      showToast({ type: "error", text: "No se pudo actualizar la posicion." });
-      return;
-    }
-
-    await loadInvestments(userId);
-    showToast({ type: "success", text: "Posicion actualizada." });
+  const handleEdit = (row: InvestmentRow) => {
+    setEditingId(row.id);
+    setAssetName(row.asset_name);
+    setAssetSymbol(row.asset_symbol ?? "");
+    setAssetType(row.asset_type);
+    setQuantity(String(row.quantity));
+    setAverageBuyPrice(String(row.average_buy_price));
+    setCurrentPrice(row.current_price === null ? "" : String(row.current_price));
+    setPurchaseDate(row.purchase_date ?? new Date().toISOString().slice(0, 10));
+    setErrors({});
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-
   const handleDelete = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta posicion. Deseas continuar?")) {
       return;
@@ -676,9 +595,9 @@ export default function InvestmentsPage() {
                         <td className="px-3 py-4 text-right font-medium text-slate-900">{formatCurrency(value)}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
-                            <a href={`?edit=${row.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                            <button type="button" onClick={() => handleEdit(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
                               Editar
-                            </a>
+                            </button>
                             <button
                               type="button"
                               onClick={() => void handleRefreshPrices(row.id)}

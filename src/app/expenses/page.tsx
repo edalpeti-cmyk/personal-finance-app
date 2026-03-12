@@ -125,28 +125,6 @@ export default function ExpensesPage() {
     void init();
   }, [authLoading, loadExpenses, userId]);
 
-  useEffect(() => {
-    if (loading || expenses.length === 0 || typeof window === "undefined") {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const editId = params.get("edit");
-    if (!editId) {
-      return;
-    }
-
-    const expense = expenses.find((item) => item.id === editId);
-    if (!expense) {
-      return;
-    }
-
-    handleEdit(expense);
-    params.delete("edit");
-    const nextQuery = params.toString();
-    window.history.replaceState({}, "", nextQuery ? '?' + nextQuery : window.location.pathname);
-  }, [expenses, loading]);
-
   const monthlyTotals = useMemo(() => {
     const year = new Date().getFullYear();
     const totals = new Array<number>(12).fill(0);
@@ -265,60 +243,21 @@ export default function ExpensesPage() {
     setSaving(false);
   };
 
-  const handleEdit = async (expense: ExpenseRow) => {
-    if (!userId) {
-      showToast({ type: "error", text: "Debes iniciar sesion para editar gastos." });
-      return;
+  const handleEdit = (expense: ExpenseRow) => {
+    setEditingId(expense.id);
+    setAmount(String(expense.amount));
+    if (PRESET_CATEGORIES.includes(expense.category)) {
+      setCategory(expense.category);
+      setCustomCategory("");
+    } else {
+      setCategory("Otros");
+      setCustomCategory(expense.category);
     }
-
-    const nextAmountRaw = window.prompt("Nuevo importe", String(expense.amount));
-    if (nextAmountRaw === null) return;
-    const nextCategory = window.prompt("Nueva categoria", expense.category);
-    if (nextCategory === null) return;
-    const nextDescription = window.prompt("Nueva descripcion", expense.description ?? "");
-    if (nextDescription === null) return;
-    const nextDate = window.prompt("Nueva fecha (YYYY-MM-DD)", expense.expense_date);
-    if (nextDate === null) return;
-
-    const nextAmount = Number(nextAmountRaw);
-    const cleanCategory = nextCategory.trim();
-    const parsedDate = new Date(`${nextDate}T00:00:00`);
-
-    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
-      showToast({ type: "error", text: "El importe debe ser mayor que 0." });
-      return;
-    }
-
-    if (cleanCategory.length < 2 || cleanCategory.length > 40) {
-      showToast({ type: "error", text: "La categoria debe tener entre 2 y 40 caracteres." });
-      return;
-    }
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      showToast({ type: "error", text: "La fecha no es valida." });
-      return;
-    }
-
-    const { error } = await supabase
-      .from("expenses")
-      .update({
-        amount: nextAmount,
-        category: cleanCategory,
-        description: nextDescription.trim() || null,
-        expense_date: nextDate
-      })
-      .eq("id", expense.id)
-      .eq("user_id", userId);
-
-    if (error) {
-      showToast({ type: "error", text: "No se pudo actualizar el gasto." });
-      return;
-    }
-
-    await loadExpenses(userId);
-    showToast({ type: "success", text: "Gasto actualizado." });
+    setDescription(expense.description ?? "");
+    setExpenseDate(expense.expense_date);
+    setErrors({});
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-
   const handleDelete = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara este gasto. Deseas continuar?")) {
       return;
@@ -521,9 +460,9 @@ export default function ExpensesPage() {
                       <td className="px-3 py-4 text-right font-medium text-slate-900">{formatCurrency(Number(expense.amount))}</td>
                       <td className="rounded-r-2xl px-3 py-4">
                         <div className="flex justify-end gap-2">
-                          <a href={`?edit=${expense.id}`} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                          <button type="button" onClick={() => handleEdit(expense)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
                             Editar
-                          </a>
+                          </button>
                           <button type="button" onClick={() => void handleDelete(expense.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">
                             Borrar
                           </button>
