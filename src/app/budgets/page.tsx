@@ -459,10 +459,10 @@ export default function BudgetsPage() {
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
         </section>
 
-        <section className="rounded-[30px] border border-white/8 bg-[linear-gradient(135deg,#031716_0%,#0b2220_52%,#115e59_100%)] p-6 text-white shadow-[0_28px_72px_rgba(3,23,22,0.42)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-white/72">Mes activo</p>
+        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#031716_0%,#0b2220_52%,#115e59_100%)] p-6 text-slate-950 shadow-[0_28px_72px_rgba(3,23,22,0.42)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-800">Mes activo</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{selectedMonth}</p>
-          <p className="mt-3 text-sm leading-6 text-white/95">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-900">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
         </section>
 
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}

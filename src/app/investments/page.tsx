@@ -414,15 +414,15 @@ export default function InvestmentsPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-white/8 bg-[linear-gradient(135deg,#020617_0%,#0b1120_52%,#134e4a_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,6,23,0.46)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-white/72">Estado actual</p>
+        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#020617_0%,#0b1120_52%,#134e4a_100%)] p-6 text-slate-950 shadow-[0_28px_72px_rgba(2,6,23,0.46)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-800">Estado actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(metrics.totalValue)}</p>
-          <p className="mt-3 text-sm leading-6 text-white/95">Valor total calculado con el precio actual registrado en cada posicion.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-900">Valor total calculado con el precio actual registrado en cada posicion.</p>
           <button
             type="button"
             onClick={() => void handleRefreshPrices()}
             disabled={refreshingPrices || investments.length === 0}
-            className="mt-6 rounded-full border border-white/18 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 rounded-full border border-white/18 bg-white/55 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {refreshingPrices ? "Actualizando precios..." : "Actualizar precios reales"}
           </button>

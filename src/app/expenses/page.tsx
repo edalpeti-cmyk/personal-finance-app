@@ -301,10 +301,10 @@ export default function ExpensesPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-white/8 bg-[linear-gradient(135deg,#020617_0%,#111827_48%,#7c2d12_100%)] p-6 text-white shadow-[0_28px_70px_rgba(2,6,23,0.42)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-white/72">Pulso del mes</p>
+        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#020617_0%,#111827_48%,#7c2d12_100%)] p-6 text-slate-950 shadow-[0_28px_70px_rgba(2,6,23,0.42)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-800">Pulso del mes</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(currentMonthTotal)}</p>
-          <p className="mt-3 text-sm leading-6 text-white/95">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-900">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
         </section>
 
         {toast ? (

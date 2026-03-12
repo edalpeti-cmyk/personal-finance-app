@@ -498,16 +498,16 @@ export default function DashboardPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-white/8 bg-[linear-gradient(135deg,#020617_0%,#0b1120_50%,#115e59_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,6,23,0.46)] md:col-span-2 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.26em] text-white/72">Momentum actual</p>
+        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#020617_0%,#0b1120_50%,#115e59_100%)] p-6 text-slate-950 shadow-[0_28px_72px_rgba(2,6,23,0.46)] md:col-span-2 xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.26em] text-slate-800">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-white/95">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
+          <p className="mt-2 max-w-sm text-sm text-slate-900">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/14 bg-black/20 p-4">
+            <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/70">Caja estimada</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.cashPosition) : "--"}</p>
             </div>
-            <div className="rounded-2xl border border-white/14 bg-black/20 p-4">
+            <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/70">Inversiones</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.investmentsValue) : "--"}</p>
             </div>
