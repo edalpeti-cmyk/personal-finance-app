@@ -419,12 +419,44 @@ export default function BudgetsPage() {
     setSaving(false);
   };
 
-  const handleEditBudget = (row: BudgetWithActual) => {
-    setEditingBudgetId(row.id);
-    setCategory(row.category);
-    setAmount(String(row.budget));
-    budgetFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast({ type: "success", text: "Editando presupuesto seleccionado." });
+  const handleEditBudget = async (row: BudgetWithActual) => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para editar presupuestos." });
+      return;
+    }
+
+    const nextCategory = window.prompt("Categoria", row.category);
+    if (nextCategory === null) return;
+    const nextAmountRaw = window.prompt("Presupuesto mensual", String(row.budget));
+    if (nextAmountRaw === null) return;
+
+    const parsedAmount = Number(nextAmountRaw);
+    if (nextCategory.trim().length < 2 || nextCategory.trim().length > 40) {
+      showToast({ type: "error", text: "La categoria debe tener entre 2 y 40 caracteres." });
+      return;
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      showToast({ type: "error", text: "El importe del presupuesto debe ser mayor que 0." });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("monthly_budgets")
+      .update({
+        category: nextCategory.trim(),
+        budget_amount: parsedAmount
+      })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      showToast({ type: "error", text: "No se pudo actualizar el presupuesto." });
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({ type: "success", text: "Presupuesto actualizado." });
   };
 
   const handleDeleteBudget = async (id: string) => {
@@ -439,13 +471,53 @@ export default function BudgetsPage() {
     showToast({ type: "success", text: "Presupuesto eliminado." });
   };
 
-  const handleEditIncome = (row: IncomeRow) => {
-    setEditingIncomeId(row.id);
-    setIncomeSource(row.source);
-    setIncomeAmount(String(row.amount));
-    setIncomeDate(row.income_date);
-    incomeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast({ type: "success", text: "Editando ingreso seleccionado." });
+  const handleEditIncome = async (row: IncomeRow) => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para editar ingresos." });
+      return;
+    }
+
+    const nextSource = window.prompt("Fuente de ingreso", row.source);
+    if (nextSource === null) return;
+    const nextAmountRaw = window.prompt("Importe", String(row.amount));
+    if (nextAmountRaw === null) return;
+    const nextDate = window.prompt("Fecha (YYYY-MM-DD)", row.income_date);
+    if (nextDate === null) return;
+
+    const parsedAmount = Number(nextAmountRaw);
+    if (nextSource.trim().length < 2 || nextSource.trim().length > 80) {
+      showToast({ type: "error", text: "La fuente del ingreso debe tener entre 2 y 80 caracteres." });
+      return;
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      showToast({ type: "error", text: "El importe del ingreso debe ser mayor que 0." });
+      return;
+    }
+
+    const parsedDate = new Date(`${nextDate}T00:00:00`);
+    if (Number.isNaN(parsedDate.getTime())) {
+      showToast({ type: "error", text: "La fecha no es valida." });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("income")
+      .update({
+        source: nextSource.trim(),
+        amount: parsedAmount,
+        income_date: nextDate
+      })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      showToast({ type: "error", text: "No se pudo actualizar el ingreso." });
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({ type: "success", text: "Ingreso actualizado." });
   };
 
   const handleDeleteIncome = async (id: string) => {

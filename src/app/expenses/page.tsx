@@ -265,21 +265,58 @@ export default function ExpensesPage() {
     setSaving(false);
   };
 
-  const handleEdit = (expense: ExpenseRow) => {
-    setEditingId(expense.id);
-    setAmount(String(expense.amount));
-    if (PRESET_CATEGORIES.includes(expense.category)) {
-      setCategory(expense.category);
-      setCustomCategory("");
-    } else {
-      setCategory("Otros");
-      setCustomCategory(expense.category);
+  const handleEdit = async (expense: ExpenseRow) => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para editar gastos." });
+      return;
     }
-    setDescription(expense.description ?? "");
-    setExpenseDate(expense.expense_date);
-    setErrors({});
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast({ type: "success", text: "Editando gasto seleccionado." });
+
+    const nextAmountRaw = window.prompt("Nuevo importe", String(expense.amount));
+    if (nextAmountRaw === null) return;
+    const nextCategory = window.prompt("Nueva categoria", expense.category);
+    if (nextCategory === null) return;
+    const nextDescription = window.prompt("Nueva descripcion", expense.description ?? "");
+    if (nextDescription === null) return;
+    const nextDate = window.prompt("Nueva fecha (YYYY-MM-DD)", expense.expense_date);
+    if (nextDate === null) return;
+
+    const nextAmount = Number(nextAmountRaw);
+    const cleanCategory = nextCategory.trim();
+    const parsedDate = new Date(`${nextDate}T00:00:00`);
+
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+      showToast({ type: "error", text: "El importe debe ser mayor que 0." });
+      return;
+    }
+
+    if (cleanCategory.length < 2 || cleanCategory.length > 40) {
+      showToast({ type: "error", text: "La categoria debe tener entre 2 y 40 caracteres." });
+      return;
+    }
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      showToast({ type: "error", text: "La fecha no es valida." });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("expenses")
+      .update({
+        amount: nextAmount,
+        category: cleanCategory,
+        description: nextDescription.trim() || null,
+        expense_date: nextDate
+      })
+      .eq("id", expense.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      showToast({ type: "error", text: "No se pudo actualizar el gasto." });
+      return;
+    }
+
+    await loadExpenses(userId);
+    showToast({ type: "success", text: "Gasto actualizado." });
   };
 
   const handleDelete = async (id: string) => {
