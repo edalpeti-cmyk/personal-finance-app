@@ -414,10 +414,10 @@ export default function InvestmentsPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] bg-[linear-gradient(135deg,#020617_0%,#0f172a_42%,#134e4a_100%)] p-6 text-white shadow-[0_24px_60px_rgba(2,6,23,0.42)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-white/82">Estado actual</p>
+        <section className="rounded-[30px] border border-white/8 bg-[linear-gradient(135deg,#020617_0%,#0b1120_52%,#134e4a_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,6,23,0.46)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-white/72">Estado actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(metrics.totalValue)}</p>
-          <p className="mt-3 text-sm leading-6 text-white/78">Valor total calculado con el precio actual registrado en cada posicion.</p>
+          <p className="mt-3 text-sm leading-6 text-white/95">Valor total calculado con el precio actual registrado en cada posicion.</p>
           <button
             type="button"
             onClick={() => void handleRefreshPrices()}
