@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTheme } from "@/components/theme-provider";
 
 const ITEMS = [
   { href: "/dashboard", label: "Dashboard", hint: "Resumen general" },
@@ -14,6 +15,7 @@ const ITEMS = [
 
 export default function SideNav() {
   const pathname = usePathname();
+  const { toggleSettings } = useTheme();
 
   return (
     <>
@@ -45,7 +47,14 @@ export default function SideNav() {
             })}
           </nav>
 
-          <div className="mt-auto rounded-[22px] border border-white/8 bg-white/4 p-3">
+          <div className="mt-auto grid gap-3 rounded-[22px] border border-white/8 bg-white/4 p-3">
+            <button
+              type="button"
+              onClick={toggleSettings}
+              className="block rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-white/10"
+            >
+              Configuracion
+            </button>
             <Link href="/logout" className="block rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-white/10">
               Cerrar sesion
             </Link>
@@ -68,6 +77,9 @@ export default function SideNav() {
             </Link>
           );
         })}
+        <button type="button" onClick={toggleSettings} className="whitespace-nowrap rounded-full bg-slate-900 px-4 py-2 text-sm text-white">
+          Configuracion
+        </button>
         <Link href="/logout" className="whitespace-nowrap rounded-full bg-amber-100 px-4 py-2 text-sm text-amber-900">
           Salir
         </Link>
@@ -75,5 +87,3 @@ export default function SideNav() {
     </>
   );
 }
-
-

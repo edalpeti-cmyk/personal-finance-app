@@ -34,7 +34,9 @@ type FireFormErrors = {
 const MAX_YEARS = 60;
 
 function inputClass(hasError: boolean) {
-  return `rounded border p-2 ${hasError ? "border-red-600" : "border-slate-300"}`;
+  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition ${
+    hasError ? "border-red-400 ring-2 ring-red-500/20" : "border-white/10 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
+  }`;
 }
 
 export default function FirePage() {
@@ -110,13 +112,7 @@ export default function FirePage() {
     const points: ProjectionPoint[] = [];
     let currentValue = netWorth;
 
-    points.push({
-      year: 0,
-      age,
-      netWorth: Number(currentValue.toFixed(2)),
-      contribution: 0,
-      growth: 0
-    });
+    points.push({ year: 0, age, netWorth: Number(currentValue.toFixed(2)), contribution: 0, growth: 0 });
 
     let yearsToFire: number | null = currentValue >= fireNumber ? 0 : null;
 
@@ -146,16 +142,17 @@ export default function FirePage() {
       {
         label: "Patrimonio proyectado",
         data: simulation.points.map((p) => p.netWorth),
-        borderColor: "#0f766e",
-        backgroundColor: "rgba(15, 118, 110, 0.15)",
-        borderWidth: 2,
-        tension: 0.2
+        borderColor: "#14b8a6",
+        backgroundColor: "rgba(20, 184, 166, 0.14)",
+        borderWidth: 3,
+        tension: 0.24,
+        fill: true
       },
       {
         label: "Capital FIRE",
         data: simulation.points.map(() => Number(fireNumber.toFixed(2))),
-        borderColor: "#b91c1c",
-        backgroundColor: "rgba(185, 28, 28, 0.12)",
+        borderColor: "#f97316",
+        backgroundColor: "rgba(249, 115, 22, 0.10)",
         borderWidth: 2,
         borderDash: [6, 6],
         pointRadius: 0,
@@ -168,145 +165,124 @@ export default function FirePage() {
     responsive: true,
     plugins: {
       legend: {
-        display: true
+        display: true,
+        labels: { color: "#e2e8f0", usePointStyle: true }
       }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+      y: { grid: { color: "rgba(148, 163, 184, 0.16)" }, ticks: { color: "#cbd5e1" } }
     }
   };
 
   return (
     <>
       <SideNav />
-      <main className="mx-auto grid max-w-6xl gap-6 p-6 md:pl-60 md:grid-cols-2">
-      <section className="rounded-lg border bg-white p-4">
-        <h1 className="mb-4 text-2xl font-semibold">Calculadora FIRE</h1>
-        <p className="mb-4 text-sm text-slate-600">capital necesario = gastos anuales / 0.04</p>
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Calculadora FIRE</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Planifica tu independencia financiera</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Calcula tu numero FIRE, estima cuantos anos te faltan y visualiza la evolucion esperada de tu patrimonio.</p>
+        </section>
 
-        <div className="grid gap-3">
-          <label className="grid gap-1 text-sm">
-            Gastos anuales (EUR)
-            <input
-              className={inputClass(Boolean(errors.annualExpenses))}
-              type="number"
-              min="0"
-              step="0.01"
-              value={annualExpenses}
-              onChange={(e) => setAnnualExpenses(e.target.value)}
-              onBlur={() => validateField("annualExpenses")}
-            />
-            {errors.annualExpenses ? <span className="text-xs text-red-700">{errors.annualExpenses}</span> : null}
-          </label>
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Formula base</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">Gastos anuales / 0.04</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Usamos la regla del 4% para estimar el capital necesario para vivir de tu patrimonio.</p>
+        </section>
 
-          <label className="grid gap-1 text-sm">
-            Patrimonio actual (EUR)
-            <input
-              className={inputClass(Boolean(errors.currentNetWorth))}
-              type="number"
-              min="0"
-              step="0.01"
-              value={currentNetWorth}
-              onChange={(e) => setCurrentNetWorth(e.target.value)}
-              onBlur={() => validateField("currentNetWorth")}
-            />
-            {errors.currentNetWorth ? <span className="text-xs text-red-700">{errors.currentNetWorth}</span> : null}
-          </label>
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Parametros</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tus datos</h2>
 
-          <label className="grid gap-1 text-sm">
-            Ahorro/inversion anual (EUR)
-            <input
-              className={inputClass(Boolean(errors.annualContribution))}
-              type="number"
-              min="0"
-              step="0.01"
-              value={annualContribution}
-              onChange={(e) => setAnnualContribution(e.target.value)}
-              onBlur={() => validateField("annualContribution")}
-            />
-            {errors.annualContribution ? <span className="text-xs text-red-700">{errors.annualContribution}</span> : null}
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            Rentabilidad esperada anual (%)
-            <input
-              className={inputClass(Boolean(errors.expectedReturn))}
-              type="number"
-              step="0.1"
-              value={expectedReturn}
-              onChange={(e) => setExpectedReturn(e.target.value)}
-              onBlur={() => validateField("expectedReturn")}
-            />
-            {errors.expectedReturn ? <span className="text-xs text-red-700">{errors.expectedReturn}</span> : null}
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            Edad actual
-            <input
-              className={inputClass(Boolean(errors.currentAge))}
-              type="number"
-              min="1"
-              step="1"
-              value={currentAge}
-              onChange={(e) => setCurrentAge(e.target.value)}
-              onBlur={() => validateField("currentAge")}
-            />
-            {errors.currentAge ? <span className="text-xs text-red-700">{errors.currentAge}</span> : null}
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-lg border bg-white p-4">
-        <h2 className="mb-4 text-xl font-semibold">Resultados</h2>
-        <div className="grid gap-2 text-sm">
-          <p>
-            <strong>Capital necesario (FIRE):</strong> {fireNumber.toFixed(2)} EUR
-          </p>
-          <p>
-            <strong>Anos hasta independencia financiera:</strong>{" "}
-            {simulation.yearsToFire === null ? `Mas de ${MAX_YEARS} anos (con los datos actuales)` : simulation.yearsToFire}
-          </p>
-          {simulation.yearsToFire !== null ? (
-            <p>
-              <strong>Edad estimada FIRE:</strong> {Number(currentAge) + simulation.yearsToFire} anos
-            </p>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="rounded-lg border bg-white p-4 md:col-span-2">
-        <h2 className="mb-4 text-xl font-semibold">Grafico de crecimiento</h2>
-        {simulation.points.length > 0 ? <Line data={chartData} options={chartOptions} /> : <p>Introduce datos validos para ver la proyeccion.</p>}
-      </section>
-
-      <section className="rounded-lg border bg-white p-4 md:col-span-2">
-        <h2 className="mb-4 text-xl font-semibold">Evolucion del patrimonio</h2>
-        {simulation.points.length === 0 ? (
-          <p>Sin datos.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50 text-left">
-                  <th className="p-2">Ano</th>
-                  <th className="p-2">Edad</th>
-                  <th className="p-2 text-right">Patrimonio</th>
-                  <th className="p-2 text-right">Aporte anual</th>
-                  <th className="p-2 text-right">Crecimiento anual</th>
-                </tr>
-              </thead>
-              <tbody>
-                {simulation.points.slice(0, 31).map((point) => (
-                  <tr key={point.year} className="border-b">
-                    <td className="p-2">{point.year}</td>
-                    <td className="p-2">{point.age}</td>
-                    <td className="p-2 text-right">{point.netWorth.toFixed(2)} EUR</td>
-                    <td className="p-2 text-right">{point.contribution.toFixed(2)} EUR</td>
-                    <td className="p-2 text-right">{point.growth.toFixed(2)} EUR</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-6 grid gap-4">
+            <label className="grid gap-2 text-sm text-slate-200">
+              Gastos anuales (EUR)
+              <input className={inputClass(Boolean(errors.annualExpenses))} type="number" min="0" step="0.01" value={annualExpenses} onChange={(e) => setAnnualExpenses(e.target.value)} onBlur={() => validateField("annualExpenses")} />
+              {errors.annualExpenses ? <span className="text-xs text-red-300">{errors.annualExpenses}</span> : null}
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Patrimonio actual (EUR)
+              <input className={inputClass(Boolean(errors.currentNetWorth))} type="number" min="0" step="0.01" value={currentNetWorth} onChange={(e) => setCurrentNetWorth(e.target.value)} onBlur={() => validateField("currentNetWorth")} />
+              {errors.currentNetWorth ? <span className="text-xs text-red-300">{errors.currentNetWorth}</span> : null}
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Ahorro/inversion anual (EUR)
+              <input className={inputClass(Boolean(errors.annualContribution))} type="number" min="0" step="0.01" value={annualContribution} onChange={(e) => setAnnualContribution(e.target.value)} onBlur={() => validateField("annualContribution")} />
+              {errors.annualContribution ? <span className="text-xs text-red-300">{errors.annualContribution}</span> : null}
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Rentabilidad esperada anual (%)
+              <input className={inputClass(Boolean(errors.expectedReturn))} type="number" step="0.1" value={expectedReturn} onChange={(e) => setExpectedReturn(e.target.value)} onBlur={() => validateField("expectedReturn")} />
+              {errors.expectedReturn ? <span className="text-xs text-red-300">{errors.expectedReturn}</span> : null}
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Edad actual
+              <input className={inputClass(Boolean(errors.currentAge))} type="number" min="1" step="1" value={currentAge} onChange={(e) => setCurrentAge(e.target.value)} onBlur={() => validateField("currentAge")} />
+              {errors.currentAge ? <span className="text-xs text-red-300">{errors.currentAge}</span> : null}
+            </label>
           </div>
-        )}
-      </section>
+        </section>
+
+        <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
+          <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital FIRE</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{fireNumber.toFixed(2)} EUR</p>
+            <p className="mt-3 text-sm text-slate-300">Objetivo total estimado.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Anos hasta FIRE</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{simulation.yearsToFire === null ? `>${MAX_YEARS}` : simulation.yearsToFire}</p>
+            <p className="mt-3 text-sm text-slate-300">Horizonte con tus datos actuales.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Edad objetivo</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{simulation.yearsToFire === null ? "No definida" : `${Number(currentAge) + simulation.yearsToFire} anos`}</p>
+            <p className="mt-3 text-sm text-slate-300">Edad aproximada para alcanzar FIRE.</p>
+          </article>
+        </section>
+
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Grafico</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Crecimiento esperado</h2>
+          <div className="mt-6 h-[320px]">
+            {simulation.points.length > 0 ? <Line data={chartData} options={chartOptions} /> : <p className="text-sm text-slate-300">Introduce datos validos para ver la proyeccion.</p>}
+          </div>
+        </section>
+
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tabla</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion del patrimonio</h2>
+
+          {simulation.points.length === 0 ? (
+            <p className="mt-6 text-sm text-slate-300">Sin datos.</p>
+          ) : (
+            <div className="mt-6 overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                <thead>
+                  <tr className="text-left text-slate-400">
+                    <th className="px-3 py-2">Ano</th>
+                    <th className="px-3 py-2">Edad</th>
+                    <th className="px-3 py-2 text-right">Patrimonio</th>
+                    <th className="px-3 py-2 text-right">Aporte anual</th>
+                    <th className="px-3 py-2 text-right">Crecimiento anual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simulation.points.slice(0, 31).map((point) => (
+                    <tr key={point.year} className="bg-white/5 shadow-sm">
+                      <td className="rounded-l-2xl px-3 py-4 text-slate-300">{point.year}</td>
+                      <td className="px-3 py-4 text-slate-300">{point.age}</td>
+                      <td className="px-3 py-4 text-right font-medium text-white">{point.netWorth.toFixed(2)} EUR</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{point.contribution.toFixed(2)} EUR</td>
+                      <td className="rounded-r-2xl px-3 py-4 text-right text-slate-300">{point.growth.toFixed(2)} EUR</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </main>
     </>
   );
