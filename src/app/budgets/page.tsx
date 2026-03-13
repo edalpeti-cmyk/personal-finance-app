@@ -121,7 +121,7 @@ function formatCurrency(value: number) {
 }
 
 function inputClass() {
-  return "w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100";
+  return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
 }
 
 export default function BudgetsPage() {
@@ -453,121 +453,121 @@ export default function BudgetsPage() {
     <>
       <SideNav />
       <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 md:p-8 xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.26em] text-teal-700">Presupuesto mensual</p>
-          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Plan mensual con ingresos y ahorro</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
+        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Presupuesto mensual</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Plan mensual con ingresos y ahorro</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
         </section>
 
-        <section className="panel rounded-[30px] border border-emerald-100 bg-[linear-gradient(180deg,rgba(246,252,250,0.97)_0%,rgba(234,246,243,0.97)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-600">Mes activo</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{selectedMonth}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-700">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Mes activo</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{selectedMonth}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
         </section>
 
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section ref={budgetFormRef} className={`panel rounded-[28px] p-6 xl:col-span-5 ${editingBudgetId ? "ring-2 ring-teal-200" : ""}`}>
+        <section ref={budgetFormRef} className={`panel rounded-[28px] p-6 text-white xl:col-span-5 ${editingBudgetId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Categorias</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">{editingBudgetId ? "Editar presupuesto" : "Nuevo presupuesto"}</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Categorias</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingBudgetId ? "Editar presupuesto" : "Nuevo presupuesto"}</h2>
             </div>
-            {editingBudgetId ? <button type="button" onClick={resetBudgetForm} className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200">Cancelar</button> : null}
+            {editingBudgetId ? <button type="button" onClick={resetBudgetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">Cancelar</button> : null}
           </div>
 
-          <label className="mt-6 grid gap-2 text-sm text-slate-700">
+          <label className="mt-6 grid gap-2 text-sm text-slate-200">
             Mes
             <input className={inputClass()} type="month" value={selectedMonth} onChange={(e) => { setSelectedMonth(e.target.value); setIncomeDate(`${e.target.value}-01`); }} />
           </label>
 
           <form onSubmit={handleSaveBudget} className="mt-4 grid gap-4" noValidate>
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Categoria
               <input className={inputClass()} value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} placeholder="Ej: Comida" />
             </label>
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Presupuesto mensual
               <input className={inputClass()} type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </label>
-            <button className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
+            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingBudgetId ? "Guardar cambios" : "Guardar presupuesto"}
             </button>
           </form>
         </section>
 
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-4">
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-teal-700">Presupuesto</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(totals.totalBudget)}</p><p className="mt-3 text-sm text-slate-600">Total planificado para el mes.</p></article>
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-teal-700">Gasto real</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(totals.totalActual)}</p><p className="mt-3 text-sm text-slate-600">Suma de gastos registrados del mes.</p></article>
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ahorro</p><p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${incomeSummary.currentSavings >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatCurrency(incomeSummary.currentSavings)}</p><p className="mt-3 text-sm text-slate-600">Ingresos menos gastos del mes seleccionado.</p></article>
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-teal-700">Tasa de ahorro</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p><p className="mt-3 text-sm text-slate-600">Se calcula sobre ingresos del mes.</p></article>
+          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(totals.totalBudget)}</p><p className="mt-3 text-sm text-slate-300">Total planificado para el mes.</p></article>
+          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(totals.totalActual)}</p><p className="mt-3 text-sm text-slate-300">Suma de gastos registrados del mes.</p></article>
+          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p><p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrency(incomeSummary.currentSavings)}</p><p className="mt-3 text-sm text-slate-300">Ingresos menos gastos del mes seleccionado.</p></article>
+          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p><p className="mt-3 text-sm text-slate-300">Se calcula sobre ingresos del mes.</p></article>
         </section>
 
-        <section ref={incomeFormRef} className="panel rounded-[28px] p-6 xl:col-span-6">
+        <section ref={incomeFormRef} className="panel rounded-[28px] p-6 text-white xl:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ingresos</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">{editingIncomeId ? "Editar ingreso" : "Registrar ingreso"}</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingIncomeId ? "Editar ingreso" : "Registrar ingreso"}</h2>
             </div>
-            {editingIncomeId ? <button type="button" onClick={resetIncomeForm} className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200">Cancelar</button> : null}
+            {editingIncomeId ? <button type="button" onClick={resetIncomeForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">Cancelar</button> : null}
           </div>
 
           <form onSubmit={handleSaveIncome} className="mt-6 grid gap-4 md:grid-cols-2" noValidate>
-            <label className="grid gap-2 text-sm text-slate-700 md:col-span-2"><span>Fuente de ingreso</span><input className={inputClass()} value={incomeSource} onChange={(e) => setIncomeSource(e.target.value)} maxLength={80} /></label>
-            <label className="grid gap-2 text-sm text-slate-700"><span>Importe</span><input className={inputClass()} type="number" min="0" step="0.01" value={incomeAmount} onChange={(e) => setIncomeAmount(e.target.value)} /></label>
-            <label className="grid gap-2 text-sm text-slate-700"><span>Fecha</span><input className={inputClass()} type="date" value={incomeDate} onChange={(e) => setIncomeDate(e.target.value)} /></label>
-            <button className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2" disabled={incomeSaving || loading} type="submit">{incomeSaving ? "Guardando..." : editingIncomeId ? "Guardar cambios" : "Guardar ingreso"}</button>
+            <label className="grid gap-2 text-sm text-slate-200 md:col-span-2"><span>Fuente de ingreso</span><input className={inputClass()} value={incomeSource} onChange={(e) => setIncomeSource(e.target.value)} maxLength={80} /></label>
+            <label className="grid gap-2 text-sm text-slate-200"><span>Importe</span><input className={inputClass()} type="number" min="0" step="0.01" value={incomeAmount} onChange={(e) => setIncomeAmount(e.target.value)} /></label>
+            <label className="grid gap-2 text-sm text-slate-200"><span>Fecha</span><input className={inputClass()} type="date" value={incomeDate} onChange={(e) => setIncomeDate(e.target.value)} /></label>
+            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2" disabled={incomeSaving || loading} type="submit">{incomeSaving ? "Guardando..." : editingIncomeId ? "Guardar cambios" : "Guardar ingreso"}</button>
           </form>
 
-          <div className="mt-6 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ingresos del mes</p><p className="mt-2 font-medium text-slate-700">{formatCurrency(incomeSummary.currentIncome)}</p></div>
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta ahorro</p><p className={`mt-2 font-medium ${incomeComparison.savingsDelta >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatCurrency(incomeComparison.savingsDelta)}</p></div>
+          <div className="mt-6 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ingresos del mes</p><p className="mt-2 font-medium text-slate-100">{formatCurrency(incomeSummary.currentIncome)}</p></div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ahorro</p><p className={`mt-2 font-medium ${incomeComparison.savingsDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrency(incomeComparison.savingsDelta)}</p></div>
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-6">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Resumen</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Comparativa mensual</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Resumen</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Comparativa mensual</h2>
             </div>
-            <button className="rounded-full bg-slate-950 px-4 py-2 text-sm text-white hover:bg-slate-800" type="button" onClick={handleExportCsv}>Exportar CSV</button>
+            <button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10" type="button" onClick={handleExportCsv}>Exportar CSV</button>
           </div>
 
-          <div className="mt-6 grid gap-4 text-sm text-slate-700 sm:grid-cols-2">
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta presupuesto</p><p className="mt-2 font-medium text-slate-700">{formatCurrency(monthOverMonth.budgetDelta)}</p></div>
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta gasto real</p><p className={`mt-2 font-medium ${monthOverMonth.actualDelta > 0 ? "text-red-700" : "text-emerald-700"}`}>{formatCurrency(monthOverMonth.actualDelta)}</p></div>
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta ingresos</p><p className={`mt-2 font-medium ${incomeComparison.incomeDelta >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatCurrency(incomeComparison.incomeDelta)}</p></div>
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Consumo presupuesto</p><p className="mt-2 font-medium text-slate-700">{totals.totalSpentPercent.toFixed(1)}%</p></div>
+          <div className="mt-6 grid gap-4 text-sm text-slate-200 sm:grid-cols-2">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta presupuesto</p><p className="mt-2 font-medium text-slate-100">{formatCurrency(monthOverMonth.budgetDelta)}</p></div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta gasto real</p><p className={`mt-2 font-medium ${monthOverMonth.actualDelta > 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrency(monthOverMonth.actualDelta)}</p></div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ingresos</p><p className={`mt-2 font-medium ${incomeComparison.incomeDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrency(incomeComparison.incomeDelta)}</p></div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consumo presupuesto</p><p className="mt-2 font-medium text-slate-100">{totals.totalSpentPercent.toFixed(1)}%</p></div>
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-7">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Presupuesto vs real</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Categorias del mes</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto vs real</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias del mes</h2>
             </div>
-            <p className="text-sm text-slate-500">Ahora puedes editar y borrar categorias presupuestadas desde la tabla.</p>
+            <p className="text-sm text-slate-400">Ahora puedes editar y borrar categorias presupuestadas desde la tabla.</p>
           </div>
 
-          {loading ? <p className="mt-6 text-sm text-slate-600">Cargando presupuesto...</p> : null}
-          {!loading && rows.length === 0 ? <p className="mt-6 text-sm text-slate-600">Aun no hay categorias presupuestadas para este mes.</p> : null}
+          {loading ? <p className="mt-6 text-sm text-slate-300">Cargando presupuesto...</p> : null}
+          {!loading && rows.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no hay categorias presupuestadas para este mes.</p> : null}
 
           {!loading && rows.length > 0 ? (
             <div className="mt-6 overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead><tr className="text-left text-slate-500"><th className="px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Restante</th><th className="px-3 py-2 text-right">Consumo</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
+                <thead><tr className="text-left text-slate-400"><th className="px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Restante</th><th className="px-3 py-2 text-right">Consumo</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={row.id} className="bg-white/90 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-700">{row.category}</td>
-                      <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(row.budget)}</td>
-                      <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(row.actual)}</td>
-                      <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-700" : "text-emerald-700"}`}>{formatCurrency(row.remaining)}</td>
-                      <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-700" : row.spentPercent > 85 ? "text-amber-700" : "text-slate-700"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
+                    <tr key={row.id} className="bg-white/5 shadow-sm">
+                      <td className="rounded-l-2xl px-3 py-4 font-medium text-white">{row.category}</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrency(row.budget)}</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrency(row.actual)}</td>
+                      <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrency(row.remaining)}</td>
+                      <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -576,23 +576,23 @@ export default function BudgetsPage() {
           ) : null}
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ingresos del mes</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Listado editable</h2>
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos del mes</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
 
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-              <thead><tr className="text-left text-slate-500"><th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Fuente</th><th className="px-3 py-2 text-right">Importe</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
+              <thead><tr className="text-left text-slate-400"><th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Fuente</th><th className="px-3 py-2 text-right">Importe</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
               <tbody>
                 {currentIncomeEntries.length === 0 ? (
-                  <tr><td className="rounded-2xl bg-white/70 px-3 py-4 text-slate-500" colSpan={4}>Aun no hay ingresos registrados para este mes.</td></tr>
+                  <tr><td className="rounded-2xl bg-white/5 px-3 py-4 text-slate-300" colSpan={4}>Aun no hay ingresos registrados para este mes.</td></tr>
                 ) : (
                   currentIncomeEntries.map((entry) => (
-                    <tr key={entry.id} className="bg-white/90 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 text-slate-600">{entry.income_date}</td>
-                      <td className="px-3 py-4 font-medium text-slate-700">{entry.source}</td>
-                      <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(Number(entry.amount))}</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
+                    <tr key={entry.id} className="bg-white/5 shadow-sm">
+                      <td className="rounded-l-2xl px-3 py-4 text-slate-300">{entry.income_date}</td>
+                      <td className="px-3 py-4 font-medium text-white">{entry.source}</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrency(Number(entry.amount))}</td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))
                 )}
@@ -601,23 +601,23 @@ export default function BudgetsPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Comparativa</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">{selectedMonth} vs {getPreviousMonth(selectedMonth)}</h2>
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{selectedMonth} vs {getPreviousMonth(selectedMonth)}</h2>
 
           {categoryComparison.length === 0 ? (
-            <p className="mt-6 text-sm text-slate-600">Sin datos suficientes para comparar meses.</p>
+            <p className="mt-6 text-sm text-slate-300">Sin datos suficientes para comparar meses.</p>
           ) : (
             <div className="mt-6 overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead><tr className="text-left text-slate-500"><th className="px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
+                <thead><tr className="text-left text-slate-400"><th className="px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
                 <tbody>
                   {categoryComparison.map((item) => (
-                    <tr key={item.category} className="bg-white/90 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-700">{item.category}</td>
-                      <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(item.currentActual)}</td>
-                      <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(item.previousActual)}</td>
-                      <td className={`rounded-r-2xl px-3 py-4 text-right font-medium ${item.delta > 0 ? "text-red-700" : item.delta < 0 ? "text-emerald-700" : "text-slate-700"}`}>{formatCurrency(item.delta)}</td>
+                    <tr key={item.category} className="bg-white/5 shadow-sm">
+                      <td className="rounded-l-2xl px-3 py-4 font-medium text-white">{item.category}</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrency(item.currentActual)}</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrency(item.previousActual)}</td>
+                      <td className={`rounded-r-2xl px-3 py-4 text-right font-medium ${item.delta > 0 ? "text-red-300" : item.delta < 0 ? "text-emerald-300" : "text-slate-100"}`}>{formatCurrency(item.delta)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -626,15 +626,15 @@ export default function BudgetsPage() {
           )}
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Gasto sin asignar</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Categorias no presupuestadas</h2>
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
           {unbudgetedExpenses.length === 0 ? (
-            <p className="mt-6 text-sm text-slate-600">Todo el gasto del mes actual esta cubierto por categorias presupuestadas.</p>
+            <p className="mt-6 text-sm text-slate-300">Todo el gasto del mes actual esta cubierto por categorias presupuestadas.</p>
           ) : (
-            <ul className="mt-6 grid gap-3 text-sm text-slate-700">
+            <ul className="mt-6 grid gap-3 text-sm text-slate-200">
               {unbudgetedExpenses.map((item) => (
-                <li key={item.category} className="rounded-3xl bg-white/80 px-4 py-3"><span className="font-medium text-slate-700">{item.category}</span>: {formatCurrency(item.actual)}</li>
+                <li key={item.category} className="rounded-3xl border border-white/8 bg-white/5 px-4 py-3"><span className="font-medium text-white">{item.category}</span>: {formatCurrency(item.actual)}</li>
               ))}
             </ul>
           )}

@@ -65,8 +65,8 @@ const ASSET_TYPE_LABELS: Record<AssetType, string> = {
 };
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white/90 px-4 py-3 text-sm text-slate-700 outline-none transition ${
-    hasError ? "border-red-400 ring-2 ring-red-100" : "border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition ${
+    hasError ? "border-red-400 ring-2 ring-red-500/20" : "border-white/10 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
   }`;
 }
 
@@ -234,12 +234,15 @@ export default function InvestmentsPage() {
     plugins: {
       legend: {
         display: true,
-        labels: { usePointStyle: true }
+        labels: { usePointStyle: true, color: "#e2e8f0" }
       }
     },
     scales: {
-      x: { grid: { display: false } },
-      y: { ticks: { callback: (value: string | number) => `${Number(value).toFixed(0)} EUR` } }
+      x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+      y: {
+        ticks: { color: "#cbd5e1", callback: (value: string | number) => `${Number(value).toFixed(0)} EUR` },
+        grid: { color: "rgba(148, 163, 184, 0.16)" }
+      }
     }
   };
 
@@ -406,23 +409,23 @@ export default function InvestmentsPage() {
     <>
       <SideNav />
       <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 md:p-8 xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.26em] text-teal-700">Portfolio tracker</p>
-          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Cartera con seguimiento real</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
+        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Portfolio tracker</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Cartera con seguimiento real</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
             Anade activos, edita posiciones, borra movimientos y actualiza precios reales para acciones, ETF, cripto, fondos y materias primas.
           </p>
         </section>
 
-        <section className="panel rounded-[30px] border border-sky-100 bg-[linear-gradient(180deg,rgba(247,250,252,0.97)_0%,rgba(237,245,248,0.97)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-600">Estado actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(metrics.totalValue)}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-700">Valor total calculado con el precio actual registrado en cada posicion.</p>
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Estado actual</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrency(metrics.totalValue)}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Valor total calculado con el precio actual registrado en cada posicion.</p>
           <button
             type="button"
             onClick={() => void handleRefreshPrices()}
             disabled={refreshingPrices || investments.length === 0}
-            className="mt-6 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {refreshingPrices ? "Actualizando precios..." : "Actualizar precios reales"}
           </button>
@@ -438,23 +441,23 @@ export default function InvestmentsPage() {
           <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section>
         ) : null}
 
-        <section ref={formRef} className={`panel rounded-[28px] p-6 xl:col-span-5 ${editingId ? "ring-2 ring-teal-200" : ""}`}>
+        <section ref={formRef} className={`panel rounded-[28px] p-6 text-white xl:col-span-5 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Formulario</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
                 {editingId ? "Editar posicion" : "Nueva posicion"}
               </h2>
             </div>
             {editingId ? (
-              <button type="button" onClick={resetForm} className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200">
+              <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
                 Cancelar edicion
               </button>
             ) : null}
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Tipo de activo
               <select className={inputClass(false)} value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
                 {ASSET_TYPES.map((option) => (
@@ -465,26 +468,26 @@ export default function InvestmentsPage() {
               </select>
             </label>
 
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Nombre
               <input className={inputClass(Boolean(errors.assetName))} value={assetName} onChange={(e) => setAssetName(e.target.value)} maxLength={80} />
               {errors.assetName ? <span className="text-xs text-red-700">{errors.assetName}</span> : null}
             </label>
 
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Ticker / simbolo
               <input className={inputClass(Boolean(errors.assetSymbol))} value={assetSymbol} onChange={(e) => setAssetSymbol(e.target.value.toUpperCase())} maxLength={15} />
               {errors.assetSymbol ? <span className="text-xs text-red-700">{errors.assetSymbol}</span> : null}
             </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-slate-700">
+              <label className="grid gap-2 text-sm text-slate-200">
                 Cantidad
                 <input className={inputClass(Boolean(errors.quantity))} type="number" min="0" step="0.00000001" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
                 {errors.quantity ? <span className="text-xs text-red-700">{errors.quantity}</span> : null}
               </label>
 
-              <label className="grid gap-2 text-sm text-slate-700">
+              <label className="grid gap-2 text-sm text-slate-200">
                 Fecha de compra
                 <input className={inputClass(Boolean(errors.purchaseDate))} type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
                 {errors.purchaseDate ? <span className="text-xs text-red-700">{errors.purchaseDate}</span> : null}
@@ -492,13 +495,13 @@ export default function InvestmentsPage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-2 text-sm text-slate-700">
+              <label className="grid gap-2 text-sm text-slate-200">
                 Precio medio
                 <input className={inputClass(Boolean(errors.averageBuyPrice))} type="number" min="0" step="0.0001" value={averageBuyPrice} onChange={(e) => setAverageBuyPrice(e.target.value)} />
                 {errors.averageBuyPrice ? <span className="text-xs text-red-700">{errors.averageBuyPrice}</span> : null}
               </label>
 
-              <label className="grid gap-2 text-sm text-slate-700">
+              <label className="grid gap-2 text-sm text-slate-200">
                 Precio actual
                 <input className={inputClass(Boolean(errors.currentPrice))} type="number" min="0" step="0.0001" value={currentPrice} onChange={(e) => setCurrentPrice(e.target.value)} placeholder="Opcional" />
                 {errors.currentPrice ? <span className="text-xs text-red-700">{errors.currentPrice}</span> : null}
@@ -506,7 +509,7 @@ export default function InvestmentsPage() {
             </div>
 
             <button
-              className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={saving || loading}
               type="submit"
             >
@@ -517,59 +520,59 @@ export default function InvestmentsPage() {
 
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Valor total</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(metrics.totalValue)}</p>
-            <p className="mt-3 text-sm text-slate-600">Suma del valor actual de todas tus posiciones.</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(metrics.totalValue)}</p>
+            <p className="mt-3 text-sm text-slate-300">Suma del valor actual de todas tus posiciones.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Rentabilidad</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Rentabilidad</p>
             <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${profit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
               {formatCurrency(profit)}
             </p>
-            <p className="mt-3 text-sm text-slate-600">{profitability === null ? "Sin base suficiente." : `${profitability.toFixed(2)}% sobre capital invertido.`}</p>
+            <p className="mt-3 text-sm text-slate-300">{profitability === null ? "Sin base suficiente." : `${profitability.toFixed(2)}% sobre capital invertido.`}</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Precios conectados</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{metrics.trackedPositions}</p>
-            <p className="mt-3 text-sm text-slate-600">Posiciones con simbolo aptas para refresco automatico.</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{metrics.trackedPositions}</p>
+            <p className="mt-3 text-sm text-slate-300">Posiciones con simbolo aptas para refresco automatico.</p>
           </article>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-12">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Evolucion</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Crecimiento del portfolio</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Crecimiento del portfolio</h2>
             </div>
           </div>
           <div className="mt-6 h-[320px]">
             {evolution.labels.length > 0 ? (
               <Line data={chartData} options={chartOptions} />
             ) : (
-              <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/60 text-sm text-slate-500">
+              <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-white/15 bg-white/5 text-sm text-slate-300">
                 Aun no hay suficiente historico para dibujar la evolucion.
               </div>
             )}
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-12">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Posiciones</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Listado editable</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Posiciones</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
             </div>
-            <p className="text-sm text-slate-500">Puedes editar, borrar o refrescar el precio individual de cada posicion.</p>
+            <p className="text-sm text-slate-400">Puedes editar, borrar o refrescar el precio individual de cada posicion.</p>
           </div>
 
-          {loading ? <p className="mt-6 text-sm text-slate-600">Cargando posiciones...</p> : null}
-          {!loading && investments.length === 0 ? <p className="mt-6 text-sm text-slate-600">Aun no tienes inversiones registradas.</p> : null}
+          {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
+          {!loading && investments.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes inversiones registradas.</p> : null}
 
           {!loading && investments.length > 0 ? (
             <div className="mt-6 overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead>
-                  <tr className="text-left text-slate-500">
+                  <tr className="text-left text-slate-400">
                     <th className="px-3 py-2">Activo</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Ticker</th>
@@ -586,28 +589,28 @@ export default function InvestmentsPage() {
                     const value = Number(row.quantity) * current;
 
                     return (
-                      <tr key={row.id} className="rounded-2xl bg-white/90 shadow-sm">
-                        <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-700">{row.asset_name}</td>
-                        <td className="px-3 py-4 text-slate-600">{ASSET_TYPE_LABELS[row.asset_type]}</td>
-                        <td className="px-3 py-4 text-slate-600">{row.asset_symbol ?? "-"}</td>
-                        <td className="px-3 py-4 text-right text-slate-600">{formatNumber(row.quantity, 6)}</td>
-                        <td className="px-3 py-4 text-right text-slate-600">{formatNumber(row.average_buy_price, 4)}</td>
-                        <td className="px-3 py-4 text-right text-slate-600">{formatNumber(current, 4)}</td>
-                        <td className="px-3 py-4 text-right font-medium text-slate-700">{formatCurrency(value)}</td>
+                      <tr key={row.id} className="rounded-2xl bg-white/5 shadow-sm">
+                        <td className="rounded-l-2xl px-3 py-4 font-medium text-white">{row.asset_name}</td>
+                        <td className="px-3 py-4 text-slate-300">{ASSET_TYPE_LABELS[row.asset_type]}</td>
+                        <td className="px-3 py-4 text-slate-300">{row.asset_symbol ?? "-"}</td>
+                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
+                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>
+                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(current, 4)}</td>
+                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrency(value)}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => handleEdit(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                            <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
                               Editar
                             </button>
                             <button
                               type="button"
                               onClick={() => void handleRefreshPrices(row.id)}
                               disabled={refreshingPrices || !row.asset_symbol}
-                              className="rounded-full bg-teal-50 px-3 py-2 text-xs font-medium text-teal-700 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Precio
                             </button>
-                            <button type="button" onClick={() => void handleDelete(row.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">
+                            <button type="button" onClick={() => void handleDelete(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">
                               Borrar
                             </button>
                           </div>

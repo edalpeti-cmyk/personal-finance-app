@@ -50,8 +50,8 @@ const PRESET_CATEGORIES = [
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white/90 px-4 py-3 text-sm text-slate-700 outline-none transition ${
-    hasError ? "border-red-400 ring-2 ring-red-100" : "border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition ${
+    hasError ? "border-red-400 ring-2 ring-red-500/20" : "border-white/10 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
   }`;
 }
 
@@ -175,8 +175,11 @@ export default function ExpensesPage() {
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { display: false } },
-      y: { ticks: { callback: (value: string | number) => `${Number(value).toFixed(0)} EUR` } }
+      x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+      y: {
+        ticks: { color: "#cbd5e1", callback: (value: string | number) => `${Number(value).toFixed(0)} EUR` },
+        grid: { color: "rgba(148, 163, 184, 0.16)" }
+      }
     }
   };
 
@@ -293,18 +296,18 @@ export default function ExpensesPage() {
     <>
       <SideNav />
       <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 md:p-8 xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.26em] text-teal-700">Control de gasto</p>
-          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Gastos con analisis accionable</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
+        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Control de gasto</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Gastos con analisis accionable</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
             Registra movimientos, clasificalos, editalos cuando haga falta y detecta rapidamente en que categoria se te va mas presupuesto.
           </p>
         </section>
 
-        <section className="panel rounded-[30px] border border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,245,0.97)_0%,rgba(250,242,232,0.97)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-600">Pulso del mes</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(currentMonthTotal)}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-700">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Pulso del mes</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrency(currentMonthTotal)}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
         </section>
 
         {toast ? (
@@ -315,27 +318,27 @@ export default function ExpensesPage() {
 
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section ref={formRef} className={`panel rounded-[28px] p-6 xl:col-span-5 ${editingId ? "ring-2 ring-teal-200" : ""}`}>
+        <section ref={formRef} className={`panel rounded-[28px] p-6 text-white xl:col-span-5 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Formulario</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">{editingId ? "Editar gasto" : "Nuevo gasto"}</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar gasto" : "Nuevo gasto"}</h2>
             </div>
             {editingId ? (
-              <button type="button" onClick={resetForm} className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200">
+              <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
                 Cancelar edicion
               </button>
             ) : null}
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Importe
               <input className={inputClass(Boolean(errors.amount))} type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
               {errors.amount ? <span className="text-xs text-red-700">{errors.amount}</span> : null}
             </label>
 
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Categoria
               <select className={inputClass(Boolean(errors.category))} value={category} onChange={(e) => setCategory(e.target.value)}>
                 {PRESET_CATEGORIES.map((item) => (
@@ -348,26 +351,26 @@ export default function ExpensesPage() {
             </label>
 
             {category === "Otros" ? (
-              <label className="grid gap-2 text-sm text-slate-700">
+              <label className="grid gap-2 text-sm text-slate-200">
                 Categoria personalizada
                 <input className={inputClass(Boolean(errors.category))} value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Ej: Mascotas" />
               </label>
             ) : null}
 
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Fecha
               <input className={inputClass(Boolean(errors.expenseDate))} type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
               {errors.expenseDate ? <span className="text-xs text-red-700">{errors.expenseDate}</span> : null}
             </label>
 
-            <label className="grid gap-2 text-sm text-slate-700">
+            <label className="grid gap-2 text-sm text-slate-200">
               Descripcion
               <input className={inputClass(Boolean(errors.description))} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={140} placeholder="Opcional" />
-              <span className="text-xs text-slate-500">{description.length}/140</span>
+              <span className="text-xs text-slate-400">{description.length}/140</span>
               {errors.description ? <span className="text-xs text-red-700">{errors.description}</span> : null}
             </label>
 
-            <button className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
+            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Anadir gasto"}
             </button>
           </form>
@@ -375,51 +378,51 @@ export default function ExpensesPage() {
 
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Mes actual</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(currentMonthTotal)}</p>
-            <p className="mt-3 text-sm text-slate-600">Importe total de gastos del mes en curso.</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mes actual</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(currentMonthTotal)}</p>
+            <p className="mt-3 text-sm text-slate-300">Importe total de gastos del mes en curso.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Media mensual</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(averageMonthlyExpense)}</p>
-            <p className="mt-3 text-sm text-slate-600">Promedio de los meses con gasto registrado.</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Media mensual</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(averageMonthlyExpense)}</p>
+            <p className="mt-3 text-sm text-slate-300">Promedio de los meses con gasto registrado.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Categoria principal</p>
-            <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">{monthlyAnalysis.topCategory?.name ?? "Sin datos"}</p>
-            <p className="mt-3 text-sm text-slate-600">Mayor concentracion de gasto del mes actual.</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Categoria principal</p>
+            <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">{monthlyAnalysis.topCategory?.name ?? "Sin datos"}</p>
+            <p className="mt-3 text-sm text-slate-300">Mayor concentracion de gasto del mes actual.</p>
           </article>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Grafico mensual</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Evolucion anual del gasto</h2>
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Grafico mensual</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion anual del gasto</h2>
           <div className="mt-6 h-[320px]">
             <Line data={chartData} options={chartOptions} />
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Analisis mensual</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Lectura rapida</h2>
-          <div className="mt-6 grid gap-4 text-sm text-slate-700">
-            <div className="rounded-3xl bg-white/80 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Categoria con mayor gasto</p>
-              <p className="mt-2 font-medium text-slate-700">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
+          <div className="mt-6 grid gap-4 text-sm text-slate-200">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mayor gasto</p>
+              <p className="mt-2 font-medium text-slate-100">
                 {monthlyAnalysis.topCategory ? `${monthlyAnalysis.topCategory.name} (${formatCurrency(monthlyAnalysis.topCategory.total)})` : "Sin datos"}
               </p>
             </div>
-            <div className="rounded-3xl bg-white/80 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Cambio respecto al mes anterior</p>
-              <p className="mt-2 font-medium text-slate-700">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Cambio respecto al mes anterior</p>
+              <p className="mt-2 font-medium text-slate-100">
                 {monthlyAnalysis.changePercentage === null
                   ? `${formatCurrency(monthlyAnalysis.changeAmount)} (sin base comparativa)`
                   : `${monthlyAnalysis.changeAmount >= 0 ? "+" : ""}${formatCurrency(monthlyAnalysis.changeAmount)} (${monthlyAnalysis.changePercentage.toFixed(1)}%)`}
               </p>
             </div>
-            <div className="rounded-3xl bg-white/80 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Recomendaciones</p>
-              <ul className="mt-2 grid gap-2 text-slate-700">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Recomendaciones</p>
+              <ul className="mt-2 grid gap-2 text-slate-100">
                 {monthlyAnalysis.recommendations.map((item) => (
                   <li key={item}>- {item}</li>
                 ))}
@@ -428,23 +431,23 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 xl:col-span-12">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Movimientos</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Ultimos gastos</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Movimientos</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ultimos gastos</h2>
             </div>
-            <p className="text-sm text-slate-500">Cada fila se puede editar o borrar con un clic.</p>
+            <p className="text-sm text-slate-400">Cada fila se puede editar o borrar con un clic.</p>
           </div>
 
-          {loading ? <p className="mt-6 text-sm text-slate-600">Cargando gastos...</p> : null}
-          {!loading && expenses.length === 0 ? <p className="mt-6 text-sm text-slate-600">Aun no tienes gastos registrados.</p> : null}
+          {loading ? <p className="mt-6 text-sm text-slate-300">Cargando gastos...</p> : null}
+          {!loading && expenses.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes gastos registrados.</p> : null}
 
           {!loading && expenses.length > 0 ? (
             <div className="mt-6 overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead>
-                  <tr className="text-left text-slate-500">
+                  <tr className="text-left text-slate-400">
                     <th className="px-3 py-2">Fecha</th>
                     <th className="px-3 py-2">Categoria</th>
                     <th className="px-3 py-2">Descripcion</th>
@@ -454,17 +457,17 @@ export default function ExpensesPage() {
                 </thead>
                 <tbody>
                   {expenses.slice(0, 30).map((expense) => (
-                    <tr key={expense.id} className="bg-white/90 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 text-slate-600">{expense.expense_date}</td>
-                      <td className="px-3 py-4 font-medium text-slate-700">{expense.category}</td>
-                      <td className="px-3 py-4 text-slate-600">{expense.description ?? "-"}</td>
-                      <td className="px-3 py-4 text-right font-medium text-slate-700">{formatCurrency(Number(expense.amount))}</td>
+                    <tr key={expense.id} className="bg-white/5 shadow-sm">
+                      <td className="rounded-l-2xl px-3 py-4 text-slate-300">{expense.expense_date}</td>
+                      <td className="px-3 py-4 font-medium text-white">{expense.category}</td>
+                      <td className="px-3 py-4 text-slate-300">{expense.description ?? "-"}</td>
+                      <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrency(Number(expense.amount))}</td>
                       <td className="rounded-r-2xl px-3 py-4">
                         <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => handleEdit(expense)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                          <button type="button" onClick={() => handleEdit(expense)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
                             Editar
                           </button>
-                          <button type="button" onClick={() => void handleDelete(expense.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">
+                          <button type="button" onClick={() => void handleDelete(expense.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">
                             Borrar
                           </button>
                         </div>
