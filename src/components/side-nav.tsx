@@ -17,7 +17,7 @@ export default function SideNav() {
 
   return (
     <>
-      <aside className="panel fixed left-4 top-4 z-20 hidden h-[calc(100vh-2rem)] w-64 overflow-hidden rounded-[28px] border border-white/10 bg-slate-950 text-white shadow-[0_30px_80px_rgba(15,23,42,0.42)] md:block">
+      <aside className="fixed left-4 top-4 z-20 hidden h-[calc(100vh-2rem)] w-64 overflow-hidden rounded-[28px] border border-white/10 bg-slate-950 text-white shadow-[0_30px_80px_rgba(15,23,42,0.42)] md:block">
         <div className="flex h-full flex-col p-4">
           <div className="mb-6 rounded-[22px] border border-white/16 bg-white/12 p-4">
             <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.28em] text-white">Control personal</p>
@@ -75,4 +75,5 @@ export default function SideNav() {
     </>
   );
 }
+
 
