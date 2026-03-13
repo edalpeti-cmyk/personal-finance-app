@@ -490,33 +490,33 @@ export default function DashboardPage() {
     <>
       <SideNav />
       <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 md:col-span-2 md:p-8 xl:col-span-7">
-          <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-teal-700">Vista general</p>
-          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-slate-950">Tu sistema financiero, de un vistazo</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
+        <section className="rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_100%)] p-6 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:p-8 xl:col-span-7">
+          <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Vista general</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Tu sistema financiero, de un vistazo</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-white/72">
             Patrimonio, ahorro, progreso FIRE e ideas accionables en una sola pantalla para decidir con rapidez.
           </p>
         </section>
 
-        <section className="panel rounded-[30px] border border-teal-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(241,247,246,0.96)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] md:col-span-2 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.26em] text-slate-600">Momentum actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-slate-700">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] md:col-span-2 xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
+          <p className="mt-2 max-w-sm text-sm text-white/76">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-black/10 bg-white/88 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/70">Caja estimada</p>
+            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.cashPosition) : "--"}</p>
             </div>
-            <div className="rounded-2xl border border-black/10 bg-white/88 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/70">Inversiones</p>
+            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.investmentsValue) : "--"}</p>
             </div>
           </div>
         </section>
 
         {loading ? (
-          <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-12">
-            <p className="text-sm text-slate-600">Cargando metricas financieras...</p>
+          <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <p className="text-sm text-white/64">Cargando metricas financieras...</p>
           </section>
         ) : null}
 
@@ -534,40 +534,40 @@ export default function DashboardPage() {
               </section>
             ) : null}
 
-            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Patrimonio total</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(metrics.totalNetWorth)}</p>
-              <p className="mt-3 text-sm text-slate-600">Caja neta acumulada mas valor actual de inversiones.</p>
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio total</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(metrics.totalNetWorth)}</p>
+              <p className="mt-3 text-sm text-white/64">Caja neta acumulada mas valor actual de inversiones.</p>
             </section>
 
-            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Tasa de ahorro</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
                 {metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}
               </p>
-              <p className="mt-3 text-sm text-slate-600">Basada en ingresos y gastos del mes actual.</p>
+              <p className="mt-3 text-sm text-white/64">Basada en ingresos y gastos del mes actual.</p>
             </section>
 
-            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Ahorro anual</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">{formatCurrency(metrics.annualSavings)}</p>
-              <p className="mt-3 text-sm text-slate-600">Ingresos anuales recientes menos gastos anuales recientes.</p>
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(metrics.annualSavings)}</p>
+              <p className="mt-3 text-sm text-white/64">Ingresos anuales recientes menos gastos anuales recientes.</p>
             </section>
 
-            <section className="kpi-card rounded-[28px] p-6 md:col-span-1 xl:col-span-3">
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Objetivo FIRE</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-slate-950">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
                 {metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}
               </p>
-              <p className="mt-3 text-sm text-slate-600">Calculado con la regla del 4% sobre tus gastos anuales.</p>
+              <p className="mt-3 text-sm text-white/64">Calculado con la regla del 4% sobre tus gastos anuales.</p>
             </section>
 
-            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-12">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Evolucion del patrimonio</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Patrimonio guardado por periodos</h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion del patrimonio</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Patrimonio guardado por periodos</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
                     {snapshotRows.length > 1
                       ? "Grafico basado en snapshots diarios guardados en tu base de datos."
                       : "Aun no hay suficiente historico guardado. Mientras tanto mostramos una estimacion basada en flujo de caja acumulado."}
@@ -583,7 +583,7 @@ export default function DashboardPage() {
                           type="button"
                           onClick={() => setChartRange(option.value)}
                           className={`rounded-full px-4 py-2 text-sm transition ${
-                            active ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            active ? "bg-emerald-500 text-slate-950" : "bg-white/6 text-white/78 hover:bg-white/12"
                           }`}
                         >
                           {option.label}
@@ -595,14 +595,14 @@ export default function DashboardPage() {
                     type="button"
                     onClick={handleSaveSnapshot}
                     disabled={snapshotSaving || !metrics}
-                    className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {snapshotSaving ? "Guardando..." : "Guardar snapshot ahora"}
                   </button>
                 </div>
               </div>
 
-              {snapshotMessage ? <p className="mt-4 text-sm text-teal-700">{snapshotMessage}</p> : null}
+              {snapshotMessage ? <p className="mt-4 text-sm text-emerald-300">{snapshotMessage}</p> : null}
 
               <div className="mt-6 h-[320px]">
                 {timelinePoints.length > 0 ? (
@@ -615,48 +615,48 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-7">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-7">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Progreso FIRE</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Camino hacia libertad financiera</h2>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Progreso FIRE</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Camino hacia libertad financiera</h2>
                 </div>
                 <p className="rounded-full bg-teal-700 px-3 py-1 text-sm font-medium text-white">{metrics.fireProgress.toFixed(2)}%</p>
               </div>
 
-              <div className="mt-6 h-5 overflow-hidden rounded-full bg-slate-200/80">
+              <div className="mt-6 h-5 overflow-hidden rounded-full bg-white/10">
                 <div
                   className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)] transition-all duration-500"
                   style={{ width: `${metrics.fireProgress.toFixed(2)}%` }}
                 />
               </div>
 
-              <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                <p>Objetivo estimado: <span className="font-medium text-slate-700">{metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}</span></p>
-                <p>Rentabilidad asumida: <span className="font-medium text-slate-700">5% anual</span></p>
+              <div className="mt-5 grid gap-3 text-sm text-white/64 sm:grid-cols-2">
+                <p>Objetivo estimado: <span className="font-medium text-white/84">{metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}</span></p>
+                <p>Rentabilidad asumida: <span className="font-medium text-white/84">5% anual</span></p>
               </div>
             </section>
 
-            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-5">
-              <p className="text-xs uppercase tracking-[0.22em] text-teal-700">Horizonte</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Anos estimados para independencia</h2>
-              <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-slate-950">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Horizonte</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Anos estimados para independencia</h2>
+              <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-white">
                 {metrics.fireTarget <= 0
                   ? "No calculable"
                   : metrics.yearsToFire === null
                     ? "No alcanzable"
                     : `${metrics.yearsToFire} anos`}
               </p>
-              <p className="mt-4 text-sm leading-6 text-slate-600">
+              <p className="mt-4 text-sm leading-6 text-white/64">
                 La estimacion usa tus gastos anuales recientes, ahorro anual positivo y una rentabilidad esperada del 5%.
               </p>
             </section>
 
-            <section className="panel rounded-[28px] p-6 md:col-span-2 xl:col-span-12">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-teal-700">IA financiera</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-slate-950">Lectura automatica de tus habitos</h2>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">IA financiera</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura automatica de tus habitos</h2>
                 </div>
                 <button
                   className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
@@ -669,19 +669,19 @@ export default function DashboardPage() {
               </div>
 
               {!hasFinancialData ? (
-                <p className="mt-4 text-sm text-slate-600">Sin datos financieros suficientes para generar insights utiles.</p>
+                <p className="mt-4 text-sm text-white/64">Sin datos financieros suficientes para generar insights utiles.</p>
               ) : null}
               {aiError ? <p className="mt-4 text-sm text-red-700">{aiError}</p> : null}
               {!aiError && aiInsights.length === 0 && hasFinancialData ? (
-                <p className="mt-4 text-sm text-slate-600">Generando recomendaciones personalizadas...</p>
+                <p className="mt-4 text-sm text-white/64">Generando recomendaciones personalizadas...</p>
               ) : null}
 
               {aiInsights.length > 0 ? (
                 <>
                   <div className="mt-6 grid gap-3 md:grid-cols-3">
                     {aiInsights.map((insight: string) => (
-                      <article key={insight} className="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm">
-                        <p className="text-sm leading-6 text-slate-700">{insight}</p>
+                      <article key={insight} className="rounded-3xl border border-white/8 bg-white/6 p-5 shadow-[0_16px_34px_rgba(2,8,23,0.26)]">
+                        <p className="text-sm leading-6 text-white/84">{insight}</p>
                       </article>
                     ))}
                   </div>
