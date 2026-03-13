@@ -27,18 +27,10 @@ export default function SideNav() {
             <p className="mt-2 text-sm text-white">Todo tu sistema financiero en un lateral claro y siempre accesible.</p>
           </div>
 
-          <button
-            type="button"
-            onClick={toggleSettings}
-            className="mb-4 block rounded-2xl border border-white/10 bg-white/6 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-white/10"
-          >
-            Configuracion
-          </button>
-
           <nav className="grid gap-2 text-sm">
             {ITEMS.map((item) => {
               const active = pathname === item.href;
-              return (
+              const link = (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -52,6 +44,25 @@ export default function SideNav() {
                   <p className={`mt-1 text-xs ${active ? "text-white" : "text-white/45"}`}>{item.hint}</p>
                 </Link>
               );
+
+              if (item.href === "/protected") {
+                return (
+                  <>
+                    <button
+                      key="settings-button"
+                      type="button"
+                      onClick={toggleSettings}
+                      className="rounded-2xl border border-transparent bg-transparent px-4 py-3 text-left text-white/92 transition hover:border-white/10 hover:bg-white/5"
+                    >
+                      <p className="font-medium">Configuracion</p>
+                      <p className="mt-1 text-xs text-white/45">Tema y apariencia</p>
+                    </button>
+                    {link}
+                  </>
+                );
+              }
+
+              return link;
             })}
           </nav>
 
