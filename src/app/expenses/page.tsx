@@ -16,6 +16,8 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
 import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
+import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -55,13 +57,10 @@ function inputClass(hasError: boolean) {
   }`;
 }
 
-function formatCurrency(value: number) {
-  return `${value.toFixed(2)} EUR`;
-}
-
 export default function ExpensesPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
+  const { currency, dateFormat } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -177,7 +176,7 @@ export default function ExpensesPage() {
     scales: {
       x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
       y: {
-        ticks: { color: "#cbd5e1", callback: (value: string | number) => `${Number(value).toFixed(0)} EUR` },
+        ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency) },
         grid: { color: "rgba(148, 163, 184, 0.16)" }
       }
     }
@@ -306,7 +305,7 @@ export default function ExpensesPage() {
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Pulso del mes</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrency(currentMonthTotal)}</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(currentMonthTotal, currency)}</p>
           <p className="mt-3 text-sm leading-6 text-slate-200">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
         </section>
 
@@ -379,12 +378,12 @@ export default function ExpensesPage() {
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mes actual</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(currentMonthTotal)}</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(currentMonthTotal, currency)}</p>
             <p className="mt-3 text-sm text-slate-300">Importe total de gastos del mes en curso.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Media mensual</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(averageMonthlyExpense)}</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(averageMonthlyExpense, currency)}</p>
             <p className="mt-3 text-sm text-slate-300">Promedio de los meses con gasto registrado.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
@@ -409,15 +408,15 @@ export default function ExpensesPage() {
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mayor gasto</p>
               <p className="mt-2 font-medium text-slate-100">
-                {monthlyAnalysis.topCategory ? `${monthlyAnalysis.topCategory.name} (${formatCurrency(monthlyAnalysis.topCategory.total)})` : "Sin datos"}
+                {monthlyAnalysis.topCategory ? `${monthlyAnalysis.topCategory.name} (${formatCurrencyByPreference(monthlyAnalysis.topCategory.total, currency)})` : "Sin datos"}
               </p>
             </div>
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Cambio respecto al mes anterior</p>
               <p className="mt-2 font-medium text-slate-100">
                 {monthlyAnalysis.changePercentage === null
-                  ? `${formatCurrency(monthlyAnalysis.changeAmount)} (sin base comparativa)`
-                  : `${monthlyAnalysis.changeAmount >= 0 ? "+" : ""}${formatCurrency(monthlyAnalysis.changeAmount)} (${monthlyAnalysis.changePercentage.toFixed(1)}%)`}
+                  ? `${formatCurrencyByPreference(monthlyAnalysis.changeAmount, currency)} (sin base comparativa)`
+                  : `${monthlyAnalysis.changeAmount >= 0 ? "+" : ""}${formatCurrencyByPreference(monthlyAnalysis.changeAmount, currency)} (${monthlyAnalysis.changePercentage.toFixed(1)}%)`}
               </p>
             </div>
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
@@ -458,10 +457,10 @@ export default function ExpensesPage() {
                 <tbody>
                   {expenses.slice(0, 30).map((expense) => (
                     <tr key={expense.id} className="bg-white/5 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 text-slate-300">{expense.expense_date}</td>
+                      <td className="rounded-l-2xl px-3 py-4 text-slate-300">{formatDateByPreference(expense.expense_date, dateFormat)}</td>
                       <td className="px-3 py-4 font-medium text-white">{expense.category}</td>
                       <td className="px-3 py-4 text-slate-300">{expense.description ?? "-"}</td>
-                      <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrency(Number(expense.amount))}</td>
+                      <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(Number(expense.amount), currency)}</td>
                       <td className="rounded-r-2xl px-3 py-4">
                         <div className="flex justify-end gap-2">
                           <button type="button" onClick={() => handleEdit(expense)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">

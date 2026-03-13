@@ -17,6 +17,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
+import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
@@ -77,18 +79,6 @@ function estimateYearsToFire(current: number, target: number, annualContribution
   return null;
 }
 
-function formatCurrency(value: number) {
-  return `${value.toFixed(2)} EUR`;
-}
-
-function formatShortDate(date: Date) {
-  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
-}
-
-function formatMonth(date: Date) {
-  return date.toLocaleDateString("es-ES", { month: "short", year: "2-digit" });
-}
-
 function formatYear(date: Date) {
   return date.getFullYear().toString();
 }
@@ -117,35 +107,35 @@ function normalizeDate(dateString: string) {
   return new Date(`${dateString}T00:00:00`);
 }
 
-function getRangeCheckpoints(range: ChartRange, firstDate: Date) {
+function getRangeCheckpoints(range: ChartRange, firstDate: Date, dateFormat: "es" | "us") {
   const now = new Date();
   const checkpoints: Array<{ date: Date; label: string }> = [];
 
   if (range === "daily") {
     const start = addDays(now, -29);
     for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 1)) {
-      checkpoints.push({ date: endOfDay(cursor), label: formatShortDate(cursor) });
+      checkpoints.push({ date: endOfDay(cursor), label: formatDateByPreference(cursor, dateFormat, { day: "2-digit", month: "short" }) });
     }
   }
 
   if (range === "monthly") {
     const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     for (let cursor = new Date(start); cursor <= now; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
-      checkpoints.push({ date: endOfMonth(cursor), label: formatMonth(cursor) });
+      checkpoints.push({ date: endOfMonth(cursor), label: formatDateByPreference(cursor, dateFormat, { month: "short", year: "2-digit" }) });
     }
   }
 
   if (range === "six_months") {
     const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     for (let cursor = new Date(start); cursor <= now; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
-      checkpoints.push({ date: endOfMonth(cursor), label: formatMonth(cursor) });
+      checkpoints.push({ date: endOfMonth(cursor), label: formatDateByPreference(cursor, dateFormat, { month: "short", year: "2-digit" }) });
     }
   }
 
   if (range === "current_year") {
     const start = new Date(now.getFullYear(), 0, 1);
     for (let cursor = new Date(start); cursor <= now; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
-      checkpoints.push({ date: endOfMonth(cursor), label: formatMonth(cursor) });
+      checkpoints.push({ date: endOfMonth(cursor), label: formatDateByPreference(cursor, dateFormat, { month: "short", year: "2-digit" }) });
     }
   }
 
@@ -174,12 +164,12 @@ function buildCashflowEvents(incomeRows: IncomeRow[], expenseRows: ExpenseRow[])
   return [...incomeEvents, ...expenseEvents].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function buildCashflowTimeline(events: CashflowEvent[], range: ChartRange) {
+function buildCashflowTimeline(events: CashflowEvent[], range: ChartRange, dateFormat: "es" | "us") {
   if (events.length === 0) {
     return [] as TimelinePoint[];
   }
 
-  const checkpoints = getRangeCheckpoints(range, normalizeDate(events[0].date));
+  const checkpoints = getRangeCheckpoints(range, normalizeDate(events[0].date), dateFormat);
   let runningValue = 0;
   let eventIndex = 0;
 
@@ -196,12 +186,12 @@ function buildCashflowTimeline(events: CashflowEvent[], range: ChartRange) {
   return points;
 }
 
-function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange) {
+function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange, dateFormat: "es" | "us") {
   if (snapshots.length === 0) {
     return [] as TimelinePoint[];
   }
 
-  const checkpoints = getRangeCheckpoints(range, normalizeDate(snapshots[0].snapshot_date));
+  const checkpoints = getRangeCheckpoints(range, normalizeDate(snapshots[0].snapshot_date), dateFormat);
   let snapshotIndex = 0;
   let latestValue = Number(snapshots[0].total_net_worth) || 0;
 
@@ -221,6 +211,7 @@ function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange) {
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
+  const { currency, dateFormat } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -246,11 +237,11 @@ export default function DashboardPage() {
   const cashflowEvents = useMemo(() => buildCashflowEvents(incomeRows, expenseRows), [incomeRows, expenseRows]);
   const timelinePoints = useMemo(() => {
     if (snapshotRows.length > 1) {
-      return buildSnapshotTimeline(snapshotRows, chartRange);
+      return buildSnapshotTimeline(snapshotRows, chartRange, dateFormat);
     }
 
-    return buildCashflowTimeline(cashflowEvents, chartRange);
-  }, [cashflowEvents, chartRange, snapshotRows]);
+    return buildCashflowTimeline(cashflowEvents, chartRange, dateFormat);
+  }, [cashflowEvents, chartRange, dateFormat, snapshotRows]);
 
   const timelineChartData = useMemo(
     () => ({
@@ -280,7 +271,7 @@ export default function DashboardPage() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (context: TooltipItem<"line">) => ` ${formatCurrency(Number(context.parsed.y ?? 0))}`
+            label: (context: TooltipItem<"line">) => ` ${formatCurrencyByPreference(Number(context.parsed.y ?? 0), currency)}`
           }
         }
       },
@@ -293,12 +284,12 @@ export default function DashboardPage() {
           grid: { color: "rgba(24, 34, 34, 0.08)" },
           ticks: {
             color: "#5f6d69",
-            callback: (value: string | number) => `${Number(value).toFixed(0)} EUR`
+            callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency)
           }
         }
       }
     }),
-    []
+    [currency]
   );
 
   const persistSnapshot = useCallback(
@@ -500,16 +491,16 @@ export default function DashboardPage() {
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] md:col-span-2 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}</p>
           <p className="mt-2 max-w-sm text-sm text-white/76">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
-              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.cashPosition) : "--"}</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
             </div>
             <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>
-              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.investmentsValue) : "--"}</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrencyByPreference(metrics.investmentsValue, currency) : "--"}</p>
             </div>
           </div>
         </section>
@@ -536,7 +527,7 @@ export default function DashboardPage() {
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio total</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(metrics.totalNetWorth)}</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p>
               <p className="mt-3 text-sm text-white/64">Caja neta acumulada mas valor actual de inversiones.</p>
             </section>
 
@@ -550,14 +541,14 @@ export default function DashboardPage() {
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(metrics.annualSavings)}</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
               <p className="mt-3 text-sm text-white/64">Ingresos anuales recientes menos gastos anuales recientes.</p>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
               <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
-                {metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}
+                {metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}
               </p>
               <p className="mt-3 text-sm text-white/64">Calculado con la regla del 4% sobre tus gastos anuales.</p>
             </section>
@@ -632,7 +623,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-5 grid gap-3 text-sm text-white/64 sm:grid-cols-2">
-                <p>Objetivo estimado: <span className="font-medium text-white/84">{metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}</span></p>
+                <p>Objetivo estimado: <span className="font-medium text-white/84">{metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}</span></p>
                 <p>Rentabilidad asumida: <span className="font-medium text-white/84">5% anual</span></p>
               </div>
             </section>

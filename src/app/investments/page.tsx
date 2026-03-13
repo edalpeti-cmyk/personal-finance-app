@@ -15,6 +15,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
+import { formatCurrencyByPreference } from "@/lib/preferences-format";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -70,10 +72,6 @@ function inputClass(hasError: boolean) {
   }`;
 }
 
-function formatCurrency(value: number) {
-  return `${value.toFixed(2)} EUR`;
-}
-
 function formatNumber(value: number, digits: number) {
   return Number(value).toFixed(digits);
 }
@@ -81,6 +79,7 @@ function formatNumber(value: number, digits: number) {
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
+  const { currency, dateFormat } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -240,7 +239,7 @@ export default function InvestmentsPage() {
     scales: {
       x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
       y: {
-        ticks: { color: "#cbd5e1", callback: (value: string | number) => `${Number(value).toFixed(0)} EUR` },
+        ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency) },
         grid: { color: "rgba(148, 163, 184, 0.16)" }
       }
     }
@@ -419,7 +418,7 @@ export default function InvestmentsPage() {
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Estado actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrency(metrics.totalValue)}</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValue, currency)}</p>
           <p className="mt-3 text-sm leading-6 text-slate-200">Valor total calculado con el precio actual registrado en cada posicion.</p>
           <button
             type="button"
@@ -521,13 +520,13 @@ export default function InvestmentsPage() {
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrency(metrics.totalValue)}</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValue, currency)}</p>
             <p className="mt-3 text-sm text-slate-300">Suma del valor actual de todas tus posiciones.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Rentabilidad</p>
             <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${profit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-              {formatCurrency(profit)}
+              {formatCurrencyByPreference(profit, currency)}
             </p>
             <p className="mt-3 text-sm text-slate-300">{profitability === null ? "Sin base suficiente." : `${profitability.toFixed(2)}% sobre capital invertido.`}</p>
           </article>
@@ -596,7 +595,7 @@ export default function InvestmentsPage() {
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(current, 4)}</td>
-                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrency(value)}</td>
+                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(value, currency)}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">

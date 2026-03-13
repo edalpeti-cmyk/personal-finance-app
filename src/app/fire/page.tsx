@@ -12,6 +12,8 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
+import { formatCurrencyByPreference } from "@/lib/preferences-format";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -40,6 +42,7 @@ function inputClass(hasError: boolean) {
 }
 
 export default function FirePage() {
+  const { currency } = useTheme();
   const [annualExpenses, setAnnualExpenses] = useState("24000");
   const [currentNetWorth, setCurrentNetWorth] = useState("30000");
   const [annualContribution, setAnnualContribution] = useState("12000");
@@ -171,7 +174,7 @@ export default function FirePage() {
     },
     scales: {
       x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
-      y: { grid: { color: "rgba(148, 163, 184, 0.16)" }, ticks: { color: "#cbd5e1" } }
+      y: { grid: { color: "rgba(148, 163, 184, 0.16)" }, ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency) } }
     }
   };
 
@@ -227,7 +230,7 @@ export default function FirePage() {
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital FIRE</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{fireNumber.toFixed(2)} EUR</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(fireNumber, currency)}</p>
             <p className="mt-3 text-sm text-slate-300">Objetivo total estimado.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
@@ -273,9 +276,9 @@ export default function FirePage() {
                     <tr key={point.year} className="bg-white/5 shadow-sm">
                       <td className="rounded-l-2xl px-3 py-4 text-slate-300">{point.year}</td>
                       <td className="px-3 py-4 text-slate-300">{point.age}</td>
-                      <td className="px-3 py-4 text-right font-medium text-white">{point.netWorth.toFixed(2)} EUR</td>
-                      <td className="px-3 py-4 text-right text-slate-300">{point.contribution.toFixed(2)} EUR</td>
-                      <td className="rounded-r-2xl px-3 py-4 text-right text-slate-300">{point.growth.toFixed(2)} EUR</td>
+                      <td className="px-3 py-4 text-right font-medium text-white">{formatCurrencyByPreference(point.netWorth, currency)}</td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(point.contribution, currency)}</td>
+                      <td className="rounded-r-2xl px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(point.growth, currency)}</td>
                     </tr>
                   ))}
                 </tbody>
