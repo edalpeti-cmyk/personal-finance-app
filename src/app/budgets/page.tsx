@@ -112,9 +112,16 @@ function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[]) {
   return { rows, unbudgeted };
 }
 
-function toCsv(rows: BudgetWithActual[], month: string) {
-  const header = ["mes", "categoria", "presupuesto", "gasto_real", "restante", "consumo_pct"];
-  const data = rows.map((row) => [month, row.category, row.budget.toFixed(2), row.actual.toFixed(2), row.remaining.toFixed(2), row.spentPercent.toFixed(1)]);
+function toCsv(rows: BudgetWithActual[], month: string, currency: string, dateFormat: "es" | "us") {
+  const header = ["mes", "categoria", `presupuesto_${currency.toLowerCase()}`, `gasto_real_${currency.toLowerCase()}`, `restante_${currency.toLowerCase()}`, "consumo_pct"];
+  const data = rows.map((row) => [
+    formatMonthByPreference(month, dateFormat),
+    row.category,
+    formatCurrencyByPreference(row.budget, currency as "EUR" | "USD" | "GBP"),
+    formatCurrencyByPreference(row.actual, currency as "EUR" | "USD" | "GBP"),
+    formatCurrencyByPreference(row.remaining, currency as "EUR" | "USD" | "GBP"),
+    row.spentPercent.toFixed(1)
+  ]);
   return [header, ...data].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");
 }
 
@@ -306,7 +313,7 @@ export default function BudgetsPage() {
       return;
     }
 
-    const csv = toCsv(rows, selectedMonth);
+    const csv = toCsv(rows, selectedMonth, currency, dateFormat);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

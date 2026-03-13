@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import PreferencesPreviewCard from "@/components/preferences-preview-card";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -57,6 +58,8 @@ export default async function Home() {
           <p className="mt-3 text-sm text-white/76">Ya puedes entrar directamente en el area privada y trabajar con tus modulos financieros.</p>
         </section>
       ) : null}
+
+      <PreferencesPreviewCard />
     </main>
   );
 }
