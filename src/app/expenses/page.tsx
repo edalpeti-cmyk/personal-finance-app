@@ -50,7 +50,7 @@ const PRESET_CATEGORIES = [
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition ${
+  return `w-full rounded-2xl border bg-white/90 px-4 py-3 text-sm text-slate-700 outline-none transition ${
     hasError ? "border-red-400 ring-2 ring-red-100" : "border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
   }`;
 }
@@ -301,10 +301,10 @@ export default function ExpensesPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#020617_0%,#111827_48%,#7c2d12_100%)] p-6 text-slate-950 shadow-[0_28px_70px_rgba(2,6,23,0.42)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-800">Pulso del mes</p>
+        <section className="panel rounded-[30px] border border-amber-100 bg-[linear-gradient(180deg,rgba(255,251,245,0.97)_0%,rgba(250,242,232,0.97)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-600">Pulso del mes</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(currentMonthTotal)}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-900">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-700">Gasto acumulado del mes actual con comparativa automatica frente al mes anterior.</p>
         </section>
 
         {toast ? (
@@ -405,13 +405,13 @@ export default function ExpensesPage() {
           <div className="mt-6 grid gap-4 text-sm text-slate-700">
             <div className="rounded-3xl bg-white/80 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Categoria con mayor gasto</p>
-              <p className="mt-2 font-medium text-slate-900">
+              <p className="mt-2 font-medium text-slate-700">
                 {monthlyAnalysis.topCategory ? `${monthlyAnalysis.topCategory.name} (${formatCurrency(monthlyAnalysis.topCategory.total)})` : "Sin datos"}
               </p>
             </div>
             <div className="rounded-3xl bg-white/80 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Cambio respecto al mes anterior</p>
-              <p className="mt-2 font-medium text-slate-900">
+              <p className="mt-2 font-medium text-slate-700">
                 {monthlyAnalysis.changePercentage === null
                   ? `${formatCurrency(monthlyAnalysis.changeAmount)} (sin base comparativa)`
                   : `${monthlyAnalysis.changeAmount >= 0 ? "+" : ""}${formatCurrency(monthlyAnalysis.changeAmount)} (${monthlyAnalysis.changePercentage.toFixed(1)}%)`}
@@ -456,9 +456,9 @@ export default function ExpensesPage() {
                   {expenses.slice(0, 30).map((expense) => (
                     <tr key={expense.id} className="bg-white/90 shadow-sm">
                       <td className="rounded-l-2xl px-3 py-4 text-slate-600">{expense.expense_date}</td>
-                      <td className="px-3 py-4 font-medium text-slate-900">{expense.category}</td>
+                      <td className="px-3 py-4 font-medium text-slate-700">{expense.category}</td>
                       <td className="px-3 py-4 text-slate-600">{expense.description ?? "-"}</td>
-                      <td className="px-3 py-4 text-right font-medium text-slate-900">{formatCurrency(Number(expense.amount))}</td>
+                      <td className="px-3 py-4 text-right font-medium text-slate-700">{formatCurrency(Number(expense.amount))}</td>
                       <td className="rounded-r-2xl px-3 py-4">
                         <div className="flex justify-end gap-2">
                           <button type="button" onClick={() => handleEdit(expense)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">

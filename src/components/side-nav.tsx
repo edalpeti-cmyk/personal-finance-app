@@ -17,12 +17,12 @@ export default function SideNav() {
 
   return (
     <>
-      <aside className="panel fixed left-4 top-4 z-20 hidden h-[calc(100vh-2rem)] w-64 overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(10,15,24,0.98)_0%,rgba(15,23,42,0.96)_52%,rgba(17,94,89,0.92)_100%)] text-white shadow-[0_30px_80px_rgba(15,23,42,0.38)] md:block">
+      <aside className="panel fixed left-4 top-4 z-20 hidden h-[calc(100vh-2rem)] w-64 overflow-hidden rounded-[28px] border border-white/10 bg-slate-950 text-white shadow-[0_30px_80px_rgba(15,23,42,0.42)] md:block">
         <div className="flex h-full flex-col p-4">
-          <div className="mb-6 rounded-[22px] border border-white/10 bg-white/5 p-4">
-            <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.28em] text-white/70">Control personal</p>
+          <div className="mb-6 rounded-[22px] border border-white/10 bg-white/8 p-4">
+            <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.28em] text-white/78">Control personal</p>
             <h1 className="mt-3 font-[var(--font-heading)] text-2xl font-semibold leading-tight">Finanzas con foco y contexto</h1>
-            <p className="mt-2 text-sm text-white/82">Todo tu sistema financiero en un lateral claro y siempre accesible.</p>
+            <p className="mt-2 text-sm text-white/88">Todo tu sistema financiero en un lateral claro y siempre accesible.</p>
           </div>
 
           <nav className="grid gap-2 text-sm">
@@ -34,19 +34,19 @@ export default function SideNav() {
                   href={item.href}
                   className={`rounded-2xl border px-4 py-3 transition ${
                     active
-                      ? "border-white/16 bg-white/14 text-white shadow-[0_12px_30px_rgba(15,23,42,0.28)]"
-                      : "border-white/8 bg-white/0 text-white/88 hover:border-white/20 hover:bg-white/8"
+                      ? "border-white/18 bg-white/16 text-white shadow-[0_12px_30px_rgba(15,23,42,0.32)]"
+                      : "border-white/10 bg-white/0 text-white/80 hover:border-white/20 hover:bg-white/10"
                   }`}
                 >
                   <p className="font-medium">{item.label}</p>
-                  <p className={`mt-1 text-xs ${active ? "text-emerald-100/90" : "text-white/58"}`}>{item.hint}</p>
+                  <p className={`mt-1 text-xs ${active ? "text-white/88" : "text-white/60"}`}>{item.hint}</p>
                 </Link>
               );
             })}
           </nav>
 
           <div className="mt-auto rounded-[22px] border border-white/10 bg-white/6 p-3">
-            <Link href="/logout" className="block rounded-2xl border border-white/14 bg-white/10 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-white/16">
+            <Link href="/logout" className="block rounded-2xl border border-white/14 bg-white/10 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-white/18">
               Cerrar sesion
             </Link>
           </div>

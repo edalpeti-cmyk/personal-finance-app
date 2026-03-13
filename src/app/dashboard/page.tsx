@@ -498,16 +498,16 @@ export default function DashboardPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#020617_0%,#0b1120_50%,#115e59_100%)] p-6 text-slate-950 shadow-[0_28px_72px_rgba(2,6,23,0.46)] md:col-span-2 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.26em] text-slate-800">Momentum actual</p>
+        <section className="panel rounded-[30px] border border-teal-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(241,247,246,0.96)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] md:col-span-2 xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.26em] text-slate-600">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{metrics ? formatCurrency(metrics.totalNetWorth) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-slate-900">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
+          <p className="mt-2 max-w-sm text-sm text-slate-700">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
+            <div className="rounded-2xl border border-black/10 bg-white/88 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/70">Caja estimada</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.cashPosition) : "--"}</p>
             </div>
-            <div className="rounded-2xl border border-black/10 bg-white/55 p-4">
+            <div className="rounded-2xl border border-black/10 bg-white/88 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/70">Inversiones</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrency(metrics.investmentsValue) : "--"}</p>
             </div>
@@ -632,8 +632,8 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                <p>Objetivo estimado: <span className="font-medium text-slate-900">{metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}</span></p>
-                <p>Rentabilidad asumida: <span className="font-medium text-slate-900">5% anual</span></p>
+                <p>Objetivo estimado: <span className="font-medium text-slate-700">{metrics.fireTarget > 0 ? formatCurrency(metrics.fireTarget) : "Sin calcular"}</span></p>
+                <p>Rentabilidad asumida: <span className="font-medium text-slate-700">5% anual</span></p>
               </div>
             </section>
 

@@ -121,7 +121,7 @@ function formatCurrency(value: number) {
 }
 
 function inputClass() {
-  return "w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100";
+  return "w-full rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100";
 }
 
 export default function BudgetsPage() {
@@ -459,10 +459,10 @@ export default function BudgetsPage() {
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
         </section>
 
-        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#031716_0%,#0b2220_52%,#115e59_100%)] p-6 text-slate-950 shadow-[0_28px_72px_rgba(3,23,22,0.42)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-800">Mes activo</p>
+        <section className="panel rounded-[30px] border border-emerald-100 bg-[linear-gradient(180deg,rgba(246,252,250,0.97)_0%,rgba(234,246,243,0.97)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-600">Mes activo</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{selectedMonth}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-900">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-700">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>
         </section>
 
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}
@@ -521,7 +521,7 @@ export default function BudgetsPage() {
           </form>
 
           <div className="mt-6 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ingresos del mes</p><p className="mt-2 font-medium text-slate-900">{formatCurrency(incomeSummary.currentIncome)}</p></div>
+            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Ingresos del mes</p><p className="mt-2 font-medium text-slate-700">{formatCurrency(incomeSummary.currentIncome)}</p></div>
             <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta ahorro</p><p className={`mt-2 font-medium ${incomeComparison.savingsDelta >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatCurrency(incomeComparison.savingsDelta)}</p></div>
           </div>
         </section>
@@ -536,10 +536,10 @@ export default function BudgetsPage() {
           </div>
 
           <div className="mt-6 grid gap-4 text-sm text-slate-700 sm:grid-cols-2">
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta presupuesto</p><p className="mt-2 font-medium text-slate-900">{formatCurrency(monthOverMonth.budgetDelta)}</p></div>
+            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta presupuesto</p><p className="mt-2 font-medium text-slate-700">{formatCurrency(monthOverMonth.budgetDelta)}</p></div>
             <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta gasto real</p><p className={`mt-2 font-medium ${monthOverMonth.actualDelta > 0 ? "text-red-700" : "text-emerald-700"}`}>{formatCurrency(monthOverMonth.actualDelta)}</p></div>
             <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Delta ingresos</p><p className={`mt-2 font-medium ${incomeComparison.incomeDelta >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatCurrency(incomeComparison.incomeDelta)}</p></div>
-            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Consumo presupuesto</p><p className="mt-2 font-medium text-slate-900">{totals.totalSpentPercent.toFixed(1)}%</p></div>
+            <div className="rounded-3xl bg-white/80 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Consumo presupuesto</p><p className="mt-2 font-medium text-slate-700">{totals.totalSpentPercent.toFixed(1)}%</p></div>
           </div>
         </section>
 
@@ -562,7 +562,7 @@ export default function BudgetsPage() {
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="bg-white/90 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-900">{row.category}</td>
+                      <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-700">{row.category}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(row.budget)}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(row.actual)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-700" : "text-emerald-700"}`}>{formatCurrency(row.remaining)}</td>
@@ -590,7 +590,7 @@ export default function BudgetsPage() {
                   currentIncomeEntries.map((entry) => (
                     <tr key={entry.id} className="bg-white/90 shadow-sm">
                       <td className="rounded-l-2xl px-3 py-4 text-slate-600">{entry.income_date}</td>
-                      <td className="px-3 py-4 font-medium text-slate-900">{entry.source}</td>
+                      <td className="px-3 py-4 font-medium text-slate-700">{entry.source}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(Number(entry.amount))}</td>
                       <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full bg-red-50 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-100">Borrar</button></div></td>
                     </tr>
@@ -614,7 +614,7 @@ export default function BudgetsPage() {
                 <tbody>
                   {categoryComparison.map((item) => (
                     <tr key={item.category} className="bg-white/90 shadow-sm">
-                      <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-900">{item.category}</td>
+                      <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-700">{item.category}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(item.currentActual)}</td>
                       <td className="px-3 py-4 text-right text-slate-600">{formatCurrency(item.previousActual)}</td>
                       <td className={`rounded-r-2xl px-3 py-4 text-right font-medium ${item.delta > 0 ? "text-red-700" : item.delta < 0 ? "text-emerald-700" : "text-slate-700"}`}>{formatCurrency(item.delta)}</td>
@@ -634,7 +634,7 @@ export default function BudgetsPage() {
           ) : (
             <ul className="mt-6 grid gap-3 text-sm text-slate-700">
               {unbudgetedExpenses.map((item) => (
-                <li key={item.category} className="rounded-3xl bg-white/80 px-4 py-3"><span className="font-medium text-slate-900">{item.category}</span>: {formatCurrency(item.actual)}</li>
+                <li key={item.category} className="rounded-3xl bg-white/80 px-4 py-3"><span className="font-medium text-slate-700">{item.category}</span>: {formatCurrency(item.actual)}</li>
               ))}
             </ul>
           )}

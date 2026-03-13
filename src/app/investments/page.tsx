@@ -65,7 +65,7 @@ const ASSET_TYPE_LABELS: Record<AssetType, string> = {
 };
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-white/90 px-4 py-3 text-sm text-slate-900 outline-none transition ${
+  return `w-full rounded-2xl border bg-white/90 px-4 py-3 text-sm text-slate-700 outline-none transition ${
     hasError ? "border-red-400 ring-2 ring-red-100" : "border-slate-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
   }`;
 }
@@ -414,15 +414,15 @@ export default function InvestmentsPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-black/10 bg-[linear-gradient(135deg,#020617_0%,#0b1120_52%,#134e4a_100%)] p-6 text-slate-950 shadow-[0_28px_72px_rgba(2,6,23,0.46)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-800">Estado actual</p>
+        <section className="panel rounded-[30px] border border-sky-100 bg-[linear-gradient(180deg,rgba(247,250,252,0.97)_0%,rgba(237,245,248,0.97)_100%)] p-6 text-slate-950 shadow-[0_26px_60px_rgba(15,23,42,0.12)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-600">Estado actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold">{formatCurrency(metrics.totalValue)}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-900">Valor total calculado con el precio actual registrado en cada posicion.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-700">Valor total calculado con el precio actual registrado en cada posicion.</p>
           <button
             type="button"
             onClick={() => void handleRefreshPrices()}
             disabled={refreshingPrices || investments.length === 0}
-            className="mt-6 rounded-full border border-white/18 bg-white/55 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {refreshingPrices ? "Actualizando precios..." : "Actualizar precios reales"}
           </button>
@@ -587,13 +587,13 @@ export default function InvestmentsPage() {
 
                     return (
                       <tr key={row.id} className="rounded-2xl bg-white/90 shadow-sm">
-                        <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-900">{row.asset_name}</td>
+                        <td className="rounded-l-2xl px-3 py-4 font-medium text-slate-700">{row.asset_name}</td>
                         <td className="px-3 py-4 text-slate-600">{ASSET_TYPE_LABELS[row.asset_type]}</td>
                         <td className="px-3 py-4 text-slate-600">{row.asset_symbol ?? "-"}</td>
                         <td className="px-3 py-4 text-right text-slate-600">{formatNumber(row.quantity, 6)}</td>
                         <td className="px-3 py-4 text-right text-slate-600">{formatNumber(row.average_buy_price, 4)}</td>
                         <td className="px-3 py-4 text-right text-slate-600">{formatNumber(current, 4)}</td>
-                        <td className="px-3 py-4 text-right font-medium text-slate-900">{formatCurrency(value)}</td>
+                        <td className="px-3 py-4 text-right font-medium text-slate-700">{formatCurrency(value)}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => handleEdit(row)} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200">
@@ -624,5 +624,6 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
 
 
