@@ -29,8 +29,35 @@ function ThemeOption({
   );
 }
 
+function SettingOption({
+  active,
+  label,
+  description,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+        active ? "border-emerald-400/30 bg-emerald-500/14 text-white" : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+      }`}
+    >
+      <p className="text-sm font-semibold">{label}</p>
+      <p className={`mt-1 text-xs ${active ? "text-emerald-100" : "text-slate-400"}`}>{description}</p>
+    </button>
+  );
+}
+
 export default function SettingsPanel() {
-  const { theme, setTheme, settingsOpen, setSettingsOpen } = useTheme();
+  const { theme, setTheme, currency, setCurrency, dateFormat, setDateFormat, settingsOpen, setSettingsOpen } = useTheme();
+  const previewDate = dateFormat === "us" ? "03/13/2026" : "13/03/2026";
+  const previewMoney = currency === "USD" ? "$2,072.76" : currency === "GBP" ? "£2,072.76" : "2,072.76 EUR";
 
   return (
     <>
@@ -78,10 +105,33 @@ export default function SettingsPanel() {
             />
           </div>
 
+          <div className="mt-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Moneda</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <SettingOption active={currency === "EUR"} label="EUR" description="Euro" onClick={() => setCurrency("EUR")} />
+              <SettingOption active={currency === "USD"} label="USD" description="Dolar" onClick={() => setCurrency("USD")} />
+              <SettingOption active={currency === "GBP"} label="GBP" description="Libra" onClick={() => setCurrency("GBP")} />
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Formato de fecha</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <SettingOption active={dateFormat === "es"} label="DD/MM/AAAA" description="Estilo espanol" onClick={() => setDateFormat("es")} />
+              <SettingOption active={dateFormat === "us"} label="MM/DD/AAAA" description="Estilo americano" onClick={() => setDateFormat("us")} />
+            </div>
+          </div>
+
           <div className="mt-8 rounded-[24px] border border-white/8 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Estado</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Vista previa</p>
             <p className="mt-2 text-sm text-slate-200">
-              Tema activo: <span className="font-semibold text-white">{theme === "dark" ? "Oscuro" : "Claro"}</span>
+              Tema: <span className="font-semibold text-white">{theme === "dark" ? "Oscuro" : "Claro"}</span>
+            </p>
+            <p className="mt-2 text-sm text-slate-200">
+              Moneda: <span className="font-semibold text-white">{previewMoney}</span>
+            </p>
+            <p className="mt-2 text-sm text-slate-200">
+              Fecha: <span className="font-semibold text-white">{previewDate}</span>
             </p>
           </div>
         </div>
