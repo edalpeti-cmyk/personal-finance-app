@@ -960,7 +960,7 @@ export default function InvestmentsPage() {
             <p className="text-sm text-slate-400">{diversificationScore} tipos activos, {profitablePositions} posiciones en positivo</p>
           </div>
 
-          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,340px)]">
+          <div className="mt-6 grid gap-6">
             <div className="min-w-0 grid gap-3">
             {allocationByType.length > 0 ? (
               allocationByType.map((item) => (
@@ -984,7 +984,7 @@ export default function InvestmentsPage() {
 
             <div className="min-w-0 overflow-hidden rounded-3xl border border-white/8 bg-white/5 p-4">
               <p className="text-sm font-medium text-white">Grafico de distribucion</p>
-              <div className="relative mt-4 h-[260px] w-full">
+              <div className="relative mt-4 h-[320px] w-full">
                 {allocationByType.length > 0 ? (
                   <Doughnut data={allocationChartData} options={allocationChartOptions} />
                 ) : (
