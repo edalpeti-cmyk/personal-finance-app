@@ -52,7 +52,7 @@ const PRESET_CATEGORIES = [
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition ${
+  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
     hasError ? "border-red-400 ring-2 ring-red-500/20" : "border-white/10 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
   }`;
 }
@@ -331,8 +331,8 @@ export default function ExpensesPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Control de gasto</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Gastos con analisis accionable</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
@@ -354,7 +354,7 @@ export default function ExpensesPage() {
 
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section ref={formRef} className={`panel rounded-[28px] p-6 text-white xl:col-span-5 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
+        <section ref={formRef} className={`panel rounded-[28px] p-5 text-white xl:col-span-5 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
@@ -406,7 +406,7 @@ export default function ExpensesPage() {
               {errors.description ? <span className="text-xs text-red-700">{errors.description}</span> : null}
             </label>
 
-            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
+            <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Anadir gasto"}
             </button>
           </form>
@@ -430,7 +430,7 @@ export default function ExpensesPage() {
           </article>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Grafico mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion anual del gasto</h2>
           <div className="mt-6 h-[320px]">
@@ -438,7 +438,7 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
           <div className="mt-6 grid gap-4 text-sm text-slate-200 sm:grid-cols-2">
@@ -467,7 +467,7 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista por niveles</p>
@@ -580,4 +580,5 @@ export default function ExpensesPage() {
     </>
   );
 }
+
 

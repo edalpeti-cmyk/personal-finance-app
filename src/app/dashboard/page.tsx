@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -501,7 +501,7 @@ export default function DashboardPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-2 md:pl-72 xl:grid-cols-12">
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:grid-cols-2 md:pl-72 xl:grid-cols-12">
         <section className="rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_100%)] p-6 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:p-8 xl:col-span-7">
           <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Vista general</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Tu sistema financiero, de un vistazo</h1>
@@ -709,5 +709,6 @@ export default function DashboardPage() {
     </>
   );
 }
+
 
 

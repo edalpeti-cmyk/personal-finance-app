@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -126,7 +126,7 @@ function toCsv(rows: BudgetWithActual[], month: string, currency: CurrencyCode, 
 }
 
 function inputClass() {
-  return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
+  return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
 }
 
 export default function BudgetsPage() {
@@ -458,8 +458,8 @@ export default function BudgetsPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Presupuesto mensual</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Plan mensual con ingresos y ahorro</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
@@ -474,7 +474,7 @@ export default function BudgetsPage() {
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section ref={budgetFormRef} className={`panel rounded-[28px] p-6 text-white xl:col-span-5 ${editingBudgetId ? "ring-2 ring-teal-400/40" : ""}`}>
+        <section ref={budgetFormRef} className={`panel rounded-[28px] p-5 text-white xl:col-span-5 ${editingBudgetId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Categorias</p>
@@ -497,7 +497,7 @@ export default function BudgetsPage() {
               Presupuesto mensual
               <input className={inputClass()} type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </label>
-            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
+            <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingBudgetId ? "Guardar cambios" : "Guardar presupuesto"}
             </button>
           </form>
@@ -526,7 +526,7 @@ export default function BudgetsPage() {
           </article>
         </section>
 
-        <section ref={incomeFormRef} className="panel rounded-[28px] p-6 text-white xl:col-span-6">
+        <section ref={incomeFormRef} className="panel rounded-[28px] p-5 text-white xl:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos</p>
@@ -539,7 +539,7 @@ export default function BudgetsPage() {
             <label className="grid gap-2 text-sm text-slate-200 md:col-span-2"><span>Fuente de ingreso</span><input className={inputClass()} value={incomeSource} onChange={(e) => setIncomeSource(e.target.value)} maxLength={80} /></label>
             <label className="grid gap-2 text-sm text-slate-200"><span>Importe</span><input className={inputClass()} type="number" min="0" step="0.01" value={incomeAmount} onChange={(e) => setIncomeAmount(e.target.value)} /></label>
             <label className="grid gap-2 text-sm text-slate-200"><span>Fecha</span><input className={inputClass()} type="date" value={incomeDate} onChange={(e) => setIncomeDate(e.target.value)} /></label>
-            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2" disabled={incomeSaving || loading} type="submit">{incomeSaving ? "Guardando..." : editingIncomeId ? "Guardar cambios" : "Guardar ingreso"}</button>
+            <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-2" disabled={incomeSaving || loading} type="submit">{incomeSaving ? "Guardando..." : editingIncomeId ? "Guardar cambios" : "Guardar ingreso"}</button>
           </form>
 
           <div className="mt-6 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
@@ -548,7 +548,7 @@ export default function BudgetsPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-6">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Resumen</p>
@@ -581,7 +581,7 @@ export default function BudgetsPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto vs real</p>
@@ -618,7 +618,7 @@ export default function BudgetsPage() {
           ) : null}
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos del mes</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
 
@@ -643,7 +643,7 @@ export default function BudgetsPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
 
@@ -670,7 +670,7 @@ export default function BudgetsPage() {
           )}
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
           {unbudgetedExpenses.length === 0 ? (
@@ -689,4 +689,5 @@ export default function BudgetsPage() {
     </>
   );
 }
+
 

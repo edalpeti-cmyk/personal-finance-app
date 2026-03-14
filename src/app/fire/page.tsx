@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import {
@@ -36,7 +36,7 @@ type FireFormErrors = {
 const MAX_YEARS = 60;
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition ${
+  return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
     hasError ? "border-red-400 ring-2 ring-red-500/20" : "border-white/10 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
   }`;
 }
@@ -181,8 +181,8 @@ export default function FirePage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-6 p-6 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-6 text-white md:p-8 xl:col-span-7">
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Calculadora FIRE</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Planifica tu independencia financiera</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Calcula tu numero FIRE, estima cuantos anos te faltan y visualiza la evolucion esperada de tu patrimonio.</p>
@@ -194,7 +194,7 @@ export default function FirePage() {
           <p className="mt-3 text-sm leading-6 text-slate-200">Usamos la regla del 4% para estimar el capital necesario para vivir de tu patrimonio.</p>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Parametros</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tus datos</h2>
 
@@ -245,7 +245,7 @@ export default function FirePage() {
           </article>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Grafico</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Crecimiento esperado</h2>
           <div className="mt-6 h-[320px]">
@@ -253,7 +253,7 @@ export default function FirePage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tabla</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion del patrimonio</h2>
 
@@ -290,3 +290,4 @@ export default function FirePage() {
     </>
   );
 }
+
