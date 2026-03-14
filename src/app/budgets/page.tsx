@@ -557,11 +557,27 @@ export default function BudgetsPage() {
             <button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10" type="button" onClick={handleExportCsv}>Exportar CSV</button>
           </div>
 
-          <div className="mt-6 grid gap-4 text-sm text-slate-200 sm:grid-cols-2">
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta presupuesto</p><p className="mt-2 font-medium text-slate-100">{formatCurrencyByPreference(monthOverMonth.budgetDelta, currency)}</p></div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta gasto real</p><p className={`mt-2 font-medium ${monthOverMonth.actualDelta > 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(monthOverMonth.actualDelta, currency)}</p></div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ingresos</p><p className={`mt-2 font-medium ${incomeComparison.incomeDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.incomeDelta, currency)}</p></div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consumo presupuesto</p><p className="mt-2 font-medium text-slate-100">{totals.totalSpentPercent.toFixed(1)}%</p></div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta presupuesto</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(monthOverMonth.budgetDelta, currency)}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Cambio del presupuesto frente al mes anterior.</p>
+            </div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta gasto real</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${monthOverMonth.actualDelta > 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(monthOverMonth.actualDelta, currency)}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Variacion del gasto registrado respecto al mes previo.</p>
+            </div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ingresos</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${incomeComparison.incomeDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.incomeDelta, currency)}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Cambio de ingresos comparado con el mes anterior.</p>
+            </div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consumo presupuesto</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{totals.totalSpentPercent.toFixed(1)}%</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Porcentaje del presupuesto total que ya has consumido.</p>
+            </div>
           </div>
         </section>
 
@@ -598,7 +614,7 @@ export default function BudgetsPage() {
           ) : null}
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos del mes</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
 
@@ -648,13 +664,15 @@ export default function BudgetsPage() {
           )}
         </section>
 
-        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
           {unbudgetedExpenses.length === 0 ? (
-            <p className="mt-6 text-sm text-slate-300">Todo el gasto del mes actual esta cubierto por categorias presupuestadas.</p>
+            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="max-w-[42ch] text-sm leading-7 text-slate-300">Todo el gasto del mes actual esta cubierto por categorias presupuestadas.</p>
+            </div>
           ) : (
-            <ul className="mt-6 grid gap-3 text-sm text-slate-200">
+            <ul className="mt-6 grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-3">
               {unbudgetedExpenses.map((item) => (
                 <li key={item.category} className="rounded-3xl border border-white/8 bg-white/5 px-4 py-3"><span className="font-medium text-white">{item.category}</span>: {formatCurrencyByPreference(item.actual, currency)}</li>
               ))}

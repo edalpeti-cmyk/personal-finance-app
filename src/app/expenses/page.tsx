@@ -441,22 +441,22 @@ export default function ExpensesPage() {
         <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
-          <div className="mt-6 grid gap-4 text-sm text-slate-200">
+          <div className="mt-6 grid gap-4 text-sm text-slate-200 sm:grid-cols-2">
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mayor gasto</p>
-              <p className="mt-2 font-medium text-slate-100">
+              <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold leading-tight text-slate-100">
                 {monthlyAnalysis.topCategory ? `${monthlyAnalysis.topCategory.name} (${formatCurrencyByPreference(monthlyAnalysis.topCategory.total, currency)})` : "Sin datos"}
               </p>
             </div>
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Cambio respecto al mes anterior</p>
-              <p className="mt-2 font-medium text-slate-100">
+              <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold leading-tight text-slate-100">
                 {monthlyAnalysis.changePercentage === null
                   ? `${formatCurrencyByPreference(monthlyAnalysis.changeAmount, currency)} (sin base comparativa)`
                   : `${monthlyAnalysis.changeAmount >= 0 ? "+" : ""}${formatCurrencyByPreference(monthlyAnalysis.changeAmount, currency)} (${monthlyAnalysis.changePercentage.toFixed(1)}%)`}
               </p>
             </div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4 sm:col-span-2">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Recomendaciones</p>
               <ul className="mt-2 grid gap-2 text-slate-100">
                 {monthlyAnalysis.recommendations.map((item) => (

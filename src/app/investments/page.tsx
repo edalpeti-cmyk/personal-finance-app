@@ -1250,26 +1250,30 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 lg:grid-cols-4">
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Valor EUR</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{formatCurrencyByPreference(selectedAsset.currentValueEur, "EUR")}</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(selectedAsset.currentValueEur, "EUR")}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">Valor consolidado de la posicion convertido a EUR.</p>
                 </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Invertido EUR</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{formatCurrencyByPreference(selectedAsset.investedEur, "EUR")}</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(selectedAsset.investedEur, "EUR")}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">Capital aportado a esta posicion desde la compra.</p>
                 </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia</p>
-                  <p className={`mt-2 text-2xl font-semibold ${selectedAsset.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(selectedAsset.gainEur, "EUR")}</p>
+                  <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${selectedAsset.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(selectedAsset.gainEur, "EUR")}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">Resultado acumulado de la posicion a precio actual.</p>
                 </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Peso cartera</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">Porcentaje que ocupa este activo dentro de la cartera.</p>
                 </article>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 {[
                   { label: "Variacion diaria", data: selectedAssetPerformance.day },
                   { label: "Variacion semanal", data: selectedAssetPerformance.week },
@@ -1280,12 +1284,12 @@ export default function InvestmentsPage() {
                     item.data.amount === null ? "text-slate-300" : positive ? "text-emerald-300" : "text-red-300";
 
                   return (
-                    <article key={item.label} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                    <article key={item.label} className={`rounded-3xl border border-white/8 bg-white/5 p-4 ${item.label === "Variacion mensual" ? "md:col-span-2" : ""}`}>
                       <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{item.label}</p>
-                      <p className={`mt-2 text-2xl font-semibold ${toneClass}`}>
+                      <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${toneClass}`}>
                         {item.data.amount === null ? "Sin datos" : formatCurrencyByPreference(item.data.amount, "EUR")}
                       </p>
-                      <p className="mt-2 text-sm text-slate-400">
+                      <p className="mt-3 text-sm leading-6 text-slate-400">
                         {item.data.pct === null ? "Hace falta mas historico real para esta ventana." : `${item.data.pct >= 0 ? "+" : ""}${item.data.pct.toFixed(2)}%`}
                       </p>
                     </article>
