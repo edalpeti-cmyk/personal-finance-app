@@ -227,21 +227,21 @@ export default function FirePage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
-          <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
+        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
+          <article className="kpi-card rounded-[26px] p-6 text-white">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital FIRE</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(fireNumber, currency)}</p>
-            <p className="mt-3 text-sm text-slate-300">Objetivo total estimado.</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(fireNumber, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Objetivo total estimado para alcanzar FIRE.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
+          <article className="kpi-card rounded-[26px] p-6 text-white">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Anos hasta FIRE</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{simulation.yearsToFire === null ? `>${MAX_YEARS}` : simulation.yearsToFire}</p>
-            <p className="mt-3 text-sm text-slate-300">Horizonte con tus datos actuales.</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{simulation.yearsToFire === null ? `>${MAX_YEARS}` : simulation.yearsToFire}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Horizonte estimado con tus datos actuales.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6 text-white xl:col-span-1">
+          <article className="kpi-card rounded-[26px] p-6 text-white md:col-span-2">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Edad objetivo</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{simulation.yearsToFire === null ? "No definida" : `${Number(currentAge) + simulation.yearsToFire} anos`}</p>
-            <p className="mt-3 text-sm text-slate-300">Edad aproximada para alcanzar FIRE.</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{simulation.yearsToFire === null ? "No definida" : `${Number(currentAge) + simulation.yearsToFire} anos`}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Edad aproximada para alcanzar tu objetivo FIRE.</p>
           </article>
         </section>
 

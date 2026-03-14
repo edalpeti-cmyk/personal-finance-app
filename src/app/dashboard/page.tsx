@@ -546,32 +546,32 @@ export default function DashboardPage() {
               </section>
             ) : null}
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio total</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p>
-              <p className="mt-3 text-sm text-white/64">Caja neta acumulada mas valor actual de inversiones.</p>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Caja neta acumulada mas valor actual de inversiones.</p>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}
               </p>
-              <p className="mt-3 text-sm text-white/64">Basada en ingresos y gastos del mes actual.</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Basada en ingresos y gastos del mes actual.</p>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
-              <p className="mt-3 text-sm text-white/64">Ingresos anuales recientes menos gastos anuales recientes.</p>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Ingresos anuales recientes menos gastos anuales recientes.</p>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-3">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}
               </p>
-              <p className="mt-3 text-sm text-white/64">Calculado con la regla del 4% sobre tus gastos anuales.</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Calculado con la regla del 4% sobre tus gastos anuales.</p>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
