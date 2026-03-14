@@ -1,6 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchMarketPrice } from "@/lib/market-prices";
+import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 
 type InvestmentPriceRow = {
   id: string;
@@ -8,6 +9,8 @@ type InvestmentPriceRow = {
   asset_symbol: string | null;
   asset_type: string;
   asset_market: string | null;
+  asset_currency: string | null;
+  quantity: number;
 };
 
 export async function GET(request: Request) {
@@ -20,9 +23,10 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient();
+    const ratesToEur = await fetchRatesToEur();
     const { data, error } = await supabase
       .from("investments")
-      .select("id, user_id, asset_symbol, asset_type, asset_market")
+      .select("id, user_id, asset_symbol, asset_type, asset_market, asset_currency, quantity")
       .not("asset_symbol", "is", null);
 
     if (error) {
@@ -46,9 +50,10 @@ export async function GET(request: Request) {
           continue;
         }
 
+        const roundedPrice = Number(price.toFixed(4));
         const { error: updateError } = await supabase
           .from("investments")
-          .update({ current_price: Number(price.toFixed(4)) })
+          .update({ current_price: roundedPrice })
           .eq("id", row.id);
 
         if (updateError) {
@@ -56,7 +61,25 @@ export async function GET(request: Request) {
           continue;
         }
 
-        updated.push({ id: row.id, userId: row.user_id, price: Number(price.toFixed(4)) });
+        const quantity = Number(row.quantity) || 0;
+        const priceEur = convertToEur(roundedPrice, row.asset_currency, ratesToEur);
+        const historyInsert = await supabase.from("investment_price_history").insert({
+          investment_id: row.id,
+          user_id: row.user_id,
+          asset_symbol: row.asset_symbol,
+          asset_currency: row.asset_currency ?? "EUR",
+          price_local: roundedPrice,
+          price_eur: Number(priceEur.toFixed(4)),
+          total_value_local: Number((roundedPrice * quantity).toFixed(4)),
+          total_value_eur: Number((priceEur * quantity).toFixed(4))
+        });
+
+        if (historyInsert.error) {
+          skipped.push({ id: row.id, userId: row.user_id, reason: historyInsert.error.message });
+          continue;
+        }
+
+        updated.push({ id: row.id, userId: row.user_id, price: roundedPrice });
       } catch (fetchError) {
         skipped.push({
           id: row.id,

@@ -75,6 +75,7 @@ export default function ExpensesPage() {
   const [description, setDescription] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
   const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -153,6 +154,42 @@ export default function ExpensesPage() {
   }, [monthlyTotals]);
 
   const monthlyAnalysis = useMemo(() => analyzeMonthlyExpenses(expenses), [expenses]);
+  const groupedExpenses = useMemo(() => {
+    const groups = new Map<
+      string,
+      { category: string; total: number; count: number; latestDate: string; items: ExpenseRow[] }
+    >();
+
+    for (const expense of expenses) {
+      const current = groups.get(expense.category) ?? {
+        category: expense.category,
+        total: 0,
+        count: 0,
+        latestDate: expense.expense_date,
+        items: []
+      };
+
+      current.total += Number(expense.amount);
+      current.count += 1;
+      current.items.push(expense);
+      if (expense.expense_date > current.latestDate) {
+        current.latestDate = expense.expense_date;
+      }
+
+      groups.set(expense.category, current);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((a, b) => b.expense_date.localeCompare(a.expense_date))
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [expenses]);
+  const selectedCategoryExpenses = useMemo(
+    () => groupedExpenses.find((group) => group.category === selectedExpenseCategory) ?? null,
+    [groupedExpenses, selectedExpenseCategory]
+  );
 
   const chartData = {
     labels: MONTH_LABELS,
@@ -433,54 +470,113 @@ export default function ExpensesPage() {
         <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Movimientos</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ultimos gastos</h2>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista por niveles</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias de gasto</h2>
             </div>
-            <p className="text-sm text-slate-400">Cada fila se puede editar o borrar con un clic.</p>
+            <p className="text-sm text-slate-400">Primero entras en una categoria y despues abres los gastos concretos de ese grupo.</p>
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando gastos...</p> : null}
           {!loading && expenses.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes gastos registrados.</p> : null}
 
           {!loading && expenses.length > 0 ? (
-            <div className="table-scroll mt-6">
-              <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead>
-                  <tr className="text-left text-slate-400">
-                    <th className="sticky-col-header px-3 py-2">Fecha</th>
-                    <th className="px-3 py-2">Categoria</th>
-                    <th className="px-3 py-2">Descripcion</th>
-                    <th className="px-3 py-2 text-right">Importe</th>
-                    <th className="px-3 py-2 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expenses.slice(0, 30).map((expense) => (
-                    <tr key={expense.id} className="bg-white/5 shadow-sm">
-                      <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">
-                        {formatDateByPreference(expense.expense_date, dateFormat)}
-                      </td>
-                      <td className="px-3 py-4 font-medium text-white">{expense.category}</td>
-                      <td className="px-3 py-4 text-slate-300">{expense.description ?? "-"}</td>
-                      <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(Number(expense.amount), currency)}</td>
-                      <td className="rounded-r-2xl px-3 py-4">
-                        <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => handleEdit(expense)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
-                            Editar
-                          </button>
-                          <button type="button" onClick={() => void handleDelete(expense.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">
-                            Borrar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {groupedExpenses.map((group) => (
+                <button
+                  key={group.category}
+                  type="button"
+                  onClick={() => setSelectedExpenseCategory(group.category)}
+                  className="rounded-[28px] border border-white/8 bg-white/5 p-5 text-left transition hover:border-emerald-400/20 hover:bg-white/10"
+                >
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">{group.category}</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{group.count}</p>
+                  <p className="mt-2 text-sm text-slate-300">Gastos registrados en esta categoria.</p>
+                  <div className="mt-5 grid gap-2 text-sm text-slate-300">
+                    <p>Total: <span className="font-medium text-white">{formatCurrencyByPreference(group.total, currency)}</span></p>
+                    <p>Ultimo movimiento: <span className="font-medium text-white">{formatDateByPreference(group.latestDate, dateFormat)}</span></p>
+                  </div>
+                  <div className="mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    Ver gastos
+                  </div>
+                </button>
+              ))}
             </div>
           ) : null}
         </section>
       </main>
+
+      {selectedCategoryExpenses ? (
+        <>
+          <button type="button" className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-[2px]" onClick={() => setSelectedExpenseCategory(null)} />
+          <aside className="fixed right-4 top-4 z-40 h-[calc(100vh-2rem)] w-[min(92vw,840px)] rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,#020817_0%,#071427_56%,#0a1d31_100%)] p-6 text-white shadow-[0_30px_80px_rgba(2,8,23,0.58)]">
+            <div className="flex h-full flex-col">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Categoria</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{selectedCategoryExpenses.category}</h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {selectedCategoryExpenses.count} movimientos · {formatCurrencyByPreference(selectedCategoryExpenses.total, currency)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedExpenseCategory(null)}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="table-scroll mt-6 flex-1 pr-1">
+                <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-400">
+                      <th className="sticky-col-header px-3 py-2">Fecha</th>
+                      <th className="px-3 py-2">Descripcion</th>
+                      <th className="px-3 py-2 text-right">Importe</th>
+                      <th className="px-3 py-2 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCategoryExpenses.items.map((expense) => (
+                      <tr key={expense.id} className="bg-white/5 shadow-sm">
+                        <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">
+                          {formatDateByPreference(expense.expense_date, dateFormat)}
+                        </td>
+                        <td className="px-3 py-4 text-slate-300">{expense.description ?? "-"}</td>
+                        <td className="px-3 py-4 text-right font-medium text-slate-100">
+                          {formatCurrencyByPreference(Number(expense.amount), currency)}
+                        </td>
+                        <td className="rounded-r-2xl px-3 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedExpenseCategory(null);
+                                handleEdit(expense);
+                              }}
+                              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(expense.id)}
+                              className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20"
+                            >
+                              Borrar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </aside>
+        </>
+      ) : null}
     </>
   );
 }

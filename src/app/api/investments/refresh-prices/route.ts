@@ -1,7 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchMarketPrice } from "@/lib/market-prices";
+import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 
 type InvestmentPriceRow = {
   id: string;
@@ -9,6 +10,8 @@ type InvestmentPriceRow = {
   asset_symbol: string | null;
   asset_type: string;
   asset_market: string | null;
+  asset_currency: string | null;
+  quantity: number;
 };
 
 export async function POST(request: Request) {
@@ -23,10 +26,11 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as { investmentId?: string };
   const db = createAdminClient();
+  const ratesToEur = await fetchRatesToEur();
 
   let query = db
     .from("investments")
-    .select("id, asset_name, asset_symbol, asset_type, asset_market")
+    .select("id, asset_name, asset_symbol, asset_type, asset_market, asset_currency, quantity")
     .eq("user_id", authData.user.id);
 
   if (body.investmentId) {
@@ -55,9 +59,10 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const roundedPrice = Number(price.toFixed(4));
       const { error: updateError } = await db
         .from("investments")
-        .update({ current_price: Number(price.toFixed(4)) })
+        .update({ current_price: roundedPrice })
         .eq("id", row.id)
         .eq("user_id", authData.user.id);
 
@@ -66,7 +71,25 @@ export async function POST(request: Request) {
         continue;
       }
 
-      updated.push({ id: row.id, symbol: row.asset_symbol, price: Number(price.toFixed(4)) });
+      const quantity = Number(row.quantity) || 0;
+      const priceEur = convertToEur(roundedPrice, row.asset_currency, ratesToEur);
+      const historyInsert = await db.from("investment_price_history").insert({
+        investment_id: row.id,
+        user_id: authData.user.id,
+        asset_symbol: row.asset_symbol,
+        asset_currency: row.asset_currency ?? "EUR",
+        price_local: roundedPrice,
+        price_eur: Number(priceEur.toFixed(4)),
+        total_value_local: Number((roundedPrice * quantity).toFixed(4)),
+        total_value_eur: Number((priceEur * quantity).toFixed(4))
+      });
+
+      if (historyInsert.error) {
+        skipped.push({ id: row.id, symbol: row.asset_symbol, reason: historyInsert.error.message });
+        continue;
+      }
+
+      updated.push({ id: row.id, symbol: row.asset_symbol, price: roundedPrice });
     } catch (fetchError) {
       skipped.push({ id: row.id, symbol: row.asset_symbol, reason: fetchError instanceof Error ? fetchError.message : "fetch_failed" });
     }

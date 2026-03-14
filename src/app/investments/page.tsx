@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -51,6 +51,10 @@ type ToastState = { type: "success" | "error"; text: string } | null;
 type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "weightPct";
 type SortDirection = "asc" | "desc";
+type HistoryPoint = {
+  snapshot_date: string;
+  total_value_eur: number;
+};
 type EnrichedInvestment = InvestmentRow & {
   current: number;
   investedLocal: number;
@@ -163,6 +167,7 @@ export default function InvestmentsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [selectedType, setSelectedType] = useState<AssetType | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
   const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -367,16 +372,22 @@ export default function InvestmentsPage() {
     () => selectedTypeAssets.find((row) => row.id === selectedAssetId) ?? null,
     [selectedAssetId, selectedTypeAssets]
   );
-  const selectedAssetEvolution = useMemo(
-    () => (selectedAsset ? buildEstimatedAssetEvolution(selectedAsset) : { labels: [], values: [] }),
-    [selectedAsset]
-  );
+  const selectedAssetEvolution = useMemo(() => {
+    if (selectedAssetHistory.length > 1) {
+      return {
+        labels: selectedAssetHistory.map((point) => new Date(point.snapshot_date).toISOString().slice(0, 10)),
+        values: selectedAssetHistory.map((point) => Number(point.total_value_eur))
+      };
+    }
+
+    return selectedAsset ? buildEstimatedAssetEvolution(selectedAsset) : { labels: [], values: [] };
+  }, [selectedAsset, selectedAssetHistory]);
   const selectedAssetChartData = useMemo(
     () => ({
       labels: selectedAssetEvolution.labels,
       datasets: [
         {
-          label: "Valor estimado en EUR",
+          label: selectedAssetHistory.length > 1 ? "Valor real en EUR" : "Valor estimado en EUR",
           data: selectedAssetEvolution.values,
           borderColor: "#14b8a6",
           backgroundColor: "rgba(20, 184, 166, 0.14)",
@@ -386,8 +397,14 @@ export default function InvestmentsPage() {
         }
       ]
     }),
-    [selectedAssetEvolution]
+    [selectedAssetEvolution, selectedAssetHistory.length]
   );
+  const selectedAssetIndex = useMemo(
+    () => selectedTypeAssets.findIndex((row) => row.id === selectedAssetId),
+    [selectedAssetId, selectedTypeAssets]
+  );
+  const previousAsset = selectedAssetIndex > 0 ? selectedTypeAssets[selectedAssetIndex - 1] : null;
+  const nextAsset = selectedAssetIndex >= 0 && selectedAssetIndex < selectedTypeAssets.length - 1 ? selectedTypeAssets[selectedAssetIndex + 1] : null;
 
   const allocationChartData = useMemo(
     () => ({
@@ -444,6 +461,31 @@ export default function InvestmentsPage() {
       setSelectedAssetId(null);
     }
   }, [selectedAssetId, selectedTypeAssets]);
+
+  useEffect(() => {
+    const loadAssetHistory = async () => {
+      if (!selectedAssetId || !userId) {
+        setSelectedAssetHistory([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("investment_price_history")
+        .select("snapshot_date, total_value_eur")
+        .eq("user_id", userId)
+        .eq("investment_id", selectedAssetId)
+        .order("snapshot_date", { ascending: true });
+
+      if (error) {
+        setSelectedAssetHistory([]);
+        return;
+      }
+
+      setSelectedAssetHistory((data as HistoryPoint[]) ?? []);
+    };
+
+    void loadAssetHistory();
+  }, [selectedAssetId, supabase, userId]);
 
   const evolution = useMemo(() => {
     const byMonth = new Map<string, { invested: number; current: number }>();
@@ -1135,9 +1177,27 @@ export default function InvestmentsPage() {
                   <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{selectedAsset.asset_name}</h2>
                   <p className="mt-2 text-sm text-slate-300">{selectedAsset.asset_symbol ?? "Sin ticker"} · {ASSET_TYPE_LABELS[selectedAsset.asset_type]} · {selectedAsset.asset_currency}</p>
                 </div>
-                <button type="button" onClick={() => setSelectedAssetId(null)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
-                  Cerrar
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => previousAsset && setSelectedAssetId(previousAsset.id)}
+                    disabled={!previousAsset}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => nextAsset && setSelectedAssetId(nextAsset.id)}
+                    disabled={!nextAsset}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Siguiente
+                  </button>
+                  <button type="button" onClick={() => setSelectedAssetId(null)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
+                    Cerrar
+                  </button>
+                </div>
               </div>
 
               <div className="mt-6 grid gap-4 lg:grid-cols-4">
@@ -1162,8 +1222,17 @@ export default function InvestmentsPage() {
               <div className="mt-6 flex-1 rounded-3xl border border-white/8 bg-white/5 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-white">Evolucion estimada del activo</p>
-                    <p className="mt-1 text-xs text-slate-400">Estimacion basada en precio medio y precio actual. Cuando tengamos historico real por activo, este grafico podra ser exacto.</p>
+                    <p className="text-sm font-medium text-white">
+                      {selectedAssetHistory.length > 1 ? "Evolucion real del activo" : "Evolucion estimada del activo"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {selectedAssetHistory.length > 1
+                        ? "Serie construida con snapshots reales del activo guardados tras las actualizaciones de precio."
+                        : "Estimacion basada en precio medio y precio actual. En cuanto se acumulen snapshots reales, este grafico dejara de ser estimado."}
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                    {selectedAssetHistory.length > 1 ? `${selectedAssetHistory.length} puntos reales` : "Sin historico suficiente"}
                   </div>
                 </div>
                 <div className="mt-4 h-[320px]">
@@ -1191,3 +1260,4 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
