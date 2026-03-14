@@ -527,7 +527,7 @@ export default function ExpensesPage() {
                 </button>
               </div>
 
-              <div className="table-scroll mt-6 flex-1 pr-1">
+              <div className={`table-scroll mt-6 flex-1 pr-1 ${selectedCategoryExpenses.items.length > 6 ? "max-h-[420px]" : ""}`}>
                 <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                   <thead>
                     <tr className="text-left text-slate-400">
@@ -548,21 +548,21 @@ export default function ExpensesPage() {
                           {formatCurrencyByPreference(Number(expense.amount), currency)}
                         </td>
                         <td className="rounded-r-2xl px-3 py-4">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-2 whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => {
                                 setSelectedExpenseCategory(null);
                                 handleEdit(expense);
                               }}
-                              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10"
+                              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10"
                             >
                               Editar
                             </button>
                             <button
                               type="button"
                               onClick={() => void handleDelete(expense.id)}
-                              className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20"
+                              className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20"
                             >
                               Borrar
                             </button>

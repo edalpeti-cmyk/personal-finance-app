@@ -591,10 +591,14 @@ export default function BudgetsPage() {
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando presupuesto...</p> : null}
-          {!loading && rows.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no hay categorias presupuestadas para este mes.</p> : null}
+          {!loading && rows.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">Aun no hay categorias presupuestadas para este mes.</p>
+            </div>
+          ) : null}
 
           {!loading && rows.length > 0 ? (
-            <div className="table-scroll mt-6">
+            <div className={`table-scroll mt-6 ${rows.length > 6 ? "max-h-[420px]" : ""}`}>
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Restante</th><th className="px-3 py-2 text-right">Consumo</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
                 <tbody>
@@ -605,7 +609,7 @@ export default function BudgetsPage() {
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
                       <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>
@@ -618,19 +622,19 @@ export default function BudgetsPage() {
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos del mes</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
 
-          <div className="table-scroll mt-6">
+          <div className={`table-scroll mt-6 ${currentIncomeEntries.length > 5 ? "max-h-[320px]" : ""}`}>
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
               <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Fecha</th><th className="px-3 py-2">Fuente</th><th className="px-3 py-2 text-right">Importe</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
               <tbody>
                 {currentIncomeEntries.length === 0 ? (
-                  <tr><td className="rounded-2xl bg-white/5 px-3 py-4 text-slate-300" colSpan={4}>Aun no hay ingresos registrados para este mes.</td></tr>
+                  <tr><td className="rounded-2xl bg-white/5 px-4 py-5 text-slate-300" colSpan={4}>Aun no hay ingresos registrados para este mes.</td></tr>
                 ) : (
                   currentIncomeEntries.map((entry) => (
                     <tr key={entry.id} className="bg-white/5 shadow-sm">
                       <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">{formatDateByPreference(entry.income_date, dateFormat)}</td>
                       <td className="px-3 py-4 font-medium text-white">{entry.source}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(Number(entry.amount), currency)}</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))
                 )}
@@ -644,9 +648,11 @@ export default function BudgetsPage() {
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
 
           {categoryComparison.length === 0 ? (
-            <p className="mt-6 text-sm text-slate-300">Sin datos suficientes para comparar meses.</p>
+            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">Sin datos suficientes para comparar meses.</p>
+            </div>
           ) : (
-            <div className="table-scroll mt-6">
+            <div className={`table-scroll mt-6 ${categoryComparison.length > 6 ? "max-h-[420px]" : ""}`}>
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
                 <tbody>

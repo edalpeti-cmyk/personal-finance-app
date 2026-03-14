@@ -1119,8 +1119,16 @@ export default function InvestmentsPage() {
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
-          {!loading && investments.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes inversiones registradas.</p> : null}
-          {!loading && investments.length > 0 && groupedAssetTypes.length === 0 ? <p className="mt-6 text-sm text-slate-300">No hay resultados con los filtros actuales.</p> : null}
+          {!loading && investments.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">Aun no tienes inversiones registradas.</p>
+            </div>
+          ) : null}
+          {!loading && investments.length > 0 && groupedAssetTypes.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">No hay resultados con los filtros actuales.</p>
+            </div>
+          ) : null}
 
           {!loading && groupedAssetTypes.length > 0 ? (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1187,21 +1195,21 @@ export default function InvestmentsPage() {
                             </div>
                           </div>
                           <div className="flex flex-wrap justify-end gap-2">
-                            <button type="button" onClick={() => setSelectedAssetId(row.id)} className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20">
+                            <button type="button" onClick={() => setSelectedAssetId(row.id)} className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20">
                               Ver detalle
                             </button>
-                            <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); handleEdit(row); }} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
+                            <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); handleEdit(row); }} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">
                               Editar
                             </button>
                             <button
                               type="button"
                               onClick={() => void handleRefreshPrices(row.id)}
                               disabled={refreshingPrices || !row.asset_symbol}
-                              className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Precio
                             </button>
-                            <button type="button" onClick={() => void handleDelete(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">
+                            <button type="button" onClick={() => void handleDelete(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">
                               Borrar
                             </button>
                           </div>
