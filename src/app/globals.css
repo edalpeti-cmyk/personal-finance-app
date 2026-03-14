@@ -358,6 +358,23 @@ html[data-motion="reduced"] *::after {
   box-shadow: 8px 0 18px rgba(2, 8, 23, 0.35);
 }
 
+.table-scroll thead th:first-child,
+.table-scroll tbody td:first-child {
+  position: sticky;
+  left: 0;
+}
+
+.table-scroll thead th:first-child {
+  z-index: 30;
+  background: #020817;
+}
+
+.table-scroll tbody td:first-child {
+  z-index: 20;
+  background: #020817;
+  box-shadow: 8px 0 18px rgba(2, 8, 23, 0.35);
+}
+
 html[data-theme="light"] .sidebar-scroll {
   scrollbar-color: rgba(15, 118, 110, 0.9) rgba(15, 23, 42, 0.08);
 }
@@ -377,6 +394,15 @@ html[data-theme="light"] .sticky-col {
 }
 
 html[data-theme="light"] .sticky-col {
+  box-shadow: 8px 0 18px rgba(15, 23, 42, 0.14);
+}
+
+html[data-theme="light"] .table-scroll thead th:first-child,
+html[data-theme="light"] .table-scroll tbody td:first-child {
+  background: #fffdf9;
+}
+
+html[data-theme="light"] .table-scroll tbody td:first-child {
   box-shadow: 8px 0 18px rgba(15, 23, 42, 0.14);
 }
 
