@@ -55,6 +55,10 @@ type HistoryPoint = {
   snapshot_date: string;
   total_value_eur: number;
 };
+type PeriodPerformance = {
+  amount: number | null;
+  pct: number | null;
+};
 type EnrichedInvestment = InvestmentRow & {
   current: number;
   investedLocal: number;
@@ -133,6 +137,35 @@ function buildEstimatedAssetEvolution(row: EnrichedInvestment) {
   }
 
   return { labels, values };
+}
+
+function calculatePeriodPerformance(history: HistoryPoint[], days: number): PeriodPerformance {
+  if (history.length < 2) {
+    return { amount: null, pct: null };
+  }
+
+  const latest = history[history.length - 1];
+  const latestDate = new Date(latest.snapshot_date);
+  const targetDate = new Date(latestDate);
+  targetDate.setDate(targetDate.getDate() - days);
+
+  let base: HistoryPoint | null = null;
+  for (let index = history.length - 2; index >= 0; index--) {
+    const point = history[index];
+    if (new Date(point.snapshot_date) <= targetDate) {
+      base = point;
+      break;
+    }
+  }
+
+  if (!base) {
+    return { amount: null, pct: null };
+  }
+
+  const amount = latest.total_value_eur - base.total_value_eur;
+  const pct = base.total_value_eur !== 0 ? (amount / base.total_value_eur) * 100 : null;
+
+  return { amount, pct };
 }
 
 export default function InvestmentsPage() {
@@ -405,6 +438,14 @@ export default function InvestmentsPage() {
   );
   const previousAsset = selectedAssetIndex > 0 ? selectedTypeAssets[selectedAssetIndex - 1] : null;
   const nextAsset = selectedAssetIndex >= 0 && selectedAssetIndex < selectedTypeAssets.length - 1 ? selectedTypeAssets[selectedAssetIndex + 1] : null;
+  const selectedAssetPerformance = useMemo(
+    () => ({
+      day: calculatePeriodPerformance(selectedAssetHistory, 1),
+      week: calculatePeriodPerformance(selectedAssetHistory, 7),
+      month: calculatePeriodPerformance(selectedAssetHistory, 30)
+    }),
+    [selectedAssetHistory]
+  );
 
   const allocationChartData = useMemo(
     () => ({
@@ -1217,6 +1258,30 @@ export default function InvestmentsPage() {
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Peso cartera</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
                 </article>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                {[
+                  { label: "Variacion diaria", data: selectedAssetPerformance.day },
+                  { label: "Variacion semanal", data: selectedAssetPerformance.week },
+                  { label: "Variacion mensual", data: selectedAssetPerformance.month }
+                ].map((item) => {
+                  const positive = (item.data.amount ?? 0) >= 0;
+                  const toneClass =
+                    item.data.amount === null ? "text-slate-300" : positive ? "text-emerald-300" : "text-red-300";
+
+                  return (
+                    <article key={item.label} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{item.label}</p>
+                      <p className={`mt-2 text-2xl font-semibold ${toneClass}`}>
+                        {item.data.amount === null ? "Sin datos" : formatCurrencyByPreference(item.data.amount, "EUR")}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {item.data.pct === null ? "Hace falta mas historico real para esta ventana." : `${item.data.pct >= 0 ? "+" : ""}${item.data.pct.toFixed(2)}%`}
+                      </p>
+                    </article>
+                  );
+                })}
               </div>
 
               <div className="mt-6 flex-1 rounded-3xl border border-white/8 bg-white/5 p-4">
