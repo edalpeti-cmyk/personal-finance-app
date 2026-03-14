@@ -397,8 +397,8 @@ export default function InvestmentsPage() {
       }
 
       const data = (await response.json()) as {
-        updated?: Array<{ id: string; price: number }>;
-        skipped?: Array<{ id: string; reason: string }>;
+        updated?: Array<{ id: string; price: number; symbol: string | null }>;
+        skipped?: Array<{ id: string; symbol: string | null; reason: string }>;
       };
 
       await loadInvestments(userId as string);
@@ -411,6 +411,15 @@ export default function InvestmentsPage() {
             ? `Precios actualizados: ${updatedCount}.${skippedCount > 0 ? ` Sin cambios: ${skippedCount}.` : ""}`
             : "No hubo precios disponibles para actualizar."
       });
+
+      if (skippedCount > 0) {
+        const sample = data.skipped?.find((item) => item.symbol)?.symbol;
+        setMessage(
+          sample
+            ? `Algunos tickers no devolvieron precio. Si son activos europeos, prueba con el ticker completo de Yahoo, por ejemplo SAN.MC, BMW.DE o VUSA.AS. Ejemplo detectado: ${sample}.`
+            : "Algunos activos no devolvieron precio. Revisa que el ticker sea el de Yahoo Finance y que incluya sufijo de mercado si hace falta."
+        );
+      }
     } catch {
       showToast({ type: "error", text: "Error de red al actualizar precios." });
     } finally {
@@ -508,6 +517,7 @@ export default function InvestmentsPage() {
             <label className="grid gap-2 text-sm text-slate-200">
               Ticker / simbolo
               <input className={inputClass(Boolean(errors.assetSymbol))} value={assetSymbol} onChange={(e) => setAssetSymbol(e.target.value.toUpperCase())} maxLength={15} />
+              <span className="text-xs text-slate-400">Usa el ticker de Yahoo Finance. Para bolsas europeas suele hacer falta el sufijo del mercado, por ejemplo `SAN.MC`, `BMW.DE` o `VUSA.AS`.</span>
               {errors.assetSymbol ? <span className="text-xs text-red-700">{errors.assetSymbol}</span> : null}
             </label>
 

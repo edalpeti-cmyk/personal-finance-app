@@ -38,19 +38,19 @@ export async function POST(request: Request) {
   }
 
   const rows = (data as InvestmentPriceRow[]) ?? [];
-  const updated: Array<{ id: string; price: number }> = [];
-  const skipped: Array<{ id: string; reason: string }> = [];
+  const updated: Array<{ id: string; price: number; symbol: string | null }> = [];
+  const skipped: Array<{ id: string; symbol: string | null; reason: string }> = [];
 
   for (const row of rows) {
     if (!row.asset_symbol) {
-      skipped.push({ id: row.id, reason: "missing_symbol" });
+      skipped.push({ id: row.id, symbol: null, reason: "missing_symbol" });
       continue;
     }
 
     try {
       const price = await fetchMarketPrice(row.asset_type, row.asset_symbol);
       if (price === null) {
-        skipped.push({ id: row.id, reason: "price_not_available" });
+        skipped.push({ id: row.id, symbol: row.asset_symbol, reason: "price_not_available" });
         continue;
       }
 
@@ -61,13 +61,13 @@ export async function POST(request: Request) {
         .eq("user_id", authData.user.id);
 
       if (updateError) {
-        skipped.push({ id: row.id, reason: updateError.message });
+        skipped.push({ id: row.id, symbol: row.asset_symbol, reason: updateError.message });
         continue;
       }
 
-      updated.push({ id: row.id, price: Number(price.toFixed(4)) });
+      updated.push({ id: row.id, symbol: row.asset_symbol, price: Number(price.toFixed(4)) });
     } catch (fetchError) {
-      skipped.push({ id: row.id, reason: fetchError instanceof Error ? fetchError.message : "fetch_failed" });
+      skipped.push({ id: row.id, symbol: row.asset_symbol, reason: fetchError instanceof Error ? fetchError.message : "fetch_failed" });
     }
   }
 
