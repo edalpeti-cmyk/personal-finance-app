@@ -1096,10 +1096,10 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
               Mostrando {groupedAssetTypes.length} tipos de activo
             </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
               Orden: {sortField} {sortLabel}
             </span>
             {(searchTerm || typeFilter !== "all" || marketFilter !== "all" || profitFilter !== "all") ? (
@@ -1111,7 +1111,7 @@ export default function InvestmentsPage() {
                   setMarketFilter("all");
                   setProfitFilter("all");
                 }}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200 transition hover:bg-white/10"
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
               >
                 Limpiar filtros
               </button>
