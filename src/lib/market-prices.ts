@@ -1,6 +1,21 @@
 export type SupportedAssetType = "stock" | "etf" | "crypto" | "fund" | "commodity";
+export type AssetMarket = "AUTO" | "US" | "ES" | "DE" | "FR" | "NL" | "IT" | "UK" | "DK" | "CH" | "SE" | "FI" | "NO";
 
-const EUROPEAN_SUFFIXES = [".MC", ".DE", ".PA", ".AS", ".MI", ".L", ".CO", ".SW", ".ST", ".HE", ".OL"];
+const MARKET_SUFFIX: Partial<Record<AssetMarket, string>> = {
+  ES: ".MC",
+  DE: ".DE",
+  FR: ".PA",
+  NL: ".AS",
+  IT: ".MI",
+  UK: ".L",
+  DK: ".CO",
+  CH: ".SW",
+  SE: ".ST",
+  FI: ".HE",
+  NO: ".OL"
+};
+
+const AUTO_SUFFIXES = [".MC", ".DE", ".PA", ".AS", ".MI", ".L", ".CO", ".SW", ".ST", ".HE", ".OL"];
 
 async function fetchYahooPrice(providerSymbol: string): Promise<number | null> {
   const response = await fetch(
@@ -34,8 +49,9 @@ async function fetchYahooPrice(providerSymbol: string): Promise<number | null> {
   return typeof price === "number" && Number.isFinite(price) ? price : null;
 }
 
-function getCandidateSymbols(assetType: string, symbol: string) {
+function getCandidateSymbols(assetType: string, symbol: string, market?: string | null) {
   const cleanSymbol = symbol.trim().toUpperCase().replace(/\s+/g, "");
+  const cleanMarket = (market ?? "AUTO").toUpperCase() as AssetMarket;
   const candidates = new Set<string>();
 
   if (!cleanSymbol) {
@@ -59,7 +75,14 @@ function getCandidateSymbols(assetType: string, symbol: string) {
   candidates.add(cleanSymbol);
 
   if (!cleanSymbol.includes(".")) {
-    for (const suffix of EUROPEAN_SUFFIXES) {
+    if (cleanMarket !== "AUTO") {
+      const suffix = MARKET_SUFFIX[cleanMarket];
+      if (suffix) {
+        candidates.add(`${cleanSymbol}${suffix}`);
+      }
+    }
+
+    for (const suffix of AUTO_SUFFIXES) {
       candidates.add(`${cleanSymbol}${suffix}`);
     }
   }
@@ -67,12 +90,12 @@ function getCandidateSymbols(assetType: string, symbol: string) {
   return Array.from(candidates);
 }
 
-export async function fetchMarketPrice(assetType: string, symbol: string): Promise<number | null> {
+export async function fetchMarketPrice(assetType: string, symbol: string, market?: string | null): Promise<number | null> {
   if (!["stock", "etf", "crypto", "fund", "commodity"].includes(assetType)) {
     return null;
   }
 
-  const candidates = getCandidateSymbols(assetType, symbol);
+  const candidates = getCandidateSymbols(assetType, symbol, market);
   for (const candidate of candidates) {
     const price = await fetchYahooPrice(candidate);
     if (price !== null) {

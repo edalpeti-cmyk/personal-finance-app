@@ -18,6 +18,7 @@ import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
+import { AssetMarket } from "@/lib/market-prices";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -29,6 +30,7 @@ type InvestmentRow = {
   asset_symbol: string | null;
   asset_type: AssetType;
   asset_currency: AssetCurrency;
+  asset_market: AssetMarket | null;
   quantity: number;
   average_buy_price: number;
   current_price: number | null;
@@ -68,6 +70,22 @@ const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   loan: "Prestamo"
 };
 
+const MARKET_OPTIONS: Array<{ value: AssetMarket; label: string }> = [
+  { value: "AUTO", label: "Auto" },
+  { value: "US", label: "Estados Unidos" },
+  { value: "ES", label: "Espana" },
+  { value: "DE", label: "Alemania" },
+  { value: "FR", label: "Francia" },
+  { value: "NL", label: "Paises Bajos" },
+  { value: "IT", label: "Italia" },
+  { value: "UK", label: "Reino Unido" },
+  { value: "DK", label: "Dinamarca" },
+  { value: "CH", label: "Suiza" },
+  { value: "SE", label: "Suecia" },
+  { value: "FI", label: "Finlandia" },
+  { value: "NO", label: "Noruega" }
+];
+
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition ${
     hasError ? "border-red-400 ring-2 ring-red-500/20" : "border-white/10 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
@@ -96,6 +114,7 @@ export default function InvestmentsPage() {
   const [assetSymbol, setAssetSymbol] = useState("");
   const [assetType, setAssetType] = useState<AssetType>("stock");
   const [assetCurrency, setAssetCurrency] = useState<AssetCurrency>("EUR");
+  const [assetMarket, setAssetMarket] = useState<AssetMarket>("AUTO");
   const [quantity, setQuantity] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
@@ -114,6 +133,7 @@ export default function InvestmentsPage() {
     setAssetSymbol("");
     setAssetType("stock");
     setAssetCurrency("EUR");
+    setAssetMarket("AUTO");
     setQuantity("");
     setAverageBuyPrice("");
     setCurrentPrice("");
@@ -142,7 +162,7 @@ export default function InvestmentsPage() {
     async (uid: string) => {
       const { data, error } = await supabase
         .from("investments")
-        .select("id, asset_name, asset_symbol, asset_type, asset_currency, quantity, average_buy_price, current_price, purchase_date")
+        .select("id, asset_name, asset_symbol, asset_type, asset_currency, asset_market, quantity, average_buy_price, current_price, purchase_date")
         .eq("user_id", uid)
         .in("asset_type", ASSET_TYPES.map((type) => type.value))
         .order("purchase_date", { ascending: false });
@@ -315,6 +335,7 @@ export default function InvestmentsPage() {
       asset_symbol: validation.cleanSymbol || null,
       asset_type: assetType,
       asset_currency: assetCurrency,
+      asset_market: assetMarket,
       quantity: validation.qty,
       average_buy_price: validation.avg,
       current_price: validation.curr,
@@ -346,6 +367,7 @@ export default function InvestmentsPage() {
     setAssetSymbol(row.asset_symbol ?? "");
     setAssetType(row.asset_type);
     setAssetCurrency(row.asset_currency ?? "EUR");
+    setAssetMarket(row.asset_market ?? "AUTO");
     setQuantity(String(row.quantity));
     setAverageBuyPrice(String(row.average_buy_price));
     setCurrentPrice(row.current_price === null ? "" : String(row.current_price));
@@ -509,6 +531,18 @@ export default function InvestmentsPage() {
             </label>
 
             <label className="grid gap-2 text-sm text-slate-200">
+              Mercado
+              <select className={inputClass(false)} value={assetMarket} onChange={(e) => setAssetMarket(e.target.value as AssetMarket)}>
+                {MARKET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-400">Si eliges mercado, la app probara automaticamente el ticker con el sufijo correcto, por ejemplo `SAN` + `Espana` da `SAN.MC`.</span>
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
               Nombre
               <input className={inputClass(Boolean(errors.assetName))} value={assetName} onChange={(e) => setAssetName(e.target.value)} maxLength={80} />
               {errors.assetName ? <span className="text-xs text-red-700">{errors.assetName}</span> : null}
@@ -613,6 +647,7 @@ export default function InvestmentsPage() {
                     <th className="px-3 py-2">Activo</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Ticker</th>
+                    <th className="px-3 py-2">Mercado</th>
                     <th className="px-3 py-2">Moneda</th>
                     <th className="px-3 py-2 text-right">Cantidad</th>
                     <th className="px-3 py-2 text-right">P. medio</th>
@@ -635,6 +670,7 @@ export default function InvestmentsPage() {
                         <td className="rounded-l-2xl px-3 py-4 font-medium text-white">{row.asset_name}</td>
                         <td className="px-3 py-4 text-slate-300">{ASSET_TYPE_LABELS[row.asset_type]}</td>
                         <td className="px-3 py-4 text-slate-300">{row.asset_symbol ?? "-"}</td>
+                        <td className="px-3 py-4 text-slate-300">{row.asset_market ?? "AUTO"}</td>
                         <td className="px-3 py-4 text-slate-300">{row.asset_currency}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>

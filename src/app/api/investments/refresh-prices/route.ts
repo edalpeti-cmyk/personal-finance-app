@@ -8,6 +8,7 @@ type InvestmentPriceRow = {
   asset_name: string;
   asset_symbol: string | null;
   asset_type: string;
+  asset_market: string | null;
 };
 
 export async function POST(request: Request) {
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
 
   let query = db
     .from("investments")
-    .select("id, asset_name, asset_symbol, asset_type")
+    .select("id, asset_name, asset_symbol, asset_type, asset_market")
     .eq("user_id", authData.user.id);
 
   if (body.investmentId) {
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      const price = await fetchMarketPrice(row.asset_type, row.asset_symbol);
+      const price = await fetchMarketPrice(row.asset_type, row.asset_symbol, row.asset_market);
       if (price === null) {
         skipped.push({ id: row.id, symbol: row.asset_symbol, reason: "price_not_available" });
         continue;

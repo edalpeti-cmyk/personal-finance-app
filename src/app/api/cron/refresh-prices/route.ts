@@ -7,6 +7,7 @@ type InvestmentPriceRow = {
   user_id: string;
   asset_symbol: string | null;
   asset_type: string;
+  asset_market: string | null;
 };
 
 export async function GET(request: Request) {
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     const supabase = createAdminClient();
     const { data, error } = await supabase
       .from("investments")
-      .select("id, user_id, asset_symbol, asset_type")
+      .select("id, user_id, asset_symbol, asset_type, asset_market")
       .not("asset_symbol", "is", null);
 
     if (error) {
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
       }
 
       try {
-        const price = await fetchMarketPrice(row.asset_type, row.asset_symbol);
+        const price = await fetchMarketPrice(row.asset_type, row.asset_symbol, row.asset_market);
         if (price === null) {
           skipped.push({ id: row.id, userId: row.user_id, reason: "price_not_available" });
           continue;
