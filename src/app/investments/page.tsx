@@ -644,7 +644,7 @@ export default function InvestmentsPage() {
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead>
                   <tr className="text-left text-slate-400">
-                    <th className="px-3 py-2">Activo</th>
+                    <th className="sticky left-0 z-20 bg-slate-950 px-3 py-2">Activo</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Ticker</th>
                     <th className="px-3 py-2">Mercado</th>
@@ -667,7 +667,9 @@ export default function InvestmentsPage() {
 
                     return (
                       <tr key={row.id} className="rounded-2xl bg-white/5 shadow-sm">
-                        <td className="rounded-l-2xl px-3 py-4 font-medium text-white">{row.asset_name}</td>
+                        <td className="sticky left-0 z-10 rounded-l-2xl bg-slate-950 px-3 py-4 font-medium text-white shadow-[8px_0_18px_rgba(2,8,23,0.35)]">
+                          {row.asset_name}
+                        </td>
                         <td className="px-3 py-4 text-slate-300">{ASSET_TYPE_LABELS[row.asset_type]}</td>
                         <td className="px-3 py-4 text-slate-300">{row.asset_symbol ?? "-"}</td>
                         <td className="px-3 py-4 text-slate-300">{row.asset_market ?? "AUTO"}</td>
