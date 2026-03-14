@@ -75,10 +75,10 @@ export default function SettingsPanel() {
     currency === "USD"
       ? "$2,072.76"
       : currency === "GBP"
-        ? "£2,072.76"
+        ? "Â£2,072.76"
         : currency === "DKK"
           ? "kr. 15.456,80"
-          : "2.072,76 €";
+          : "2.072,76 â‚¬";
 
   return (
     <>
