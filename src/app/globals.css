@@ -118,10 +118,6 @@ textarea {
   box-shadow: 0 18px 48px rgba(2, 8, 23, 0.32);
 }
 
-.panel table {
-  overflow: hidden;
-}
-
 .panel tbody tr {
   transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
@@ -339,6 +335,10 @@ html[data-motion="reduced"] *::after {
 .table-scroll {
   position: relative;
   overflow-x: auto;
+}
+
+.table-scroll table {
+  overflow: visible;
 }
 
 .sticky-col-header,
