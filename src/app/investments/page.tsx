@@ -51,6 +51,15 @@ type ToastState = { type: "success" | "error"; text: string } | null;
 type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "weightPct";
 type SortDirection = "asc" | "desc";
+type EnrichedInvestment = InvestmentRow & {
+  current: number;
+  investedLocal: number;
+  currentLocal: number;
+  investedEur: number;
+  currentValueEur: number;
+  gainEur: number;
+  weightPct: number;
+};
 
 const ASSET_TYPES: Array<{ value: AssetType; label: string }> = [
   { value: "stock", label: "Accion" },
@@ -100,6 +109,28 @@ function formatNumber(value: number, digits: number) {
   return Number(value).toFixed(digits);
 }
 
+function buildEstimatedAssetEvolution(row: EnrichedInvestment) {
+  const startDate = row.purchase_date ? new Date(`${row.purchase_date}T00:00:00`) : new Date();
+  const now = new Date();
+  const monthsDiff = Math.max(
+    1,
+    (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth())
+  );
+  const steps = Math.min(Math.max(monthsDiff + 1, 2), 12);
+  const labels: string[] = [];
+  const values: number[] = [];
+
+  for (let index = 0; index < steps; index++) {
+    const progress = steps === 1 ? 1 : index / (steps - 1);
+    const pointDate = new Date(startDate.getFullYear(), startDate.getMonth() + Math.round(progress * monthsDiff), 1);
+    const estimatedValue = row.investedEur + (row.currentValueEur - row.investedEur) * progress;
+    labels.push(`${pointDate.getFullYear()}-${String(pointDate.getMonth() + 1).padStart(2, "0")}`);
+    values.push(Number(estimatedValue.toFixed(2)));
+  }
+
+  return { labels, values };
+}
+
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -130,6 +161,8 @@ export default function InvestmentsPage() {
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
   const [sortField, setSortField] = useState<SortField>("currentValueEur");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [selectedType, setSelectedType] = useState<AssetType | null>(null);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -222,7 +255,7 @@ export default function InvestmentsPage() {
   const profitEur = metrics.totalValueEur - metrics.investedCapitalEur;
   const profitability = metrics.investedCapitalEur > 0 ? (profitEur / metrics.investedCapitalEur) * 100 : null;
 
-  const enrichedInvestments = useMemo(() => {
+  const enrichedInvestments = useMemo<EnrichedInvestment[]>(() => {
     return investments.map((row) => {
       const qty = Number(row.quantity) || 0;
       const avg = Number(row.average_buy_price) || 0;
@@ -299,6 +332,62 @@ export default function InvestmentsPage() {
   const biggestPosition = topHoldings[0] ?? null;
   const profitablePositions = enrichedInvestments.filter((row) => row.gainEur >= 0).length;
   const diversificationScore = allocationByType.length;
+  const groupedAssetTypes = useMemo(() => {
+    const groups = new Map<
+      AssetType,
+      { type: AssetType; label: string; count: number; totalValueEur: number; gainEur: number; topAsset: string | null }
+    >();
+
+    for (const row of filteredInvestments) {
+      const current = groups.get(row.asset_type) ?? {
+        type: row.asset_type,
+        label: ASSET_TYPE_LABELS[row.asset_type],
+        count: 0,
+        totalValueEur: 0,
+        gainEur: 0,
+        topAsset: null
+      };
+
+      current.count += 1;
+      current.totalValueEur += row.currentValueEur;
+      current.gainEur += row.gainEur;
+      if (!current.topAsset || row.currentValueEur > (filteredInvestments.find((item) => item.asset_name === current.topAsset)?.currentValueEur ?? -1)) {
+        current.topAsset = row.asset_name;
+      }
+      groups.set(row.asset_type, current);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => b.totalValueEur - a.totalValueEur);
+  }, [filteredInvestments]);
+  const selectedTypeAssets = useMemo(
+    () => (selectedType ? filteredInvestments.filter((row) => row.asset_type === selectedType) : []),
+    [filteredInvestments, selectedType]
+  );
+  const selectedAsset = useMemo(
+    () => selectedTypeAssets.find((row) => row.id === selectedAssetId) ?? null,
+    [selectedAssetId, selectedTypeAssets]
+  );
+  const selectedAssetEvolution = useMemo(
+    () => (selectedAsset ? buildEstimatedAssetEvolution(selectedAsset) : { labels: [], values: [] }),
+    [selectedAsset]
+  );
+  const selectedAssetChartData = useMemo(
+    () => ({
+      labels: selectedAssetEvolution.labels,
+      datasets: [
+        {
+          label: "Valor estimado en EUR",
+          data: selectedAssetEvolution.values,
+          borderColor: "#14b8a6",
+          backgroundColor: "rgba(20, 184, 166, 0.14)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.25
+        }
+      ]
+    }),
+    [selectedAssetEvolution]
+  );
 
   const allocationChartData = useMemo(
     () => ({
@@ -342,6 +431,19 @@ export default function InvestmentsPage() {
   };
 
   const sortLabel = sortDirection === "asc" ? "↑" : "↓";
+
+  useEffect(() => {
+    if (selectedType && !groupedAssetTypes.some((group) => group.type === selectedType)) {
+      setSelectedType(null);
+      setSelectedAssetId(null);
+    }
+  }, [groupedAssetTypes, selectedType]);
+
+  useEffect(() => {
+    if (selectedAssetId && !selectedTypeAssets.some((row) => row.id === selectedAssetId)) {
+      setSelectedAssetId(null);
+    }
+  }, [selectedAssetId, selectedTypeAssets]);
 
   const evolution = useMemo(() => {
     const byMonth = new Map<string, { invested: number; current: number }>();
@@ -840,12 +942,12 @@ export default function InvestmentsPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Posiciones</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tipos de activo</h2>
             </div>
-            <p className="text-sm text-slate-400">Cada posicion mantiene su moneda y el total se consolida automaticamente en EUR.</p>
+            <p className="text-sm text-slate-400">Primero eliges el tipo de activo y luego abres los activos concretos dentro de ese grupo.</p>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_220px_220px_220px]">
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_180px_180px]">
             <label className="grid gap-2 text-sm text-slate-200">
               Buscar por nombre o ticker
               <input
@@ -888,11 +990,22 @@ export default function InvestmentsPage() {
                 <option value="negative">En negativo</option>
               </select>
             </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              Ordenar por
+              <select className={inputClass(false)} value={sortField} onChange={(e) => setSortField(e.target.value as SortField)}>
+                <option value="currentValueEur">Valor EUR</option>
+                <option value="gainEur">Plusvalia EUR</option>
+                <option value="weightPct">Peso</option>
+                <option value="asset_name">Nombre</option>
+                <option value="asset_type">Tipo</option>
+              </select>
+            </label>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200">
-              Mostrando {filteredInvestments.length} de {investments.length} posiciones
+              Mostrando {groupedAssetTypes.length} tipos de activo
             </span>
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200">
               Orden: {sortField} {sortLabel}
@@ -915,77 +1028,77 @@ export default function InvestmentsPage() {
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
           {!loading && investments.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes inversiones registradas.</p> : null}
-          {!loading && investments.length > 0 && filteredInvestments.length === 0 ? <p className="mt-6 text-sm text-slate-300">No hay resultados con los filtros actuales.</p> : null}
+          {!loading && investments.length > 0 && groupedAssetTypes.length === 0 ? <p className="mt-6 text-sm text-slate-300">No hay resultados con los filtros actuales.</p> : null}
 
-          {!loading && filteredInvestments.length > 0 ? (
-            <div className="table-scroll mt-6">
-              <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead>
-                  <tr className="text-left text-slate-400">
-                    <th className="sticky-col-header px-3 py-2">
-                      <button type="button" onClick={() => handleSort("asset_name")} className="font-inherit">
-                        Activo {sortField === "asset_name" ? sortLabel : ""}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2">
-                      <button type="button" onClick={() => handleSort("asset_type")} className="font-inherit">
-                        Tipo {sortField === "asset_type" ? sortLabel : ""}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2">Ticker</th>
-                    <th className="px-3 py-2">Mercado</th>
-                    <th className="px-3 py-2">Moneda</th>
-                    <th className="px-3 py-2 text-right">Cantidad</th>
-                    <th className="px-3 py-2 text-right">P. medio</th>
-                    <th className="px-3 py-2 text-right">P. actual</th>
-                    {showLocalValues ? <th className="px-3 py-2 text-right">Valor local</th> : null}
-                    <th className="px-3 py-2 text-right">Cambio a EUR</th>
-                    <th className="px-3 py-2 text-right">
-                      <button type="button" onClick={() => handleSort("currentValueEur")} className="font-inherit">
-                        Valor EUR {sortField === "currentValueEur" ? sortLabel : ""}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-right">
-                      <button type="button" onClick={() => handleSort("gainEur")} className="font-inherit">
-                        Plusvalia EUR {sortField === "gainEur" ? sortLabel : ""}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-right">
-                      <button type="button" onClick={() => handleSort("weightPct")} className="font-inherit">
-                        Peso {sortField === "weightPct" ? sortLabel : ""}
-                      </button>
-                    </th>
-                    <th className="px-3 py-2 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInvestments.map((row) => {
+          {!loading && groupedAssetTypes.length > 0 ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {groupedAssetTypes.map((group) => (
+                <button
+                  key={group.type}
+                  type="button"
+                  onClick={() => {
+                    setSelectedType(group.type);
+                    setSelectedAssetId(null);
+                  }}
+                  className="rounded-[28px] border border-white/8 bg-white/5 p-5 text-left transition hover:border-emerald-400/20 hover:bg-white/10"
+                >
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">{group.label}</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{group.count}</p>
+                  <p className="mt-2 text-sm text-slate-300">Activos dentro de este tipo.</p>
+                  <div className="mt-5 grid gap-2 text-sm text-slate-300">
+                    <p>Total: <span className="font-medium text-white">{formatCurrencyByPreference(group.totalValueEur, "EUR")}</span></p>
+                    <p>Plusvalia: <span className={group.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{formatCurrencyByPreference(group.gainEur, "EUR")}</span></p>
+                    <p>Principal: <span className="font-medium text-white">{group.topAsset ?? "Sin datos"}</span></p>
+                  </div>
+                  <div className="mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    Abrir activos
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      </main>
+
+      {selectedType ? (
+        <>
+          <button type="button" className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-[2px]" onClick={() => { setSelectedType(null); setSelectedAssetId(null); }} />
+          <aside className="fixed right-4 top-4 z-40 h-[calc(100vh-2rem)] w-[min(92vw,760px)] rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,#020817_0%,#071427_56%,#0a1d31_100%)] p-6 text-white shadow-[0_30px_80px_rgba(2,8,23,0.58)]">
+            <div className="flex h-full flex-col">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Tipo de activo</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{ASSET_TYPE_LABELS[selectedType]}</h2>
+                  <p className="mt-2 text-sm text-slate-300">{selectedTypeAssets.length} activos en este grupo</p>
+                </div>
+                <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); }} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="mt-6 flex-1 overflow-y-auto pr-1">
+                <div className="grid gap-3">
+                  {selectedTypeAssets.map((row) => {
                     const fxRate = ratesToEur[row.asset_currency] ?? 1;
 
                     return (
-                      <tr key={row.id} className="rounded-2xl bg-white/5 shadow-sm">
-                        <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">
-                          {row.asset_name}
-                        </td>
-                        <td className="px-3 py-4 text-slate-300">{ASSET_TYPE_LABELS[row.asset_type]}</td>
-                        <td className="px-3 py-4 text-slate-300">{row.asset_symbol ?? "-"}</td>
-                        <td className="px-3 py-4 text-slate-300">{row.asset_market ?? "AUTO"}</td>
-                        <td className="px-3 py-4 text-slate-300">{row.asset_currency}</td>
-                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
-                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>
-                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.current, 4)}</td>
-                        {showLocalValues ? (
-                          <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.currentLocal, row.asset_currency)}</td>
-                        ) : null}
-                        <td className="px-3 py-4 text-right text-slate-300">{fxRate.toFixed(4)}</td>
-                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</td>
-                        <td className={`px-3 py-4 text-right font-medium ${row.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
-                          {formatCurrencyByPreference(row.gainEur, "EUR")}
-                        </td>
-                        <td className="px-3 py-4 text-right text-slate-300">{row.weightPct.toFixed(1)}%</td>
-                        <td className="rounded-r-2xl px-3 py-4">
-                          <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
+                      <article key={row.id} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <p className="font-medium text-white">{row.asset_name}</p>
+                            <p className="mt-1 text-sm text-slate-400">{row.asset_symbol ?? "Sin ticker"} · {row.asset_market ?? "AUTO"} · {row.asset_currency}</p>
+                            <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
+                              <p>Valor EUR: <span className="font-medium text-white">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</span></p>
+                              <p>Peso: <span className="font-medium text-white">{row.weightPct.toFixed(1)}%</span></p>
+                              <p>Plusvalia: <span className={row.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{formatCurrencyByPreference(row.gainEur, "EUR")}</span></p>
+                              <p>Cambio EUR: <span className="font-medium text-white">{fxRate.toFixed(4)}</span></p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <button type="button" onClick={() => setSelectedAssetId(row.id)} className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20">
+                              Ver detalle
+                            </button>
+                            <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); handleEdit(row); }} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
                               Editar
                             </button>
                             <button
@@ -1000,16 +1113,81 @@ export default function InvestmentsPage() {
                               Borrar
                             </button>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </article>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
-          ) : null}
-        </section>
-      </main>
+          </aside>
+        </>
+      ) : null}
+
+      {selectedAsset ? (
+        <>
+          <button type="button" className="fixed inset-0 z-40 bg-slate-950/72 backdrop-blur-[2px]" onClick={() => setSelectedAssetId(null)} />
+          <aside className="fixed left-1/2 top-1/2 z-50 h-[min(88vh,760px)] w-[min(92vw,820px)] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,#020817_0%,#071427_56%,#0a1d31_100%)] p-6 text-white shadow-[0_30px_80px_rgba(2,8,23,0.58)]">
+            <div className="flex h-full flex-col">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Activo</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{selectedAsset.asset_name}</h2>
+                  <p className="mt-2 text-sm text-slate-300">{selectedAsset.asset_symbol ?? "Sin ticker"} · {ASSET_TYPE_LABELS[selectedAsset.asset_type]} · {selectedAsset.asset_currency}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedAssetId(null)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-4 lg:grid-cols-4">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Valor EUR</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{formatCurrencyByPreference(selectedAsset.currentValueEur, "EUR")}</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Invertido EUR</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{formatCurrencyByPreference(selectedAsset.investedEur, "EUR")}</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia</p>
+                  <p className={`mt-2 text-2xl font-semibold ${selectedAsset.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(selectedAsset.gainEur, "EUR")}</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Peso cartera</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
+                </article>
+              </div>
+
+              <div className="mt-6 flex-1 rounded-3xl border border-white/8 bg-white/5 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-white">Evolucion estimada del activo</p>
+                    <p className="mt-1 text-xs text-slate-400">Estimacion basada en precio medio y precio actual. Cuando tengamos historico real por activo, este grafico podra ser exacto.</p>
+                  </div>
+                </div>
+                <div className="mt-4 h-[320px]">
+                  <Line
+                    data={selectedAssetChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: false } },
+                      scales: {
+                        x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+                        y: {
+                          grid: { color: "rgba(148, 163, 184, 0.16)" },
+                          ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </aside>
+        </>
+      ) : null}
     </>
   );
 }
