@@ -503,11 +503,27 @@ export default function BudgetsPage() {
           </form>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 xl:grid-cols-4">
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(totals.totalBudget, currency)}</p><p className="mt-3 text-sm text-slate-300">Total planificado para el mes.</p></article>
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(totals.totalActual, currency)}</p><p className="mt-3 text-sm text-slate-300">Suma de gastos registrados del mes.</p></article>
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p><p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeSummary.currentSavings, currency)}</p><p className="mt-3 text-sm text-slate-300">Ingresos menos gastos del mes seleccionado.</p></article>
-          <article className="kpi-card rounded-[26px] p-6"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p><p className="mt-3 text-sm text-slate-300">Se calcula sobre ingresos del mes.</p></article>
+        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalBudget, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Total planificado para el mes seleccionado.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalActual, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de los gastos ya registrados en el mes.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p>
+            <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeSummary.currentSavings, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ingresos menos gastos del periodo que estas viendo.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Calculada sobre los ingresos del mes seleccionado.</p>
+          </article>
         </section>
 
         <section ref={incomeFormRef} className="panel rounded-[28px] p-6 text-white xl:col-span-6">
