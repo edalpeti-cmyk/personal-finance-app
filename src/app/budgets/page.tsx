@@ -6,7 +6,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
-import { formatCurrencyByPreference, formatDateByPreference, formatMonthByPreference } from "@/lib/preferences-format";
+import { type CurrencyCode, formatCurrencyByPreference, formatDateByPreference, formatMonthByPreference } from "@/lib/preferences-format";
 
 type BudgetRow = {
   id: string;
@@ -112,14 +112,14 @@ function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[]) {
   return { rows, unbudgeted };
 }
 
-function toCsv(rows: BudgetWithActual[], month: string, currency: string, dateFormat: "es" | "us") {
+function toCsv(rows: BudgetWithActual[], month: string, currency: CurrencyCode, dateFormat: "es" | "us") {
   const header = ["mes", "categoria", `presupuesto_${currency.toLowerCase()}`, `gasto_real_${currency.toLowerCase()}`, `restante_${currency.toLowerCase()}`, "consumo_pct"];
   const data = rows.map((row) => [
     formatMonthByPreference(month, dateFormat),
     row.category,
-    formatCurrencyByPreference(row.budget, currency as "EUR" | "USD" | "GBP"),
-    formatCurrencyByPreference(row.actual, currency as "EUR" | "USD" | "GBP"),
-    formatCurrencyByPreference(row.remaining, currency as "EUR" | "USD" | "GBP"),
+    formatCurrencyByPreference(row.budget, currency),
+    formatCurrencyByPreference(row.actual, currency),
+    formatCurrencyByPreference(row.remaining, currency),
     row.spentPercent.toFixed(1)
   ]);
   return [header, ...data].map((line) => line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(",")).join("\n");

@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
 
@@ -80,6 +81,7 @@ function formatNumber(value: number, digits: number) {
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
+  const { showLocalValues } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -605,6 +607,8 @@ export default function InvestmentsPage() {
                     <th className="px-3 py-2 text-right">Cantidad</th>
                     <th className="px-3 py-2 text-right">P. medio</th>
                     <th className="px-3 py-2 text-right">P. actual</th>
+                    {showLocalValues ? <th className="px-3 py-2 text-right">Valor local</th> : null}
+                    <th className="px-3 py-2 text-right">Cambio a EUR</th>
                     <th className="px-3 py-2 text-right">Valor EUR</th>
                     <th className="px-3 py-2 text-right">Acciones</th>
                   </tr>
@@ -612,6 +616,8 @@ export default function InvestmentsPage() {
                 <tbody>
                   {investments.map((row) => {
                     const current = Number(row.current_price ?? row.average_buy_price);
+                    const localValue = Number(row.quantity) * current;
+                    const fxRate = ratesToEur[row.asset_currency] ?? 1;
                     const valueEur = convertToEur(Number(row.quantity) * current, row.asset_currency, ratesToEur);
 
                     return (
@@ -623,6 +629,10 @@ export default function InvestmentsPage() {
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(current, 4)}</td>
+                        {showLocalValues ? (
+                          <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(localValue, row.asset_currency)}</td>
+                        ) : null}
+                        <td className="px-3 py-4 text-right text-slate-300">{fxRate.toFixed(4)}</td>
                         <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(valueEur, "EUR")}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">

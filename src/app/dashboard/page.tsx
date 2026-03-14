@@ -301,7 +301,9 @@ export default function DashboardPage() {
         snapshot_date: new Date().toISOString().slice(0, 10),
         total_net_worth: Number(totalNetWorth.toFixed(2)),
         cash_position: Number(cashPosition.toFixed(2)),
-        investments_value: Number(investmentsValue.toFixed(2))
+        investments_value: Number(investmentsValue.toFixed(2)),
+        snapshot_currency: "EUR",
+        fx_rates_to_eur: ratesToEur
       };
 
       const upsertResult = await supabase.from("net_worth_snapshots").upsert(snapshotPayload, {
@@ -325,7 +327,7 @@ export default function DashboardPage() {
       setSnapshotRows((snapshotsResult.data as SnapshotRow[]) ?? []);
       return { error: null };
     },
-    [supabase]
+    [ratesToEur, supabase]
   );
 
   const generateInsights = useCallback(async () => {

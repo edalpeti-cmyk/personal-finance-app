@@ -29,6 +29,10 @@ html {
   scroll-behavior: smooth;
 }
 
+html[data-motion="reduced"] {
+  scroll-behavior: auto;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
@@ -297,6 +301,15 @@ html[data-theme="light"] .shadow-\[0_18px_40px_rgba\(2\2c 8\2c 23\2c 0\.42\)\] {
 
 .page-enter {
   animation: page-enter 380ms ease-out;
+}
+
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 .sidebar-scroll {

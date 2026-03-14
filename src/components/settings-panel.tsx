@@ -55,9 +55,30 @@ function SettingOption({
 }
 
 export default function SettingsPanel() {
-  const { theme, setTheme, currency, setCurrency, dateFormat, setDateFormat, settingsOpen, setSettingsOpen } = useTheme();
+  const {
+    theme,
+    setTheme,
+    currency,
+    setCurrency,
+    dateFormat,
+    setDateFormat,
+    showLocalValues,
+    setShowLocalValues,
+    reduceMotion,
+    setReduceMotion,
+    settingsOpen,
+    setSettingsOpen
+  } = useTheme();
+
   const previewDate = dateFormat === "us" ? "03/13/2026" : "13/03/2026";
-  const previewMoney = currency === "USD" ? "$2,072.76" : currency === "GBP" ? "Â£2,072.76" : "2,072.76 EUR";
+  const previewMoney =
+    currency === "USD"
+      ? "$2,072.76"
+      : currency === "GBP"
+        ? "£2,072.76"
+        : currency === "DKK"
+          ? "kr. 15.456,80"
+          : "2.072,76 €";
 
   return (
     <>
@@ -75,7 +96,7 @@ export default function SettingsPanel() {
           settingsOpen ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-[108%] opacity-0"
         }`}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col overflow-y-auto pr-1">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Configuracion</p>
@@ -107,10 +128,11 @@ export default function SettingsPanel() {
 
           <div className="mt-8">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Moneda</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <SettingOption active={currency === "EUR"} label="EUR" description="Euro" onClick={() => setCurrency("EUR")} />
               <SettingOption active={currency === "USD"} label="USD" description="Dolar" onClick={() => setCurrency("USD")} />
               <SettingOption active={currency === "GBP"} label="GBP" description="Libra" onClick={() => setCurrency("GBP")} />
+              <SettingOption active={currency === "DKK"} label="DKK" description="Corona danesa" onClick={() => setCurrency("DKK")} />
             </div>
           </div>
 
@@ -119,6 +141,42 @@ export default function SettingsPanel() {
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <SettingOption active={dateFormat === "es"} label="DD/MM/AAAA" description="Estilo espanol" onClick={() => setDateFormat("es")} />
               <SettingOption active={dateFormat === "us"} label="MM/DD/AAAA" description="Estilo americano" onClick={() => setDateFormat("us")} />
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Cartera</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <SettingOption
+                active={showLocalValues}
+                label="Valor local visible"
+                description="Muestra moneda local y valor consolidado a EUR."
+                onClick={() => setShowLocalValues(true)}
+              />
+              <SettingOption
+                active={!showLocalValues}
+                label="Solo total en EUR"
+                description="Simplifica la tabla dejando solo el consolidado."
+                onClick={() => setShowLocalValues(false)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Movimiento</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <SettingOption
+                active={!reduceMotion}
+                label="Animaciones suaves"
+                description="Mantiene transiciones y microinteracciones activas."
+                onClick={() => setReduceMotion(false)}
+              />
+              <SettingOption
+                active={reduceMotion}
+                label="Reducir movimiento"
+                description="Reduce animaciones para una lectura mas estable."
+                onClick={() => setReduceMotion(true)}
+              />
             </div>
           </div>
 
@@ -132,6 +190,12 @@ export default function SettingsPanel() {
             </p>
             <p className="mt-2 text-sm text-slate-200">
               Fecha: <span className="font-semibold text-white">{previewDate}</span>
+            </p>
+            <p className="mt-2 text-sm text-slate-200">
+              Cartera: <span className="font-semibold text-white">{showLocalValues ? "Moneda local + EUR" : "Solo EUR"}</span>
+            </p>
+            <p className="mt-2 text-sm text-slate-200">
+              Movimiento: <span className="font-semibold text-white">{reduceMotion ? "Reducido" : "Suave"}</span>
             </p>
           </div>
         </div>

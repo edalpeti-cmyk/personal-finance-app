@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
+import { convertToEur, fetchRatesToEur, type AssetCurrency } from "@/lib/currency-rates";
 
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
@@ -17,6 +17,7 @@ export type SnapshotMetrics = {
   savingsRate: number | null;
   fireTarget: number;
   fireProgress: number;
+  ratesToEur: Record<AssetCurrency, number>;
 };
 
 function isSameMonth(dateString: string, now: Date) {
@@ -98,6 +99,7 @@ export async function buildSnapshotMetrics(supabase: SupabaseClient, userId: str
     monthlyExpenses,
     savingsRate,
     fireTarget,
-    fireProgress
+    fireProgress,
+    ratesToEur
   };
 }

@@ -30,7 +30,9 @@ export async function GET(request: Request) {
             snapshot_date: snapshotDate,
             total_net_worth: Number(metrics.totalNetWorth.toFixed(2)),
             cash_position: Number(metrics.cashPosition.toFixed(2)),
-            investments_value: Number(metrics.investmentsValue.toFixed(2))
+            investments_value: Number(metrics.investmentsValue.toFixed(2)),
+            snapshot_currency: "EUR",
+            fx_rates_to_eur: metrics.ratesToEur
           },
           { onConflict: "user_id,snapshot_date" }
         );

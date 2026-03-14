@@ -1,10 +1,11 @@
-export type CurrencyCode = "EUR" | "USD" | "GBP";
+export type CurrencyCode = "EUR" | "USD" | "GBP" | "DKK";
 export type DateFormat = "es" | "us";
 
 const CURRENCY_LOCALE: Record<CurrencyCode, string> = {
   EUR: "es-ES",
   USD: "en-US",
-  GBP: "en-GB"
+  GBP: "en-GB",
+  DKK: "da-DK"
 };
 
 const DATE_LOCALE: Record<DateFormat, string> = {
