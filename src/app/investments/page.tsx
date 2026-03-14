@@ -906,28 +906,28 @@ export default function InvestmentsPage() {
           </form>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 xl:grid-cols-4">
+        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total en EUR</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
-            <p className="mt-3 text-sm text-slate-300">Suma del valor actual de todas tus posiciones convertida a EUR.</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma del valor actual de tus posiciones, consolidada en EUR.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Rentabilidad en EUR</p>
-            <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${profitEur >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(profitEur, "EUR")}
             </p>
-            <p className="mt-3 text-sm text-slate-300">Rentabilidad consolidada tras convertir todas las posiciones.</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Resultado total de la cartera despues de convertir todas las posiciones.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{metrics.trackedPositions}</p>
-            <p className="mt-3 text-sm text-slate-300">Posiciones con simbolo aptas para refresco automatico.</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{metrics.trackedPositions}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Activos con simbolo valido para actualizar precio automaticamente.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mayor posicion</p>
-            <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">{biggestPosition ? biggestPosition.asset_name : "Sin datos"}</p>
-            <p className="mt-3 text-sm text-slate-300">
+            <p className="mt-4 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{biggestPosition ? biggestPosition.asset_name : "Sin datos"}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">
               {biggestPosition ? `${biggestPosition.weightPct.toFixed(1)}% del portfolio` : "Anade posiciones para medir concentracion."}
             </p>
           </article>
@@ -961,19 +961,27 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="mt-6 grid gap-6">
-            <div className="min-w-0 grid gap-3">
+            <div className="min-w-0 grid gap-3 md:grid-cols-2">
             {allocationByType.length > 0 ? (
               allocationByType.map((item) => (
                 <article key={item.type} className="rounded-3xl border border-white/8 bg-white/5 p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-medium text-white">{item.label}</p>
-                      <p className="mt-1 text-sm text-slate-400">{formatCurrencyByPreference(item.value, "EUR")}</p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-sm font-semibold text-emerald-300">
+                      {item.weightPct.toFixed(0)}%
                     </div>
-                    <p className="text-sm font-medium text-emerald-300">{item.weightPct.toFixed(1)}%</p>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate font-medium text-white">{item.label}</p>
+                        <p className="shrink-0 text-sm font-medium text-slate-200">{formatCurrencyByPreference(item.value, "EUR")}</p>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+                        <span>Peso en cartera</span>
+                        <span>{item.weightPct.toFixed(1)}%</span>
+                      </div>
+                    </div>
                   </div>
                 </article>
               ))
