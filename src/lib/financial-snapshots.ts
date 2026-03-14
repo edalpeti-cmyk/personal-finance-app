@@ -1,8 +1,9 @@
-﻿import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
-type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null };
+type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
 
 export type SnapshotMetrics = {
   totalNetWorth: number;
@@ -31,10 +32,12 @@ function isWithinLast12Months(dateString: string, now: Date) {
 }
 
 export async function buildSnapshotMetrics(supabase: SupabaseClient, userId: string): Promise<SnapshotMetrics> {
+  const ratesToEur = await fetchRatesToEur();
+
   const [expensesResult, incomeResult, investmentsResult] = await Promise.all([
     supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
     supabase.from("income").select("amount, income_date").eq("user_id", userId),
-    supabase.from("investments").select("quantity, average_buy_price, current_price").eq("user_id", userId)
+    supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId)
   ]);
 
   if (expensesResult.error || incomeResult.error || investmentsResult.error) {
@@ -54,7 +57,7 @@ export async function buildSnapshotMetrics(supabase: SupabaseClient, userId: str
   const investmentsValue = investmentRows.reduce((acc, row) => {
     const qty = Number(row.quantity) || 0;
     const price = Number(row.current_price ?? row.average_buy_price) || 0;
-    return acc + qty * price;
+    return acc + convertToEur(qty * price, row.asset_currency, ratesToEur);
   }, 0);
 
   const totalIncomeAllTime = incomeRows.reduce((acc, row) => acc + Number(row.amount), 0);

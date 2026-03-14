@@ -1,10 +1,11 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateRuleBasedInsights, type FinancialSnapshot } from "@/lib/ai-insights";
+import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 
 type ExpenseRow = { amount: number; expense_date: string; category: string };
 type IncomeRow = { amount: number; income_date: string };
-type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null };
+type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
 
 function isSameMonth(dateString: string, now: Date) {
   const date = new Date(`${dateString}T00:00:00`);
@@ -39,11 +40,12 @@ function parseInsightsFromText(rawText: string) {
 
 async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   const supabase = await createClient();
+  const ratesToEur = await fetchRatesToEur();
 
   const [{ data: expenses }, { data: income }, { data: investments }] = await Promise.all([
     supabase.from("expenses").select("amount, expense_date, category").eq("user_id", userId),
     supabase.from("income").select("amount, income_date").eq("user_id", userId),
-    supabase.from("investments").select("quantity, average_buy_price, current_price").eq("user_id", userId)
+    supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId)
   ]);
 
   const now = new Date();
@@ -71,7 +73,7 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   const netWorth = investmentRows.reduce((acc, row) => {
     const qty = Number(row.quantity) || 0;
     const price = Number(row.current_price ?? row.average_buy_price) || 0;
-    return acc + qty * price;
+    return acc + convertToEur(qty * price, row.asset_currency, ratesToEur);
   }, 0);
 
   const fireTarget = annualExpenses > 0 ? annualExpenses / 0.04 : 0;

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,8 +15,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
-import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
+import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -27,6 +27,7 @@ type InvestmentRow = {
   asset_name: string;
   asset_symbol: string | null;
   asset_type: AssetType;
+  asset_currency: AssetCurrency;
   quantity: number;
   average_buy_price: number;
   current_price: number | null;
@@ -79,7 +80,6 @@ function formatNumber(value: number, digits: number) {
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
-  const { currency, dateFormat } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -88,10 +88,12 @@ export default function InvestmentsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
+  const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
 
   const [assetName, setAssetName] = useState("");
   const [assetSymbol, setAssetSymbol] = useState("");
   const [assetType, setAssetType] = useState<AssetType>("stock");
+  const [assetCurrency, setAssetCurrency] = useState<AssetCurrency>("EUR");
   const [quantity, setQuantity] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
@@ -109,6 +111,7 @@ export default function InvestmentsPage() {
     setAssetName("");
     setAssetSymbol("");
     setAssetType("stock");
+    setAssetCurrency("EUR");
     setQuantity("");
     setAverageBuyPrice("");
     setCurrentPrice("");
@@ -116,11 +119,28 @@ export default function InvestmentsPage() {
     setErrors({});
   }, []);
 
+  useEffect(() => {
+    const loadRates = async () => {
+      try {
+        const response = await fetch("/api/fx-rates", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { rates?: Record<AssetCurrency, number> };
+        if (data.rates) {
+          setRatesToEur(data.rates);
+        }
+      } catch {
+        // fallback remains active
+      }
+    };
+
+    void loadRates();
+  }, []);
+
   const loadInvestments = useCallback(
     async (uid: string) => {
       const { data, error } = await supabase
         .from("investments")
-        .select("id, asset_name, asset_symbol, asset_type, quantity, average_buy_price, current_price, purchase_date")
+        .select("id, asset_name, asset_symbol, asset_type, asset_currency, quantity, average_buy_price, current_price, purchase_date")
         .eq("user_id", uid)
         .in("asset_type", ASSET_TYPES.map((type) => type.value))
         .order("purchase_date", { ascending: false });
@@ -155,20 +175,20 @@ export default function InvestmentsPage() {
         const qty = Number(row.quantity) || 0;
         const avg = Number(row.average_buy_price) || 0;
         const current = Number(row.current_price ?? row.average_buy_price) || 0;
-        const invested = qty * avg;
-        const currentValue = qty * current;
+        const invested = convertToEur(qty * avg, row.asset_currency, ratesToEur);
+        const currentValue = convertToEur(qty * current, row.asset_currency, ratesToEur);
 
-        acc.totalValue += currentValue;
-        acc.investedCapital += invested;
+        acc.totalValueEur += currentValue;
+        acc.investedCapitalEur += invested;
         acc.trackedPositions += current > 0 && row.asset_symbol ? 1 : 0;
         return acc;
       },
-      { totalValue: 0, investedCapital: 0, trackedPositions: 0 }
+      { totalValueEur: 0, investedCapitalEur: 0, trackedPositions: 0 }
     );
-  }, [investments]);
+  }, [investments, ratesToEur]);
 
-  const profit = metrics.totalValue - metrics.investedCapital;
-  const profitability = metrics.investedCapital > 0 ? (profit / metrics.investedCapital) * 100 : null;
+  const profitEur = metrics.totalValueEur - metrics.investedCapitalEur;
+  const profitability = metrics.investedCapitalEur > 0 ? (profitEur / metrics.investedCapitalEur) * 100 : null;
 
   const evolution = useMemo(() => {
     const byMonth = new Map<string, { invested: number; current: number }>();
@@ -181,8 +201,8 @@ export default function InvestmentsPage() {
       const current = Number(row.current_price ?? row.average_buy_price) || 0;
       const previous = byMonth.get(key) ?? { invested: 0, current: 0 };
 
-      previous.invested += qty * avg;
-      previous.current += qty * current;
+      previous.invested += convertToEur(qty * avg, row.asset_currency, ratesToEur);
+      previous.current += convertToEur(qty * current, row.asset_currency, ratesToEur);
       byMonth.set(key, previous);
     }
 
@@ -203,13 +223,13 @@ export default function InvestmentsPage() {
     }
 
     return { labels, investedData, currentData };
-  }, [investments]);
+  }, [investments, ratesToEur]);
 
   const chartData = {
     labels: evolution.labels,
     datasets: [
       {
-        label: "Capital invertido",
+        label: "Capital invertido (EUR)",
         data: evolution.investedData,
         borderColor: "#0f766e",
         backgroundColor: "rgba(15, 118, 110, 0.12)",
@@ -217,7 +237,7 @@ export default function InvestmentsPage() {
         tension: 0.28
       },
       {
-        label: "Valor actual",
+        label: "Valor actual (EUR)",
         data: evolution.currentData,
         borderColor: "#1d4ed8",
         backgroundColor: "rgba(29, 78, 216, 0.12)",
@@ -239,7 +259,7 @@ export default function InvestmentsPage() {
     scales: {
       x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
       y: {
-        ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency) },
+        ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") },
         grid: { color: "rgba(148, 163, 184, 0.16)" }
       }
     }
@@ -292,6 +312,7 @@ export default function InvestmentsPage() {
       asset_name: validation.cleanName,
       asset_symbol: validation.cleanSymbol || null,
       asset_type: assetType,
+      asset_currency: assetCurrency,
       quantity: validation.qty,
       average_buy_price: validation.avg,
       current_price: validation.curr,
@@ -322,6 +343,7 @@ export default function InvestmentsPage() {
     setAssetName(row.asset_name);
     setAssetSymbol(row.asset_symbol ?? "");
     setAssetType(row.asset_type);
+    setAssetCurrency(row.asset_currency ?? "EUR");
     setQuantity(String(row.quantity));
     setAverageBuyPrice(String(row.average_buy_price));
     setCurrentPrice(row.current_price === null ? "" : String(row.current_price));
@@ -330,6 +352,7 @@ export default function InvestmentsPage() {
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast({ type: "success", text: "Modo edicion activado para esta posicion." });
   };
+
   const handleDelete = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta posicion. Deseas continuar?")) {
       return;
@@ -412,14 +435,14 @@ export default function InvestmentsPage() {
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Portfolio tracker</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Cartera con seguimiento real</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-            Anade activos, edita posiciones, borra movimientos y actualiza precios reales para acciones, ETF, cripto, fondos y materias primas.
+            Anade activos, elige la moneda de cada posicion y calcula automaticamente el valor total convertido a EUR.
           </p>
         </section>
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Estado actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValue, currency)}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-200">Valor total calculado con el precio actual registrado en cada posicion.</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Valor total convertido automaticamente a EUR segun la moneda elegida en cada posicion.</p>
           <button
             type="button"
             onClick={() => void handleRefreshPrices()}
@@ -436,17 +459,13 @@ export default function InvestmentsPage() {
           </section>
         ) : null}
 
-        {message ? (
-          <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section>
-        ) : null}
+        {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section> : null}
 
         <section ref={formRef} className={`panel rounded-[28px] p-6 text-white xl:col-span-5 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
-                {editingId ? "Editar posicion" : "Nueva posicion"}
-              </h2>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar posicion" : "Nueva posicion"}</h2>
             </div>
             {editingId ? (
               <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
@@ -462,6 +481,17 @@ export default function InvestmentsPage() {
                 {ASSET_TYPES.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              Moneda del activo
+              <select className={inputClass(false)} value={assetCurrency} onChange={(e) => setAssetCurrency(e.target.value as AssetCurrency)}>
+                {SUPPORTED_ASSET_CURRENCIES.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
                   </option>
                 ))}
               </select>
@@ -495,23 +525,19 @@ export default function InvestmentsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-sm text-slate-200">
-                Precio medio
+                Precio medio ({assetCurrency})
                 <input className={inputClass(Boolean(errors.averageBuyPrice))} type="number" min="0" step="0.0001" value={averageBuyPrice} onChange={(e) => setAverageBuyPrice(e.target.value)} />
                 {errors.averageBuyPrice ? <span className="text-xs text-red-700">{errors.averageBuyPrice}</span> : null}
               </label>
 
               <label className="grid gap-2 text-sm text-slate-200">
-                Precio actual
+                Precio actual ({assetCurrency})
                 <input className={inputClass(Boolean(errors.currentPrice))} type="number" min="0" step="0.0001" value={currentPrice} onChange={(e) => setCurrentPrice(e.target.value)} placeholder="Opcional" />
                 {errors.currentPrice ? <span className="text-xs text-red-700">{errors.currentPrice}</span> : null}
               </label>
             </div>
 
-            <button
-              className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={saving || loading}
-              type="submit"
-            >
+            <button className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Anadir activo"}
             </button>
           </form>
@@ -519,16 +545,16 @@ export default function InvestmentsPage() {
 
         <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total</p>
-            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValue, currency)}</p>
-            <p className="mt-3 text-sm text-slate-300">Suma del valor actual de todas tus posiciones.</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total en EUR</p>
+            <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
+            <p className="mt-3 text-sm text-slate-300">Suma del valor actual de todas tus posiciones convertida a EUR.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Rentabilidad</p>
-            <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${profit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-              {formatCurrencyByPreference(profit, currency)}
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Rentabilidad en EUR</p>
+            <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${profitEur >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+              {formatCurrencyByPreference(profitEur, "EUR")}
             </p>
-            <p className="mt-3 text-sm text-slate-300">{profitability === null ? "Sin base suficiente." : `${profitability.toFixed(2)}% sobre capital invertido.`}</p>
+            <p className="mt-3 text-sm text-slate-300">Rentabilidad consolidada tras convertir todas las posiciones.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
@@ -541,7 +567,7 @@ export default function InvestmentsPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Crecimiento del portfolio</h2>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Crecimiento del portfolio en EUR</h2>
             </div>
           </div>
           <div className="mt-6 h-[320px]">
@@ -561,7 +587,7 @@ export default function InvestmentsPage() {
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Posiciones</p>
               <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
             </div>
-            <p className="text-sm text-slate-400">Puedes editar, borrar o refrescar el precio individual de cada posicion.</p>
+            <p className="text-sm text-slate-400">Cada posicion mantiene su moneda y el total se consolida automaticamente en EUR.</p>
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
@@ -575,27 +601,29 @@ export default function InvestmentsPage() {
                     <th className="px-3 py-2">Activo</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Ticker</th>
+                    <th className="px-3 py-2">Moneda</th>
                     <th className="px-3 py-2 text-right">Cantidad</th>
                     <th className="px-3 py-2 text-right">P. medio</th>
                     <th className="px-3 py-2 text-right">P. actual</th>
-                    <th className="px-3 py-2 text-right">Valor</th>
+                    <th className="px-3 py-2 text-right">Valor EUR</th>
                     <th className="px-3 py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {investments.map((row) => {
                     const current = Number(row.current_price ?? row.average_buy_price);
-                    const value = Number(row.quantity) * current;
+                    const valueEur = convertToEur(Number(row.quantity) * current, row.asset_currency, ratesToEur);
 
                     return (
                       <tr key={row.id} className="rounded-2xl bg-white/5 shadow-sm">
                         <td className="rounded-l-2xl px-3 py-4 font-medium text-white">{row.asset_name}</td>
                         <td className="px-3 py-4 text-slate-300">{ASSET_TYPE_LABELS[row.asset_type]}</td>
                         <td className="px-3 py-4 text-slate-300">{row.asset_symbol ?? "-"}</td>
+                        <td className="px-3 py-4 text-slate-300">{row.asset_currency}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(current, 4)}</td>
-                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(value, currency)}</td>
+                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(valueEur, "EUR")}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
@@ -626,6 +654,3 @@ export default function InvestmentsPage() {
     </>
   );
 }
-
-
-
