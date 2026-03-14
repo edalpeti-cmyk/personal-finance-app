@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -562,13 +562,13 @@ export default function BudgetsPage() {
           {!loading && rows.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no hay categorias presupuestadas para este mes.</p> : null}
 
           {!loading && rows.length > 0 ? (
-            <div className="mt-6 overflow-x-auto">
+            <div className="table-scroll mt-6">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead><tr className="text-left text-slate-400"><th className="sticky left-0 z-20 bg-slate-950 px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Restante</th><th className="px-3 py-2 text-right">Consumo</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
+                <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Restante</th><th className="px-3 py-2 text-right">Consumo</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="bg-white/5 shadow-sm">
-                      <td className="sticky left-0 z-10 rounded-l-2xl bg-slate-950 px-3 py-4 font-medium text-white shadow-[8px_0_18px_rgba(2,8,23,0.35)]">{row.category}</td>
+                      <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">{row.category}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.budget, currency)}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
@@ -586,16 +586,16 @@ export default function BudgetsPage() {
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos del mes</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Listado editable</h2>
 
-          <div className="mt-6 overflow-x-auto">
+          <div className="table-scroll mt-6">
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-              <thead><tr className="text-left text-slate-400"><th className="sticky left-0 z-20 bg-slate-950 px-3 py-2">Fecha</th><th className="px-3 py-2">Fuente</th><th className="px-3 py-2 text-right">Importe</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
+              <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Fecha</th><th className="px-3 py-2">Fuente</th><th className="px-3 py-2 text-right">Importe</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
               <tbody>
                 {currentIncomeEntries.length === 0 ? (
                   <tr><td className="rounded-2xl bg-white/5 px-3 py-4 text-slate-300" colSpan={4}>Aun no hay ingresos registrados para este mes.</td></tr>
                 ) : (
                   currentIncomeEntries.map((entry) => (
                     <tr key={entry.id} className="bg-white/5 shadow-sm">
-                      <td className="sticky left-0 z-10 rounded-l-2xl bg-slate-950 px-3 py-4 text-slate-300 shadow-[8px_0_18px_rgba(2,8,23,0.35)]">{formatDateByPreference(entry.income_date, dateFormat)}</td>
+                      <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">{formatDateByPreference(entry.income_date, dateFormat)}</td>
                       <td className="px-3 py-4 font-medium text-white">{entry.source}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(Number(entry.amount), currency)}</td>
                       <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => handleEditIncome(entry)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteIncome(entry.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
@@ -614,13 +614,13 @@ export default function BudgetsPage() {
           {categoryComparison.length === 0 ? (
             <p className="mt-6 text-sm text-slate-300">Sin datos suficientes para comparar meses.</p>
           ) : (
-            <div className="mt-6 overflow-x-auto">
+            <div className="table-scroll mt-6">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead><tr className="text-left text-slate-400"><th className="sticky left-0 z-20 bg-slate-950 px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
+                <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
                 <tbody>
                   {categoryComparison.map((item) => (
                     <tr key={item.category} className="bg-white/5 shadow-sm">
-                      <td className="sticky left-0 z-10 rounded-l-2xl bg-slate-950 px-3 py-4 font-medium text-white shadow-[8px_0_18px_rgba(2,8,23,0.35)]">{item.category}</td>
+                      <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">{item.category}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(item.currentActual, currency)}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(item.previousActual, currency)}</td>
                       <td className={`rounded-r-2xl px-3 py-4 text-right font-medium ${item.delta > 0 ? "text-red-300" : item.delta < 0 ? "text-emerald-300" : "text-slate-100"}`}>{formatCurrencyByPreference(item.delta, currency)}</td>

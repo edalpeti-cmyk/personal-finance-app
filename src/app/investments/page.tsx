@@ -640,11 +640,11 @@ export default function InvestmentsPage() {
           {!loading && investments.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes inversiones registradas.</p> : null}
 
           {!loading && investments.length > 0 ? (
-            <div className="mt-6 overflow-x-auto">
+            <div className="table-scroll mt-6">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead>
                   <tr className="text-left text-slate-400">
-                    <th className="sticky left-0 z-20 bg-slate-950 px-3 py-2">Activo</th>
+                    <th className="sticky-col-header px-3 py-2">Activo</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Ticker</th>
                     <th className="px-3 py-2">Mercado</th>
@@ -667,7 +667,7 @@ export default function InvestmentsPage() {
 
                     return (
                       <tr key={row.id} className="rounded-2xl bg-white/5 shadow-sm">
-                        <td className="sticky left-0 z-10 rounded-l-2xl bg-slate-950 px-3 py-4 font-medium text-white shadow-[8px_0_18px_rgba(2,8,23,0.35)]">
+                        <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">
                           {row.asset_name}
                         </td>
                         <td className="px-3 py-4 text-slate-300">{ASSET_TYPE_LABELS[row.asset_type]}</td>
