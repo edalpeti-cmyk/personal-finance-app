@@ -1039,8 +1039,8 @@ export default function InvestmentsPage() {
             <p className="text-sm text-slate-400">Primero eliges el tipo de activo y luego abres los activos concretos dentro de ese grupo.</p>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_180px_180px_180px_180px]">
-            <label className="grid gap-2 text-sm text-slate-200">
+          <div className="mt-6 grid gap-4 xl:grid-cols-6">
+            <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2">
               Buscar por nombre o ticker
               <input
                 className={inputClass(false)}
