@@ -120,6 +120,9 @@ export default function InvestmentsPage() {
   const [currentPrice, setCurrentPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
   const [errors, setErrors] = useState<InvestmentFormErrors>({});
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<AssetType | "all">("all");
+  const [marketFilter, setMarketFilter] = useState<AssetMarket | "all">("all");
   const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -211,6 +214,72 @@ export default function InvestmentsPage() {
 
   const profitEur = metrics.totalValueEur - metrics.investedCapitalEur;
   const profitability = metrics.investedCapitalEur > 0 ? (profitEur / metrics.investedCapitalEur) * 100 : null;
+
+  const enrichedInvestments = useMemo(() => {
+    return investments.map((row) => {
+      const qty = Number(row.quantity) || 0;
+      const avg = Number(row.average_buy_price) || 0;
+      const current = Number(row.current_price ?? row.average_buy_price) || 0;
+      const investedLocal = qty * avg;
+      const currentLocal = qty * current;
+      const investedEur = convertToEur(investedLocal, row.asset_currency, ratesToEur);
+      const currentValueEur = convertToEur(currentLocal, row.asset_currency, ratesToEur);
+      const gainEur = currentValueEur - investedEur;
+      const weightPct = metrics.totalValueEur > 0 ? (currentValueEur / metrics.totalValueEur) * 100 : 0;
+
+      return {
+        ...row,
+        current,
+        investedLocal,
+        currentLocal,
+        investedEur,
+        currentValueEur,
+        gainEur,
+        weightPct
+      };
+    });
+  }, [investments, metrics.totalValueEur, ratesToEur]);
+
+  const filteredInvestments = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+
+    return enrichedInvestments.filter((row) => {
+      const matchesSearch =
+        !search ||
+        row.asset_name.toLowerCase().includes(search) ||
+        (row.asset_symbol ?? "").toLowerCase().includes(search);
+      const matchesType = typeFilter === "all" || row.asset_type === typeFilter;
+      const matchesMarket = marketFilter === "all" || (row.asset_market ?? "AUTO") === marketFilter;
+
+      return matchesSearch && matchesType && matchesMarket;
+    });
+  }, [enrichedInvestments, marketFilter, searchTerm, typeFilter]);
+
+  const allocationByType = useMemo(() => {
+    const totals = new Map<AssetType, number>();
+    for (const row of enrichedInvestments) {
+      totals.set(row.asset_type, (totals.get(row.asset_type) ?? 0) + row.currentValueEur);
+    }
+
+    return Array.from(totals.entries())
+      .map(([type, value]) => ({
+        type,
+        label: ASSET_TYPE_LABELS[type],
+        value,
+        weightPct: metrics.totalValueEur > 0 ? (value / metrics.totalValueEur) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [enrichedInvestments, metrics.totalValueEur]);
+
+  const topHoldings = useMemo(() => {
+    return [...enrichedInvestments]
+      .sort((a, b) => b.currentValueEur - a.currentValueEur)
+      .slice(0, 5);
+  }, [enrichedInvestments]);
+
+  const biggestPosition = topHoldings[0] ?? null;
+  const profitablePositions = enrichedInvestments.filter((row) => row.gainEur >= 0).length;
+  const diversificationScore = allocationByType.length;
 
   const evolution = useMemo(() => {
     const byMonth = new Map<string, { invested: number; current: number }>();
@@ -589,7 +658,7 @@ export default function InvestmentsPage() {
           </form>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 xl:grid-cols-3">
+        <section className="grid gap-4 xl:col-span-7 xl:grid-cols-4">
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total en EUR</p>
             <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
@@ -606,6 +675,13 @@ export default function InvestmentsPage() {
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
             <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{metrics.trackedPositions}</p>
             <p className="mt-3 text-sm text-slate-300">Posiciones con simbolo aptas para refresco automatico.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mayor posicion</p>
+            <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">{biggestPosition ? biggestPosition.asset_name : "Sin datos"}</p>
+            <p className="mt-3 text-sm text-slate-300">
+              {biggestPosition ? `${biggestPosition.weightPct.toFixed(1)}% del portfolio` : "Anade posiciones para medir concentracion."}
+            </p>
           </article>
         </section>
 
@@ -627,6 +703,64 @@ export default function InvestmentsPage() {
           </div>
         </section>
 
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-7">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis de cartera</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Distribucion por tipo de activo</h2>
+            </div>
+            <p className="text-sm text-slate-400">{diversificationScore} tipos activos, {profitablePositions} posiciones en positivo</p>
+          </div>
+
+          <div className="mt-6 grid gap-3">
+            {allocationByType.length > 0 ? (
+              allocationByType.map((item) => (
+                <article key={item.type} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-white">{item.label}</p>
+                      <p className="mt-1 text-sm text-slate-400">{formatCurrencyByPreference(item.value, "EUR")}</p>
+                    </div>
+                    <p className="text-sm font-medium text-emerald-300">{item.weightPct.toFixed(1)}%</p>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-slate-300">Aun no hay datos suficientes para analizar la distribucion.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="panel rounded-[28px] p-6 text-white xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Concentracion</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Posiciones con mas peso</h2>
+
+          <div className="mt-6 grid gap-3">
+            {topHoldings.length > 0 ? (
+              topHoldings.map((row) => (
+                <article key={row.id} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-medium text-white">{row.asset_name}</p>
+                      <p className="mt-1 text-sm text-slate-400">{row.asset_symbol ?? row.asset_type}</p>
+                    </div>
+                    <p className="text-sm font-medium text-emerald-300">{row.weightPct.toFixed(1)}%</p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-400">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</span>
+                    <span className={row.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}>{formatCurrencyByPreference(row.gainEur, "EUR")}</span>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-slate-300">Aun no hay posiciones para analizar.</p>
+            )}
+          </div>
+        </section>
+
         <section className="panel rounded-[28px] p-6 text-white xl:col-span-12">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -636,10 +770,66 @@ export default function InvestmentsPage() {
             <p className="text-sm text-slate-400">Cada posicion mantiene su moneda y el total se consolida automaticamente en EUR.</p>
           </div>
 
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_220px_220px]">
+            <label className="grid gap-2 text-sm text-slate-200">
+              Buscar por nombre o ticker
+              <input
+                className={inputClass(false)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Ej: Apple, SAN, BTC"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              Filtrar por tipo
+              <select className={inputClass(false)} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as AssetType | "all")}>
+                <option value="all">Todos</option>
+                {ASSET_TYPES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              Filtrar por mercado
+              <select className={inputClass(false)} value={marketFilter} onChange={(e) => setMarketFilter(e.target.value as AssetMarket | "all")}>
+                <option value="all">Todos</option>
+                {MARKET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200">
+              Mostrando {filteredInvestments.length} de {investments.length} posiciones
+            </span>
+            {(searchTerm || typeFilter !== "all" || marketFilter !== "all") ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setTypeFilter("all");
+                  setMarketFilter("all");
+                }}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-slate-200 transition hover:bg-white/10"
+              >
+                Limpiar filtros
+              </button>
+            ) : null}
+          </div>
+
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
           {!loading && investments.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes inversiones registradas.</p> : null}
+          {!loading && investments.length > 0 && filteredInvestments.length === 0 ? <p className="mt-6 text-sm text-slate-300">No hay resultados con los filtros actuales.</p> : null}
 
-          {!loading && investments.length > 0 ? (
+          {!loading && filteredInvestments.length > 0 ? (
             <div className="table-scroll mt-6">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead>
@@ -659,11 +849,8 @@ export default function InvestmentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {investments.map((row) => {
-                    const current = Number(row.current_price ?? row.average_buy_price);
-                    const localValue = Number(row.quantity) * current;
+                  {filteredInvestments.map((row) => {
                     const fxRate = ratesToEur[row.asset_currency] ?? 1;
-                    const valueEur = convertToEur(Number(row.quantity) * current, row.asset_currency, ratesToEur);
 
                     return (
                       <tr key={row.id} className="rounded-2xl bg-white/5 shadow-sm">
@@ -676,12 +863,12 @@ export default function InvestmentsPage() {
                         <td className="px-3 py-4 text-slate-300">{row.asset_currency}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.quantity, 6)}</td>
                         <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.average_buy_price, 4)}</td>
-                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(current, 4)}</td>
+                        <td className="px-3 py-4 text-right text-slate-300">{formatNumber(row.current, 4)}</td>
                         {showLocalValues ? (
-                          <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(localValue, row.asset_currency)}</td>
+                          <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.currentLocal, row.asset_currency)}</td>
                         ) : null}
                         <td className="px-3 py-4 text-right text-slate-300">{fxRate.toFixed(4)}</td>
-                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(valueEur, "EUR")}</td>
+                        <td className="px-3 py-4 text-right font-medium text-slate-100">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</td>
                         <td className="rounded-r-2xl px-3 py-4">
                           <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">
