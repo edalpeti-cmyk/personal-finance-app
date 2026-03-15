@@ -70,6 +70,11 @@ function isWithinLast12Months(dateString: string, now: Date) {
   return date >= cutoff;
 }
 
+function isCurrentYear(dateString: string, now: Date) {
+  const date = new Date(`${dateString}T00:00:00`);
+  return date.getFullYear() === now.getFullYear();
+}
+
 function estimateYearsToFire(current: number, target: number, annualContribution: number, expectedReturn = 0.05) {
   if (current >= target) return 0;
   if (annualContribution <= 0) return null;
@@ -469,7 +474,7 @@ export default function DashboardPage() {
         0
       );
       const annualSavings = savingsTargetRows.reduce(
-        (acc, row) => (isWithinLast12Months(row.month, now) ? acc + Number(row.savings_target) : acc),
+        (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.savings_target) : acc),
         0
       );
 
@@ -587,7 +592,7 @@ export default function DashboardPage() {
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los ultimos 12 meses.</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los meses del año actual.</p>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
