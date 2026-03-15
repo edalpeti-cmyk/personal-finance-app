@@ -1096,10 +1096,10 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
+            <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
               Mostrando {groupedAssetTypes.length} tipos de activo
             </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
+            <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
               Orden: {sortField} {sortLabel}
             </span>
             {(searchTerm || typeFilter !== "all" || marketFilter !== "all" || profitFilter !== "all") ? (
@@ -1111,7 +1111,7 @@ export default function InvestmentsPage() {
                   setMarketFilter("all");
                   setProfitFilter("all");
                 }}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
+                className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
               >
                 Limpiar filtros
               </button>
@@ -1150,7 +1150,7 @@ export default function InvestmentsPage() {
                     <p>Plusvalia: <span className={group.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{formatCurrencyByPreference(group.gainEur, "EUR")}</span></p>
                     <p>Principal: <span className="font-medium text-white">{group.topAsset ?? "Sin datos"}</span></p>
                   </div>
-                  <div className="mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                  <div className="ui-chip mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
                     Abrir activos
                   </div>
                 </button>

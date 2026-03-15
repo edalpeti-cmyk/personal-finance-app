@@ -118,6 +118,23 @@ textarea {
   box-shadow: 0 18px 48px rgba(2, 8, 23, 0.32);
 }
 
+.section-subtitle {
+  font-size: 1.65rem;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1;
+}
+
 .panel tbody tr {
   transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
@@ -404,6 +421,22 @@ html[data-theme="light"] .table-scroll tbody td:first-child {
 
 html[data-theme="light"] .table-scroll tbody td:first-child {
   box-shadow: 8px 0 18px rgba(15, 23, 42, 0.14);
+}
+
+@media (max-width: 768px) {
+  .section-subtitle {
+    font-size: 1.45rem;
+  }
+
+  .table-scroll th,
+  .table-scroll td {
+    padding-top: 0.7rem !important;
+    padding-bottom: 0.7rem !important;
+  }
+
+  .table-scroll table {
+    font-size: 0.8125rem;
+  }
 }
 
 @keyframes page-enter {

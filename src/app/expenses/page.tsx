@@ -495,7 +495,7 @@ export default function ExpensesPage() {
                     <p>Total: <span className="font-medium text-white">{formatCurrencyByPreference(group.total, currency)}</span></p>
                     <p>Ultimo movimiento: <span className="font-medium text-white">{formatDateByPreference(group.latestDate, dateFormat)}</span></p>
                   </div>
-                  <div className="mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                  <div className="ui-chip mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
                     Ver gastos
                   </div>
                 </button>
