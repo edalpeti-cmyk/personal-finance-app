@@ -37,6 +37,10 @@ type ExpenseFormErrors = {
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
+type MonthlyBudgetImportRow = {
+  category: string;
+  budget_amount: number;
+};
 
 const PRESET_CATEGORIES = [
   "Vivienda",
@@ -50,6 +54,22 @@ const PRESET_CATEGORIES = [
 ];
 
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const BUDGET_IMPORT_DESCRIPTION = "Base importada desde presupuesto mensual";
+
+function monthToDate(month: string) {
+  return `${month}-01`;
+}
+
+function monthDateRange(month: string) {
+  const [year, monthIndexRaw] = month.split("-").map(Number);
+  const monthIndex = monthIndexRaw - 1;
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 0);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10)
+  };
+}
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -64,6 +84,7 @@ export default function ExpensesPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importingBudget, setImportingBudget] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -317,6 +338,76 @@ export default function ExpensesPage() {
     showToast({ type: "success", text: "Gasto eliminado." });
   };
 
+  const handleImportBudgetAsExpenses = async () => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para importar el presupuesto." });
+      return;
+    }
+
+    const month = expenseDate.slice(0, 7);
+    const range = monthDateRange(month);
+    setImportingBudget(true);
+    setMessage(null);
+
+    const [budgetResult, existingImportsResult] = await Promise.all([
+      supabase
+        .from("monthly_budgets")
+        .select("category, budget_amount")
+        .eq("user_id", userId)
+        .eq("month", monthToDate(month))
+        .order("category", { ascending: true }),
+      supabase
+        .from("expenses")
+        .select("category")
+        .eq("user_id", userId)
+        .eq("description", BUDGET_IMPORT_DESCRIPTION)
+        .gte("expense_date", range.start)
+        .lte("expense_date", range.end)
+    ]);
+
+    if (budgetResult.error || existingImportsResult.error) {
+      showToast({ type: "error", text: budgetResult.error?.message ?? existingImportsResult.error?.message ?? "No se pudo importar el presupuesto." });
+      setImportingBudget(false);
+      return;
+    }
+
+    const budgetRows = (budgetResult.data as MonthlyBudgetImportRow[]) ?? [];
+    const existingCategories = new Set(((existingImportsResult.data as Array<{ category: string }>) ?? []).map((row) => row.category));
+
+    if (budgetRows.length === 0) {
+      showToast({ type: "error", text: "No hay presupuesto guardado para el mes seleccionado." });
+      setImportingBudget(false);
+      return;
+    }
+
+    const rowsToInsert = budgetRows
+      .filter((row) => !existingCategories.has(row.category))
+      .map((row) => ({
+        user_id: userId,
+        category: row.category,
+        amount: Number(row.budget_amount),
+        description: BUDGET_IMPORT_DESCRIPTION,
+        expense_date: monthToDate(month)
+      }));
+
+    if (rowsToInsert.length === 0) {
+      showToast({ type: "success", text: "Ese presupuesto ya estaba importado como gasto base en este mes." });
+      setImportingBudget(false);
+      return;
+    }
+
+    const insertResult = await supabase.from("expenses").insert(rowsToInsert);
+    if (insertResult.error) {
+      showToast({ type: "error", text: "No se pudo copiar el presupuesto a gastos." });
+      setImportingBudget(false);
+      return;
+    }
+
+    await loadExpenses(userId);
+    showToast({ type: "success", text: `Se copiaron ${rowsToInsert.length} categorias del presupuesto a gastos.` });
+    setImportingBudget(false);
+  };
+
   if (authLoading) {
     return (
       <>
@@ -365,6 +456,25 @@ export default function ExpensesPage() {
                 Cancelar edicion
               </button>
             ) : null}
+          </div>
+
+          <div className="mt-4 rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-white">Copiar presupuesto del mes a gastos</p>
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  Importa las categorias presupuestadas del mes de la fecha seleccionada como gastos base.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleImportBudgetAsExpenses()}
+                disabled={importingBudget || loading}
+                className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {importingBudget ? "Importando..." : "Copiar presupuesto"}
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
