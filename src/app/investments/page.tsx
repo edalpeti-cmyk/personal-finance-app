@@ -59,6 +59,14 @@ type PeriodPerformance = {
   amount: number | null;
   pct: number | null;
 };
+type AssetLookupSuggestion = {
+  symbol: string;
+  name: string;
+  assetType: AssetType;
+  market: AssetMarket;
+  currency: AssetCurrency | null;
+  exchange: string | null;
+};
 type EnrichedInvestment = InvestmentRow & {
   current: number;
   investedLocal: number;
@@ -191,6 +199,9 @@ export default function InvestmentsPage() {
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [assetSuggestions, setAssetSuggestions] = useState<AssetLookupSuggestion[]>([]);
+  const [assetLookupLoading, setAssetLookupLoading] = useState(false);
   const [errors, setErrors] = useState<InvestmentFormErrors>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<AssetType | "all">("all");
@@ -219,8 +230,61 @@ export default function InvestmentsPage() {
     setAverageBuyPrice("");
     setCurrentPrice("");
     setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setLookupQuery("");
+    setAssetSuggestions([]);
     setErrors({});
   }, []);
+
+  useEffect(() => {
+    const trimmedQuery = lookupQuery.trim();
+    if (trimmedQuery.length < 2) {
+      setAssetSuggestions([]);
+      setAssetLookupLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setAssetLookupLoading(true);
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/investments/search-assets?q=${encodeURIComponent(trimmedQuery)}`, {
+          cache: "no-store",
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          setAssetSuggestions([]);
+          setAssetLookupLoading(false);
+          return;
+        }
+
+        const data = (await response.json()) as { suggestions?: AssetLookupSuggestion[] };
+        setAssetSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+        setAssetLookupLoading(false);
+      } catch {
+        setAssetSuggestions([]);
+        setAssetLookupLoading(false);
+      }
+    }, 280);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [lookupQuery]);
+
+  const handleAssetSuggestionSelect = (suggestion: AssetLookupSuggestion) => {
+    setLookupQuery(suggestion.symbol);
+    setAssetSymbol(suggestion.symbol);
+    setAssetName(suggestion.name);
+    setAssetType(suggestion.assetType);
+    setAssetMarket(suggestion.market);
+    if (suggestion.currency && SUPPORTED_ASSET_CURRENCIES.includes(suggestion.currency)) {
+      setAssetCurrency(suggestion.currency);
+    }
+    setAssetSuggestions([]);
+  };
 
   useEffect(() => {
     const loadRates = async () => {
@@ -616,7 +680,7 @@ export default function InvestmentsPage() {
     today.setHours(0, 0, 0, 0);
 
     if (cleanName.length < 2 || cleanName.length > 80) nextErrors.assetName = "El nombre debe tener entre 2 y 80 caracteres.";
-    if (cleanSymbol.length > 15) nextErrors.assetSymbol = "El ticker no puede superar 15 caracteres.";
+    if (cleanSymbol.length > 24) nextErrors.assetSymbol = "El ticker o identificador no puede superar 24 caracteres.";
     else if (cleanSymbol && !/^[A-Z0-9.-]+$/.test(cleanSymbol)) nextErrors.assetSymbol = "El ticker solo admite A-Z, 0-9, punto y guion.";
     if (!Number.isFinite(qty) || qty <= 0) nextErrors.quantity = "La cantidad debe ser mayor que 0.";
     if (!Number.isFinite(avg) || avg < 0) nextErrors.averageBuyPrice = "El precio medio debe ser un numero valido >= 0.";
@@ -682,6 +746,8 @@ export default function InvestmentsPage() {
     setEditingId(row.id);
     setAssetName(row.asset_name);
     setAssetSymbol(row.asset_symbol ?? "");
+    setLookupQuery(row.asset_symbol ?? row.asset_name);
+    setAssetSuggestions([]);
     setAssetType(row.asset_type);
     setAssetCurrency(row.asset_currency ?? "EUR");
     setAssetMarket(row.asset_market ?? "AUTO");
@@ -866,9 +932,46 @@ export default function InvestmentsPage() {
             </label>
 
             <label className="grid gap-2 text-sm text-slate-200">
-              Ticker / simbolo
-              <input className={inputClass(Boolean(errors.assetSymbol))} value={assetSymbol} onChange={(e) => setAssetSymbol(e.target.value.toUpperCase())} maxLength={15} />
-              <span className="text-xs text-slate-400">Usa el ticker de Yahoo Finance. Para bolsas europeas suele hacer falta el sufijo del mercado, por ejemplo `SAN.MC`, `BMW.DE` o `VUSA.AS`.</span>
+              Ticker / simbolo / ISIN
+              <input
+                className={inputClass(Boolean(errors.assetSymbol))}
+                value={lookupQuery}
+                onChange={(e) => {
+                  const nextValue = e.target.value.toUpperCase();
+                  setLookupQuery(nextValue);
+                  setAssetSymbol(nextValue);
+                }}
+                maxLength={20}
+                placeholder="Ej: SAN, VUSA, BTC-USD o un ISIN"
+              />
+              <span className="text-xs text-slate-400">Escribe ticker, simbolo o ISIN y elige el activo sugerido. Si no aparece, puedes seguir rellenando a mano.</span>
+              {assetLookupLoading ? <span className="text-xs text-emerald-300">Buscando activos...</span> : null}
+              {assetSuggestions.length > 0 ? (
+                <div className="grid gap-2 rounded-3xl border border-white/8 bg-white/5 p-3">
+                  {assetSuggestions.map((suggestion) => (
+                    <button
+                      key={`${suggestion.symbol}-${suggestion.market}-${suggestion.exchange ?? "na"}`}
+                      type="button"
+                      onClick={() => handleAssetSuggestionSelect(suggestion)}
+                      className="rounded-2xl border border-white/8 bg-slate-950/60 px-3 py-3 text-left transition hover:border-emerald-400/20 hover:bg-white/10"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-white">{suggestion.name}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {suggestion.symbol} · {ASSET_TYPE_LABELS[suggestion.assetType]} · {suggestion.market}
+                            {suggestion.exchange ? ` · ${suggestion.exchange}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs text-slate-300">
+                          <p>{suggestion.currency ?? "Sin moneda"}</p>
+                          <p className="mt-1 text-emerald-300">Elegir</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {errors.assetSymbol ? <span className="text-xs text-red-700">{errors.assetSymbol}</span> : null}
             </label>
 
