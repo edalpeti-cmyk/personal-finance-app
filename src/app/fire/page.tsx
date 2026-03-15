@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -33,7 +33,16 @@ type FireFormErrors = {
   currentAge?: string;
 };
 
+type FireSettings = {
+  annualExpenses: string;
+  currentNetWorth: string;
+  annualContribution: string;
+  expectedReturn: string;
+  currentAge: string;
+};
+
 const MAX_YEARS = 60;
+const FIRE_SETTINGS_KEY = "personal-finance-fire-settings";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -49,6 +58,33 @@ export default function FirePage() {
   const [expectedReturn, setExpectedReturn] = useState("6");
   const [currentAge, setCurrentAge] = useState("30");
   const [errors, setErrors] = useState<FireFormErrors>({});
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(FIRE_SETTINGS_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<FireSettings>;
+      if (typeof parsed.annualExpenses === "string") setAnnualExpenses(parsed.annualExpenses);
+      if (typeof parsed.currentNetWorth === "string") setCurrentNetWorth(parsed.currentNetWorth);
+      if (typeof parsed.annualContribution === "string") setAnnualContribution(parsed.annualContribution);
+      if (typeof parsed.expectedReturn === "string") setExpectedReturn(parsed.expectedReturn);
+      if (typeof parsed.currentAge === "string") setCurrentAge(parsed.currentAge);
+    } catch {
+      // ignore invalid local data
+    }
+  }, []);
+
+  useEffect(() => {
+    const payload: FireSettings = {
+      annualExpenses,
+      currentNetWorth,
+      annualContribution,
+      expectedReturn,
+      currentAge
+    };
+    window.localStorage.setItem(FIRE_SETTINGS_KEY, JSON.stringify(payload));
+  }, [annualContribution, annualExpenses, currentAge, currentNetWorth, expectedReturn]);
 
   const validateField = (field: keyof FireFormErrors) => {
     const next: FireFormErrors = {};
@@ -191,7 +227,7 @@ export default function FirePage() {
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Formula base</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">Gastos anuales / 0.04</p>
-          <p className="mt-3 text-sm leading-6 text-slate-200">Usamos la regla del 4% para estimar el capital necesario para vivir de tu patrimonio.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Usamos la regla del 4% para estimar el capital necesario para vivir de tu patrimonio. Esta configuracion se comparte con el dashboard.</p>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
