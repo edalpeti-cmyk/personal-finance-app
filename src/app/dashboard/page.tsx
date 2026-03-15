@@ -25,6 +25,7 @@ type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
 type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: AssetCurrency | null };
 type SnapshotRow = { snapshot_date: string; total_net_worth: number };
+type SavingsTargetRow = { savings_target: number; month: string };
 type CashflowEvent = { date: string; delta: number };
 type TimelinePoint = { label: string; value: number };
 type ChartRange = "daily" | "monthly" | "annual" | "six_months" | "current_year";
@@ -401,16 +402,18 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, savingsTargetsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
-        supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId)
+        supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
+        supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId)
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || savingsTargetsResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
+            savingsTargetsResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -422,6 +425,7 @@ export default function DashboardPage() {
       const nextExpenseRows = (expensesResult.data as ExpenseRow[]) ?? [];
       const nextIncomeRows = (incomeResult.data as IncomeRow[]) ?? [];
       const investmentRows = (investmentsResult.data as InvestmentRow[]) ?? [];
+      const savingsTargetRows = (savingsTargetsResult.data as SavingsTargetRow[]) ?? [];
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
@@ -445,17 +449,20 @@ export default function DashboardPage() {
         (acc, row) => (isSameMonth(row.income_date, now) ? acc + Number(row.amount) : acc),
         0
       );
-      const savingsRate = monthIncome > 0 ? ((monthIncome - monthExpenses) / monthIncome) * 100 : null;
+      const monthSavingsTarget = savingsTargetRows.reduce(
+        (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.savings_target) : acc),
+        0
+      );
+      const savingsRate = monthIncome > 0 ? (monthSavingsTarget / monthIncome) * 100 : null;
 
       const annualExpenses = nextExpenseRows.reduce(
         (acc, row) => (isWithinLast12Months(row.expense_date, now) ? acc + Number(row.amount) : acc),
         0
       );
-      const annualIncome = nextIncomeRows.reduce(
-        (acc, row) => (isWithinLast12Months(row.income_date, now) ? acc + Number(row.amount) : acc),
+      const annualSavings = savingsTargetRows.reduce(
+        (acc, row) => (isWithinLast12Months(row.month, now) ? acc + Number(row.savings_target) : acc),
         0
       );
-      const annualSavings = annualIncome - annualExpenses;
 
       const fireTarget = annualExpenses > 0 ? annualExpenses / 0.04 : 0;
       const fireProgress = fireTarget > 0 ? Math.min((totalNetWorth / fireTarget) * 100, 100) : 0;
@@ -557,13 +564,13 @@ export default function DashboardPage() {
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}
               </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Basada en ingresos y gastos del mes actual.</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Basada en tu ahorro objetivo del mes actual frente a los ingresos del mes.</p>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Ingresos anuales recientes menos gastos anuales recientes.</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los ultimos 12 meses.</p>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
@@ -660,7 +667,7 @@ export default function DashboardPage() {
                     : `${metrics.yearsToFire} anos`}
               </p>
               <p className="mt-4 text-sm leading-6 text-white/64">
-                La estimacion usa tus gastos anuales recientes, ahorro anual positivo y una rentabilidad esperada del 5%.
+                La estimacion usa tus gastos anuales recientes, tu ahorro objetivo anual y una rentabilidad esperada del 5%.
               </p>
             </section>
 
