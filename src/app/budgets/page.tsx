@@ -147,6 +147,7 @@ export default function BudgetsPage() {
   const [toast, setToast] = useState<ToastState>(null);
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [copySourceMonth, setCopySourceMonth] = useState(getPreviousMonth(new Date().toISOString().slice(0, 7)));
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
@@ -157,6 +158,7 @@ export default function BudgetsPage() {
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [savingsTarget, setSavingsTarget] = useState("");
   const [savingsTargetSaving, setSavingsTargetSaving] = useState(false);
+  const [copyingBudget, setCopyingBudget] = useState(false);
 
   const [rows, setRows] = useState<BudgetWithActual[]>([]);
   const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
@@ -229,6 +231,105 @@ export default function BudgetsPage() {
     await loadData(userId, selectedMonth);
     showToast({ type: "success", text: "Ahorro objetivo actualizado." });
     setSavingsTargetSaving(false);
+  };
+
+  const handleCopyBudgetFromMonth = async () => {
+    setToast(null);
+    setMessage(null);
+
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para copiar presupuestos." });
+      return;
+    }
+
+    if (!copySourceMonth) {
+      showToast({ type: "error", text: "Elige un mes origen para copiar el presupuesto." });
+      return;
+    }
+
+    if (copySourceMonth === selectedMonth) {
+      showToast({ type: "error", text: "El mes origen y el mes destino no pueden ser el mismo." });
+      return;
+    }
+
+    const confirmed = window.confirm(`Se copiara el presupuesto de ${formatMonthByPreference(copySourceMonth, dateFormat)} sobre ${formatMonthByPreference(selectedMonth, dateFormat)}. Se reemplazaran las categorias y el ahorro objetivo del mes destino. Deseas continuar?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setCopyingBudget(true);
+    const sourceMonthDate = monthToDate(copySourceMonth);
+    const targetMonthDate = monthToDate(selectedMonth);
+
+    const [sourceBudgetsResult, sourceSavingsTargetResult] = await Promise.all([
+      supabase.from("monthly_budgets").select("category, budget_amount").eq("user_id", userId).eq("month", sourceMonthDate).order("category", { ascending: true }),
+      supabase.from("monthly_savings_targets").select("savings_target").eq("user_id", userId).eq("month", sourceMonthDate).maybeSingle()
+    ]);
+
+    if (sourceBudgetsResult.error || sourceSavingsTargetResult.error) {
+      showToast({
+        type: "error",
+        text: sourceBudgetsResult.error?.message || sourceSavingsTargetResult.error?.message || "No se pudo leer el presupuesto del mes origen."
+      });
+      setCopyingBudget(false);
+      return;
+    }
+
+    const sourceBudgets = (sourceBudgetsResult.data as Array<{ category: string; budget_amount: number }>) ?? [];
+    const sourceSavingsTarget = Number((sourceSavingsTargetResult.data as { savings_target?: number } | null)?.savings_target ?? 0);
+
+    if (sourceBudgets.length === 0 && sourceSavingsTarget === 0) {
+      showToast({ type: "error", text: "El mes origen no tiene presupuesto ni ahorro objetivo para copiar." });
+      setCopyingBudget(false);
+      return;
+    }
+
+    const deleteBudgetsResult = await supabase.from("monthly_budgets").delete().eq("user_id", userId).eq("month", targetMonthDate);
+    if (deleteBudgetsResult.error) {
+      showToast({ type: "error", text: deleteBudgetsResult.error.message });
+      setCopyingBudget(false);
+      return;
+    }
+
+    if (sourceBudgets.length > 0) {
+      const budgetsPayload = sourceBudgets.map((row) => ({
+        user_id: userId,
+        month: targetMonthDate,
+        category: row.category,
+        budget_amount: Number(row.budget_amount)
+      }));
+
+      const insertBudgetsResult = await supabase.from("monthly_budgets").insert(budgetsPayload);
+      if (insertBudgetsResult.error) {
+        showToast({ type: "error", text: insertBudgetsResult.error.message });
+        setCopyingBudget(false);
+        return;
+      }
+    }
+
+    const savingsResult = await supabase
+      .from("monthly_savings_targets")
+      .upsert(
+        {
+          user_id: userId,
+          month: targetMonthDate,
+          savings_target: sourceSavingsTarget
+        },
+        { onConflict: "user_id,month" }
+      );
+
+    if (savingsResult.error) {
+      showToast({ type: "error", text: savingsResult.error.message });
+      setCopyingBudget(false);
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({
+      type: "success",
+      text: `Presupuesto copiado desde ${formatMonthByPreference(copySourceMonth, dateFormat)}.`
+    });
+    setCopyingBudget(false);
   };
 
   const loadData = useCallback(
@@ -548,6 +649,25 @@ export default function BudgetsPage() {
             Mes
             <input className={inputClass()} type="month" value={selectedMonth} onChange={(e) => { setSelectedMonth(e.target.value); setIncomeDate(`${e.target.value}-01`); }} />
           </label>
+
+          <div className="mt-4 grid gap-4 rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Copiar otro mes</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">Duplica categorias y ahorro objetivo de un mes anterior al mes activo.</p>
+            </div>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Mes origen
+              <input className={inputClass()} type="month" value={copySourceMonth} onChange={(e) => setCopySourceMonth(e.target.value)} />
+            </label>
+            <button
+              className="rounded-2xl border border-white/10 bg-white/8 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={copyingBudget || loading}
+              onClick={() => void handleCopyBudgetFromMonth()}
+              type="button"
+            >
+              {copyingBudget ? "Copiando..." : "Copiar presupuesto de otro mes"}
+            </button>
+          </div>
 
           <form onSubmit={handleSaveSavingsTarget} className="mt-4 grid gap-4 rounded-3xl border border-white/8 bg-white/5 p-4" noValidate>
             <div>
