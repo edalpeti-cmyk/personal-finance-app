@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,6 +11,9 @@ import {
   Legend
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { createClient } from "@/lib/supabase/client";
+import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
+import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
@@ -41,6 +44,14 @@ type FireSettings = {
   currentAge: string;
 };
 
+type FireSettingsRow = {
+  annual_expenses: number;
+  current_net_worth: number;
+  annual_contribution: number;
+  expected_return: number;
+  current_age: number;
+};
+
 const MAX_YEARS = 60;
 const FIRE_SETTINGS_KEY = "personal-finance-fire-settings";
 
@@ -51,6 +62,8 @@ function inputClass(hasError: boolean) {
 }
 
 export default function FirePage() {
+  const supabase = useMemo(() => createClient(), []);
+  const { userId, authLoading } = useAuthGuard();
   const { currency } = useTheme();
   const [annualExpenses, setAnnualExpenses] = useState("24000");
   const [currentNetWorth, setCurrentNetWorth] = useState("30000");
@@ -58,22 +71,52 @@ export default function FirePage() {
   const [expectedReturn, setExpectedReturn] = useState("6");
   const [currentAge, setCurrentAge] = useState("30");
   const [errors, setErrors] = useState<FireFormErrors>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(FIRE_SETTINGS_KEY);
-    if (!raw) return;
+    const loadSettings = async () => {
+      if (authLoading || !userId) {
+        return;
+      }
 
-    try {
-      const parsed = JSON.parse(raw) as Partial<FireSettings>;
-      if (typeof parsed.annualExpenses === "string") setAnnualExpenses(parsed.annualExpenses);
-      if (typeof parsed.currentNetWorth === "string") setCurrentNetWorth(parsed.currentNetWorth);
-      if (typeof parsed.annualContribution === "string") setAnnualContribution(parsed.annualContribution);
-      if (typeof parsed.expectedReturn === "string") setExpectedReturn(parsed.expectedReturn);
-      if (typeof parsed.currentAge === "string") setCurrentAge(parsed.currentAge);
-    } catch {
-      // ignore invalid local data
-    }
-  }, []);
+      const { data, error } = await supabase
+        .from("fire_settings")
+        .select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!error && data) {
+        const row = data as FireSettingsRow;
+        setAnnualExpenses(String(row.annual_expenses));
+        setCurrentNetWorth(String(row.current_net_worth));
+        setAnnualContribution(String(row.annual_contribution));
+        setExpectedReturn(String(row.expected_return));
+        setCurrentAge(String(row.current_age));
+        setLoading(false);
+        return;
+      }
+
+      const raw = window.localStorage.getItem(FIRE_SETTINGS_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Partial<FireSettings>;
+          if (typeof parsed.annualExpenses === "string") setAnnualExpenses(parsed.annualExpenses);
+          if (typeof parsed.currentNetWorth === "string") setCurrentNetWorth(parsed.currentNetWorth);
+          if (typeof parsed.annualContribution === "string") setAnnualContribution(parsed.annualContribution);
+          if (typeof parsed.expectedReturn === "string") setExpectedReturn(parsed.expectedReturn);
+          if (typeof parsed.currentAge === "string") setCurrentAge(parsed.currentAge);
+        } catch {
+          // ignore invalid local data
+        }
+      }
+
+      setLoading(false);
+    };
+
+    void loadSettings();
+  }, [authLoading, supabase, userId]);
 
   useEffect(() => {
     const payload: FireSettings = {
@@ -85,6 +128,56 @@ export default function FirePage() {
     };
     window.localStorage.setItem(FIRE_SETTINGS_KEY, JSON.stringify(payload));
   }, [annualContribution, annualExpenses, currentAge, currentNetWorth, expectedReturn]);
+
+  const handleSaveSettings = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaveMessage(null);
+
+    if (!userId) {
+      setSaveMessage("No hay sesion activa para guardar la configuracion FIRE.");
+      return;
+    }
+
+    const expenses = Number(annualExpenses);
+    const netWorth = Number(currentNetWorth);
+    const contribution = Number(annualContribution);
+    const expected = Number(expectedReturn);
+    const age = Number(currentAge);
+
+    if (
+      !Number.isFinite(expenses) ||
+      expenses <= 0 ||
+      !Number.isFinite(netWorth) ||
+      netWorth < 0 ||
+      !Number.isFinite(contribution) ||
+      contribution < 0 ||
+      !Number.isFinite(expected) ||
+      expected < -20 ||
+      expected > 30 ||
+      !Number.isFinite(age) ||
+      age < 18 ||
+      age > 100
+    ) {
+      setSaveMessage("Revisa los campos FIRE antes de guardar.");
+      return;
+    }
+
+    setSaving(true);
+    const { error } = await supabase.from("fire_settings").upsert(
+      {
+        user_id: userId,
+        annual_expenses: expenses,
+        current_net_worth: netWorth,
+        annual_contribution: contribution,
+        expected_return: expected,
+        current_age: age
+      },
+      { onConflict: "user_id" }
+    );
+
+    setSaving(false);
+    setSaveMessage(error ? error.message : "Configuracion FIRE guardada en Supabase.");
+  };
 
   const validateField = (field: keyof FireFormErrors) => {
     const next: FireFormErrors = {};
@@ -214,6 +307,17 @@ export default function FirePage() {
     }
   };
 
+  if (authLoading || loading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-6xl p-6 md:pl-72">
+          <AuthLoadingState title="Preparando calculadora FIRE" description="Estamos cargando tu configuracion FIRE guardada." />
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
       <SideNav />
@@ -233,8 +337,7 @@ export default function FirePage() {
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Parametros</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tus datos</h2>
-
-          <div className="mt-6 grid gap-4">
+          <form className="mt-6 grid gap-4" onSubmit={handleSaveSettings}>
             <label className="grid gap-2 text-sm text-slate-200">
               Gastos anuales (EUR)
               <input className={inputClass(Boolean(errors.annualExpenses))} type="number" min="0" step="0.01" value={annualExpenses} onChange={(e) => setAnnualExpenses(e.target.value)} onBlur={() => validateField("annualExpenses")} />
@@ -260,7 +363,11 @@ export default function FirePage() {
               <input className={inputClass(Boolean(errors.currentAge))} type="number" min="1" step="1" value={currentAge} onChange={(e) => setCurrentAge(e.target.value)} onBlur={() => validateField("currentAge")} />
               {errors.currentAge ? <span className="text-xs text-red-300">{errors.currentAge}</span> : null}
             </label>
-          </div>
+            <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">
+              {saving ? "Guardando..." : "Guardar configuracion FIRE"}
+            </button>
+            {saveMessage ? <p className="text-sm text-slate-300">{saveMessage}</p> : null}
+          </form>
         </section>
 
         <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">

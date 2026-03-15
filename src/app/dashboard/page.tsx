@@ -26,12 +26,12 @@ type IncomeRow = { amount: number; income_date: string };
 type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: AssetCurrency | null };
 type SnapshotRow = { snapshot_date: string; total_net_worth: number };
 type SavingsTargetRow = { savings_target: number; month: string };
-type FireSettings = {
-  annualExpenses: string;
-  currentNetWorth: string;
-  annualContribution: string;
-  expectedReturn: string;
-  currentAge: string;
+type FireSettingsRow = {
+  annual_expenses: number;
+  current_net_worth: number;
+  annual_contribution: number;
+  expected_return: number;
+  current_age: number;
 };
 type CashflowEvent = { date: string; delta: number };
 type TimelinePoint = { label: string; value: number };
@@ -56,8 +56,6 @@ const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "six_months", label: "6 meses" },
   { value: "current_year", label: "Ano actual" }
 ];
-const FIRE_SETTINGS_KEY = "personal-finance-fire-settings";
-
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function isSameMonth(dateString: string, now: Date) {
@@ -240,7 +238,6 @@ export default function DashboardPage() {
   const [snapshotSaving, setSnapshotSaving] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
-  const [fireSettings, setFireSettings] = useState<FireSettings | null>(null);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -385,26 +382,6 @@ export default function DashboardPage() {
   }, [metrics, persistSnapshot, userId]);
 
   useEffect(() => {
-    const loadFireSettings = () => {
-      const raw = window.localStorage.getItem(FIRE_SETTINGS_KEY);
-      if (!raw) {
-        setFireSettings(null);
-        return;
-      }
-
-      try {
-        setFireSettings(JSON.parse(raw) as FireSettings);
-      } catch {
-        setFireSettings(null);
-      }
-    };
-
-    loadFireSettings();
-    window.addEventListener("storage", loadFireSettings);
-    return () => window.removeEventListener("storage", loadFireSettings);
-  }, []);
-
-  useEffect(() => {
     const loadRates = async () => {
       try {
         const response = await fetch("/api/fx-rates", { cache: "no-store" });
@@ -431,18 +408,20 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, savingsTargetsResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, savingsTargetsResult, fireSettingsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
-        supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId)
+        supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
+        supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || savingsTargetsResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || savingsTargetsResult.error || fireSettingsResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
             savingsTargetsResult.error?.message ||
+            fireSettingsResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -455,6 +434,7 @@ export default function DashboardPage() {
       const nextIncomeRows = (incomeResult.data as IncomeRow[]) ?? [];
       const investmentRows = (investmentsResult.data as InvestmentRow[]) ?? [];
       const savingsTargetRows = (savingsTargetsResult.data as SavingsTargetRow[]) ?? [];
+      const fireSettings = (fireSettingsResult.data as FireSettingsRow | null) ?? null;
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
@@ -493,21 +473,13 @@ export default function DashboardPage() {
         0
       );
 
-      const configuredAnnualExpenses = Number(fireSettings?.annualExpenses);
-      const configuredNetWorth = Number(fireSettings?.currentNetWorth);
-      const configuredAnnualContribution = Number(fireSettings?.annualContribution);
-      const configuredExpectedReturn = Number(fireSettings?.expectedReturn) / 100;
-
-      const fireAnnualExpenses =
-        Number.isFinite(configuredAnnualExpenses) && configuredAnnualExpenses > 0 ? configuredAnnualExpenses : annualExpenses;
-      const fireNetWorth =
-        Number.isFinite(configuredNetWorth) && configuredNetWorth >= 0 ? configuredNetWorth : totalNetWorth;
-      const fireAnnualContribution =
-        Number.isFinite(configuredAnnualContribution) && configuredAnnualContribution >= 0
-          ? configuredAnnualContribution
-          : Math.max(annualSavings, 0);
+      const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
+      const fireNetWorth = fireSettings && fireSettings.current_net_worth >= 0 ? fireSettings.current_net_worth : totalNetWorth;
+      const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(annualSavings, 0);
       const fireExpectedReturn =
-        Number.isFinite(configuredExpectedReturn) && configuredExpectedReturn > -1 ? configuredExpectedReturn : 0.05;
+        fireSettings && fireSettings.expected_return >= -20 && fireSettings.expected_return <= 30
+          ? fireSettings.expected_return / 100
+          : 0.05;
 
       const fireTarget = fireAnnualExpenses > 0 ? fireAnnualExpenses / 0.04 : 0;
       const fireProgress = fireTarget > 0 ? Math.min((fireNetWorth / fireTarget) * 100, 100) : 0;
@@ -530,7 +502,7 @@ export default function DashboardPage() {
     };
 
     void run();
-  }, [authLoading, fireSettings, persistSnapshot, ratesToEur, supabase, userId]);
+  }, [authLoading, persistSnapshot, ratesToEur, supabase, userId]);
 
   useEffect(() => {
     if (!loading && !message && metrics && !aiAutoGenerated && hasFinancialData) {
