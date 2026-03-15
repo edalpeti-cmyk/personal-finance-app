@@ -178,7 +178,7 @@ export default function ExpensesPage() {
   const groupedExpenses = useMemo(() => {
     const groups = new Map<
       string,
-      { category: string; total: number; count: number; latestDate: string; items: ExpenseRow[] }
+      { category: string; total: number; count: number; importedCount: number; latestDate: string; items: ExpenseRow[] }
     >();
 
     for (const expense of expenses) {
@@ -186,12 +186,16 @@ export default function ExpensesPage() {
         category: expense.category,
         total: 0,
         count: 0,
+        importedCount: 0,
         latestDate: expense.expense_date,
         items: []
       };
 
       current.total += Number(expense.amount);
       current.count += 1;
+      if (expense.description === BUDGET_IMPORT_DESCRIPTION) {
+        current.importedCount += 1;
+      }
       current.items.push(expense);
       if (expense.expense_date > current.latestDate) {
         current.latestDate = expense.expense_date;
@@ -408,6 +412,64 @@ export default function ExpensesPage() {
     setImportingBudget(false);
   };
 
+  const handleOverwriteImportedBudgetExpenses = async () => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para sobrescribir la importacion." });
+      return;
+    }
+
+    const month = expenseDate.slice(0, 7);
+    const range = monthDateRange(month);
+    setImportingBudget(true);
+    setMessage(null);
+
+    const deleteResult = await supabase
+      .from("expenses")
+      .delete()
+      .eq("user_id", userId)
+      .eq("description", BUDGET_IMPORT_DESCRIPTION)
+      .gte("expense_date", range.start)
+      .lte("expense_date", range.end);
+
+    if (deleteResult.error) {
+      showToast({ type: "error", text: "No se pudieron limpiar los gastos base importados." });
+      setImportingBudget(false);
+      return;
+    }
+
+    await handleImportBudgetAsExpenses();
+    setImportingBudget(false);
+  };
+
+  const handleDeleteImportedBudgetExpenses = async () => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para borrar la importacion." });
+      return;
+    }
+
+    const month = expenseDate.slice(0, 7);
+    const range = monthDateRange(month);
+    setImportingBudget(true);
+
+    const deleteResult = await supabase
+      .from("expenses")
+      .delete()
+      .eq("user_id", userId)
+      .eq("description", BUDGET_IMPORT_DESCRIPTION)
+      .gte("expense_date", range.start)
+      .lte("expense_date", range.end);
+
+    if (deleteResult.error) {
+      showToast({ type: "error", text: "No se pudieron borrar los gastos base importados." });
+      setImportingBudget(false);
+      return;
+    }
+
+    await loadExpenses(userId);
+    showToast({ type: "success", text: "Se han eliminado los gastos base importados de ese mes." });
+    setImportingBudget(false);
+  };
+
   if (authLoading) {
     return (
       <>
@@ -459,21 +521,39 @@ export default function ExpensesPage() {
           </div>
 
           <div className="mt-4 rounded-3xl border border-white/8 bg-white/5 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3">
               <div>
                 <p className="text-sm font-medium text-white">Copiar presupuesto del mes a gastos</p>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
                   Importa las categorias presupuestadas del mes de la fecha seleccionada como gastos base.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleImportBudgetAsExpenses()}
-                disabled={importingBudget || loading}
-                className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {importingBudget ? "Importando..." : "Copiar presupuesto"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleImportBudgetAsExpenses()}
+                  disabled={importingBudget || loading}
+                  className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {importingBudget ? "Importando..." : "Copiar presupuesto"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleOverwriteImportedBudgetExpenses()}
+                  disabled={importingBudget || loading}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sobrescribir importacion
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteImportedBudgetExpenses()}
+                  disabled={importingBudget || loading}
+                  className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Borrar importados
+                </button>
+              </div>
             </div>
           </div>
 
@@ -604,6 +684,7 @@ export default function ExpensesPage() {
                   <div className="mt-5 grid gap-2 text-sm text-slate-300">
                     <p>Total: <span className="font-medium text-white">{formatCurrencyByPreference(group.total, currency)}</span></p>
                     <p>Ultimo movimiento: <span className="font-medium text-white">{formatDateByPreference(group.latestDate, dateFormat)}</span></p>
+                    <p>Base importada: <span className="font-medium text-white">{group.importedCount}</span></p>
                   </div>
                   <div className="ui-chip mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
                     Ver gastos
@@ -653,7 +734,16 @@ export default function ExpensesPage() {
                         <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">
                           {formatDateByPreference(expense.expense_date, dateFormat)}
                         </td>
-                        <td className="px-3 py-4 text-slate-300">{expense.description ?? "-"}</td>
+                        <td className="px-3 py-4 text-slate-300">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>{expense.description ?? "-"}</span>
+                            {expense.description === BUDGET_IMPORT_DESCRIPTION ? (
+                              <span className="ui-chip rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                                Base presupuesto
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
                         <td className="px-3 py-4 text-right font-medium text-slate-100">
                           {formatCurrencyByPreference(Number(expense.amount), currency)}
                         </td>
