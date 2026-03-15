@@ -27,6 +27,12 @@ type IncomeRow = {
   income_date: string;
 };
 
+type SavingsTargetRow = {
+  id: string;
+  month: string;
+  savings_target: number;
+};
+
 type BudgetWithActual = {
   id: string;
   category: string;
@@ -149,6 +155,8 @@ export default function BudgetsPage() {
   const [incomeAmount, setIncomeAmount] = useState("");
   const [incomeDate, setIncomeDate] = useState(new Date().toISOString().slice(0, 10));
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [savingsTarget, setSavingsTarget] = useState("");
+  const [savingsTargetSaving, setSavingsTargetSaving] = useState(false);
 
   const [rows, setRows] = useState<BudgetWithActual[]>([]);
   const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
@@ -184,6 +192,45 @@ export default function BudgetsPage() {
     setIncomeDate(`${selectedMonth}-01`);
   }, [selectedMonth]);
 
+  const handleSaveSavingsTarget = async (event: FormEvent) => {
+    event.preventDefault();
+    setToast(null);
+    setMessage(null);
+
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para guardar el ahorro objetivo." });
+      return;
+    }
+
+    const parsedTarget = Number(savingsTarget);
+    if (!Number.isFinite(parsedTarget) || parsedTarget < 0) {
+      showToast({ type: "error", text: "El ahorro objetivo debe ser 0 o mayor." });
+      return;
+    }
+
+    setSavingsTargetSaving(true);
+    const { error } = await supabase
+      .from("monthly_savings_targets")
+      .upsert(
+        {
+          user_id: userId,
+          month: monthToDate(selectedMonth),
+          savings_target: parsedTarget
+        },
+        { onConflict: "user_id,month" }
+      );
+
+    if (error) {
+      showToast({ type: "error", text: error.message });
+      setSavingsTargetSaving(false);
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({ type: "success", text: "Ahorro objetivo actualizado." });
+    setSavingsTargetSaving(false);
+  };
+
   const loadData = useCallback(
     async (uid: string, month: string) => {
       const currentMonthDate = monthToDate(month);
@@ -195,25 +242,38 @@ export default function BudgetsPage() {
       const [currentData, prevData] = await Promise.all([
         Promise.all([
           supabase.from("monthly_budgets").select("id, month, category, budget_amount").eq("user_id", uid).eq("month", currentMonthDate).order("category", { ascending: true }),
+          supabase.from("monthly_savings_targets").select("id, month, savings_target").eq("user_id", uid).eq("month", currentMonthDate).maybeSingle(),
           supabase.from("expenses").select("category, amount").eq("user_id", uid).gte("expense_date", currentRange.start).lte("expense_date", currentRange.end),
           supabase.from("income").select("id, amount, source, income_date").eq("user_id", uid).gte("income_date", currentRange.start).lte("income_date", currentRange.end).order("income_date", { ascending: false })
         ]),
         Promise.all([
           supabase.from("monthly_budgets").select("id, month, category, budget_amount").eq("user_id", uid).eq("month", prevMonthDate).order("category", { ascending: true }),
+          supabase.from("monthly_savings_targets").select("id, month, savings_target").eq("user_id", uid).eq("month", prevMonthDate).maybeSingle(),
           supabase.from("expenses").select("category, amount").eq("user_id", uid).gte("expense_date", prevRange.start).lte("expense_date", prevRange.end),
           supabase.from("income").select("amount").eq("user_id", uid).gte("income_date", prevRange.start).lte("income_date", prevRange.end)
         ])
       ]);
 
-      const [currentBudgets, currentExpenses, currentIncome] = currentData;
-      const [previousBudgets, previousExpenses, previousIncome] = prevData;
+      const [currentBudgets, currentSavingsTargetData, currentExpenses, currentIncome] = currentData;
+      const [previousBudgets, previousSavingsTargetData, previousExpenses, previousIncome] = prevData;
 
-      if (currentBudgets.error || currentExpenses.error || currentIncome.error || previousBudgets.error || previousExpenses.error || previousIncome.error) {
+      if (
+        currentBudgets.error ||
+        currentSavingsTargetData.error ||
+        currentExpenses.error ||
+        currentIncome.error ||
+        previousBudgets.error ||
+        previousSavingsTargetData.error ||
+        previousExpenses.error ||
+        previousIncome.error
+      ) {
         setMessage(
           currentBudgets.error?.message ||
+            currentSavingsTargetData.error?.message ||
             currentExpenses.error?.message ||
             currentIncome.error?.message ||
             previousBudgets.error?.message ||
+            previousSavingsTargetData.error?.message ||
             previousExpenses.error?.message ||
             previousIncome.error?.message ||
             "No se pudo cargar el presupuesto mensual."
@@ -233,13 +293,14 @@ export default function BudgetsPage() {
       const currentExpenseTotal = currentExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const prevIncomeTotal = prevIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const prevExpenseTotal = prevExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const currentSavings = currentIncomeTotal - currentExpenseTotal;
-      const prevSavings = prevIncomeTotal - prevExpenseTotal;
+      const currentSavings = Number((currentSavingsTargetData.data as SavingsTargetRow | null)?.savings_target ?? 0);
+      const prevSavings = Number((previousSavingsTargetData.data as SavingsTargetRow | null)?.savings_target ?? 0);
 
       setRows(builtCurrent.rows);
       setPrevRows(builtPrevious.rows);
       setUnbudgetedExpenses(builtCurrent.unbudgeted);
       setCurrentIncomeEntries(currentIncomeRows);
+      setSavingsTarget(String(currentSavings));
       setIncomeSummary({
         currentIncome: currentIncomeTotal,
         currentExpenses: currentExpenseTotal,
@@ -462,7 +523,7 @@ export default function BudgetsPage() {
         <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Presupuesto mensual</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Plan mensual con ingresos y ahorro</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Gestiona limites por categoria, registra ingresos del mes y controla si tu ahorro real va en la direccion correcta.</p>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Gestiona limites por categoria, registra ingresos del mes y fija un ahorro objetivo mensual para medir tu plan con claridad.</p>
         </section>
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
@@ -487,6 +548,20 @@ export default function BudgetsPage() {
             Mes
             <input className={inputClass()} type="month" value={selectedMonth} onChange={(e) => { setSelectedMonth(e.target.value); setIncomeDate(`${e.target.value}-01`); }} />
           </label>
+
+          <form onSubmit={handleSaveSavingsTarget} className="mt-4 grid gap-4 rounded-3xl border border-white/8 bg-white/5 p-4" noValidate>
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ahorro objetivo</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">Este valor se usará para calcular el ahorro y la tasa de ahorro del mes seleccionado.</p>
+            </div>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Ahorro planificado del mes
+              <input className={inputClass()} type="number" min="0" step="0.01" value={savingsTarget} onChange={(e) => setSavingsTarget(e.target.value)} placeholder="Ej: 500" />
+            </label>
+            <button className="rounded-2xl border border-emerald-400/20 bg-emerald-500/90 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={savingsTargetSaving || loading} type="submit">
+              {savingsTargetSaving ? "Guardando..." : "Guardar ahorro objetivo"}
+            </button>
+          </form>
 
           <form onSubmit={handleSaveBudget} className="mt-4 grid gap-4" noValidate>
             <label className="grid gap-2 text-sm text-slate-200">
@@ -517,12 +592,12 @@ export default function BudgetsPage() {
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeSummary.currentSavings, currency)}</p>
-            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ingresos menos gastos del periodo que estas viendo.</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Objetivo de ahorro que has marcado para este mes.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p>
-            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Calculada sobre los ingresos del mes seleccionado.</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo dividido entre los ingresos del mes seleccionado.</p>
           </article>
         </section>
 
@@ -544,7 +619,7 @@ export default function BudgetsPage() {
 
           <div className="mt-6 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ingresos del mes</p><p className="mt-2 font-medium text-slate-100">{formatCurrencyByPreference(incomeSummary.currentIncome, currency)}</p></div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ahorro</p><p className={`mt-2 font-medium ${incomeComparison.savingsDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}</p></div>
+            <div className="rounded-3xl border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ahorro objetivo</p><p className={`mt-2 font-medium ${incomeComparison.savingsDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}</p></div>
           </div>
         </section>
 
