@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -50,7 +50,7 @@ type InvestmentFormErrors = {
 
 type ToastState = { type: "success" | "error"; text: string } | null;
 type ProfitFilter = "all" | "positive" | "negative";
-type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "weightPct";
+type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "gainPct" | "weightPct";
 type SortDirection = "asc" | "desc";
 type HistoryPoint = {
   snapshot_date: string;
@@ -126,6 +126,39 @@ function inputClass(hasError: boolean) {
 
 function formatNumber(value: number, digits: number) {
   return Number(value).toFixed(digits);
+}
+
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index];
+    const nextChar = line[index + 1];
+
+    if (char === "\"" && inQuotes && nextChar === "\"") {
+      current += "\"";
+      index += 1;
+      continue;
+    }
+
+    if (char === "\"") {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
 }
 
 function buildEstimatedAssetEvolution(row: EnrichedInvestment) {
@@ -217,6 +250,7 @@ export default function InvestmentsPage() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
   const formRef = useRef<HTMLElement | null>(null);
+  const csvInputRef = useRef<HTMLInputElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -464,6 +498,8 @@ export default function InvestmentsPage() {
   const biggestPosition = topHoldings[0] ?? null;
   const profitablePositions = enrichedInvestments.filter((row) => row.gainEur >= 0).length;
   const diversificationScore = allocationByType.length;
+  const concentrationAlerts = enrichedInvestments.filter((row) => row.weightPct >= 25);
+  const drawdownAlerts = enrichedInvestments.filter((row) => (row.gainPct ?? 0) <= -10);
   const groupedAssetTypes = useMemo(() => {
     const groups = new Map<
       AssetType,
@@ -509,6 +545,21 @@ export default function InvestmentsPage() {
 
     return selectedAsset ? buildEstimatedAssetEvolution(selectedAsset) : { labels: [], values: [] };
   }, [selectedAsset, selectedAssetHistory]);
+  const selectedAssetReturnPctSeries = useMemo(() => {
+    if (selectedAssetEvolution.values.length === 0) {
+      return [] as number[];
+    }
+
+    const base = selectedAssetHistory.length > 1
+      ? Number(selectedAssetHistory[0]?.total_value_eur ?? 0)
+      : Number(selectedAsset?.investedEur ?? 0);
+
+    if (!base || base <= 0) {
+      return selectedAssetEvolution.values.map(() => 0);
+    }
+
+    return selectedAssetEvolution.values.map((value) => Number((((value - base) / base) * 100).toFixed(2)));
+  }, [selectedAsset?.investedEur, selectedAssetEvolution.values, selectedAssetHistory]);
   const selectedAssetChartData = useMemo(
     () => ({
       labels: selectedAssetEvolution.labels,
@@ -521,10 +572,21 @@ export default function InvestmentsPage() {
           borderWidth: 3,
           fill: true,
           tension: 0.25
+        },
+        {
+          label: "Rentabilidad %",
+          data: selectedAssetReturnPctSeries,
+          borderColor: "#f59e0b",
+          backgroundColor: "rgba(245, 158, 11, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.22,
+          yAxisID: "yPct",
+          pointRadius: 0
         }
       ]
     }),
-    [selectedAssetEvolution, selectedAssetHistory.length]
+    [selectedAssetEvolution, selectedAssetHistory.length, selectedAssetReturnPctSeries]
   );
   const selectedAssetIndex = useMemo(
     () => selectedTypeAssets.findIndex((row) => row.id === selectedAssetId),
@@ -861,6 +923,86 @@ export default function InvestmentsPage() {
       showToast({ type: "error", text: "Error de red al actualizar precios." });
     } finally {
       setRefreshingPrices(false);
+    }
+  };
+
+  const handleCsvImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para importar cartera." });
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        showToast({ type: "error", text: "El CSV no tiene suficientes filas." });
+        return;
+      }
+
+      const headers = parseCsvLine(lines[0]).map((item) => item.toLowerCase());
+      const getIndex = (name: string) => headers.indexOf(name);
+
+      const required = ["asset_name", "asset_type", "asset_currency", "quantity", "average_buy_price"];
+      const missing = required.filter((name) => getIndex(name) === -1);
+      if (missing.length > 0) {
+        showToast({ type: "error", text: `Faltan columnas obligatorias: ${missing.join(", ")}` });
+        return;
+      }
+
+      const payload = lines.slice(1).map((line) => {
+        const values = parseCsvLine(line);
+        const read = (name: string) => {
+          const index = getIndex(name);
+          return index >= 0 ? values[index] ?? "" : "";
+        };
+
+        return {
+          user_id: userId,
+          asset_name: read("asset_name"),
+          asset_symbol: read("asset_symbol") || null,
+          asset_isin: read("asset_isin") || null,
+          asset_type: read("asset_type") as AssetType,
+          asset_currency: read("asset_currency") as AssetCurrency,
+          asset_market: (read("asset_market") || "AUTO") as AssetMarket,
+          quantity: Number(read("quantity")),
+          average_buy_price: Number(read("average_buy_price")),
+          current_price: read("current_price") ? Number(read("current_price")) : Number(read("average_buy_price")),
+          purchase_date: read("purchase_date") || new Date().toISOString().slice(0, 10)
+        };
+      }).filter((row) =>
+        row.asset_name &&
+        ASSET_TYPES.some((type) => type.value === row.asset_type) &&
+        SUPPORTED_ASSET_CURRENCIES.includes(row.asset_currency) &&
+        Number.isFinite(row.quantity) &&
+        row.quantity > 0 &&
+        Number.isFinite(row.average_buy_price) &&
+        row.average_buy_price >= 0 &&
+        Number.isFinite(row.current_price ?? 0)
+      );
+
+      if (payload.length === 0) {
+        showToast({ type: "error", text: "No se encontraron filas validas para importar." });
+        return;
+      }
+
+      const { error } = await supabase.from("investments").insert(payload);
+      if (error) {
+        showToast({ type: "error", text: error.message });
+        return;
+      }
+
+      await loadInvestments(userId);
+      showToast({ type: "success", text: `${payload.length} posiciones importadas desde CSV.` });
+    } catch {
+      showToast({ type: "error", text: "No se pudo leer el CSV de inversiones." });
+    } finally {
+      if (csvInputRef.current) {
+        csvInputRef.current.value = "";
+      }
     }
   };
 
@@ -1235,6 +1377,7 @@ export default function InvestmentsPage() {
               <select className={inputClass(false)} value={sortField} onChange={(e) => setSortField(e.target.value as SortField)}>
                 <option value="currentValueEur">Valor EUR</option>
                 <option value="gainEur">Plusvalia EUR</option>
+                <option value="gainPct">Rentabilidad %</option>
                 <option value="weightPct">Peso</option>
                 <option value="asset_name">Nombre</option>
                 <option value="asset_type">Tipo</option>
@@ -1263,6 +1406,20 @@ export default function InvestmentsPage() {
                 Limpiar filtros
               </button>
             ) : null}
+          </div>
+
+          <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => void handleCsvImport(e)} />
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => csvInputRef.current?.click()}
+              className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10"
+            >
+              Importar cartera CSV
+            </button>
+            <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+              CSV: asset_name, asset_symbol, asset_isin, asset_type, asset_currency, asset_market, quantity, average_buy_price, current_price, purchase_date
+            </span>
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
@@ -1304,6 +1461,27 @@ export default function InvestmentsPage() {
               ))}
             </div>
           ) : null}
+
+          {!loading && (concentrationAlerts.length > 0 || drawdownAlerts.length > 0) ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <article className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Concentracion</p>
+                <p className="mt-2 text-sm leading-6 text-amber-50">
+                  {concentrationAlerts.length > 0
+                    ? `${concentrationAlerts.length} activo(s) pesan 25% o mas de la cartera.`
+                    : "Sin alertas de concentracion."}
+                </p>
+              </article>
+              <article className="rounded-3xl border border-red-400/20 bg-red-500/10 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-red-200">Perdidas relevantes</p>
+                <p className="mt-2 text-sm leading-6 text-red-50">
+                  {drawdownAlerts.length > 0
+                    ? `${drawdownAlerts.length} activo(s) caen 10% o mas frente al capital invertido.`
+                    : "Sin alertas de perdidas relevantes."}
+                </p>
+              </article>
+            </div>
+          ) : null}
         </section>
       </main>
 
@@ -1334,6 +1512,10 @@ export default function InvestmentsPage() {
                           <div>
                             <p className="font-medium text-white">{row.asset_name}</p>
                             <p className="mt-1 text-sm text-slate-400">{row.asset_symbol ?? "Sin ticker"} · {row.asset_market ?? "AUTO"} · {row.asset_currency}</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {row.weightPct >= 25 ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">Concentrado</span> : null}
+                              {(row.gainPct ?? 0) <= -10 ? <span className="rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-200">Perdida relevante</span> : null}
+                            </div>
                             <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                               <p>Valor EUR: <span className="font-medium text-white">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</span></p>
                               <p>Peso: <span className="font-medium text-white">{row.weightPct.toFixed(1)}%</span></p>
@@ -1488,12 +1670,19 @@ export default function InvestmentsPage() {
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
+                      plugins: {
+                        legend: { display: true, labels: { color: "#cbd5e1", usePointStyle: true } }
+                      },
                       scales: {
                         x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
                         y: {
                           grid: { color: "rgba(148, 163, 184, 0.16)" },
                           ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
+                        },
+                        yPct: {
+                          position: "right",
+                          grid: { display: false },
+                          ticks: { color: "#fbbf24", callback: (value: string | number) => `${Number(value).toFixed(0)}%` }
                         }
                       }
                     }}
