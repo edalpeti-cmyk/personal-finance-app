@@ -29,6 +29,7 @@ type InvestmentRow = {
   id: string;
   asset_name: string;
   asset_symbol: string | null;
+  asset_isin: string | null;
   asset_type: AssetType;
   asset_currency: AssetCurrency;
   asset_market: AssetMarket | null;
@@ -62,6 +63,7 @@ type PeriodPerformance = {
 type AssetLookupSuggestion = {
   symbol: string;
   name: string;
+  isin: string | null;
   assetType: AssetType;
   market: AssetMarket;
   currency: AssetCurrency | null;
@@ -192,6 +194,7 @@ export default function InvestmentsPage() {
 
   const [assetName, setAssetName] = useState("");
   const [assetSymbol, setAssetSymbol] = useState("");
+  const [assetIsin, setAssetIsin] = useState("");
   const [assetType, setAssetType] = useState<AssetType>("stock");
   const [assetCurrency, setAssetCurrency] = useState<AssetCurrency>("EUR");
   const [assetMarket, setAssetMarket] = useState<AssetMarket>("AUTO");
@@ -223,6 +226,7 @@ export default function InvestmentsPage() {
     setEditingId(null);
     setAssetName("");
     setAssetSymbol("");
+    setAssetIsin("");
     setAssetType("stock");
     setAssetCurrency("EUR");
     setAssetMarket("AUTO");
@@ -278,12 +282,35 @@ export default function InvestmentsPage() {
     setLookupQuery(suggestion.symbol);
     setAssetSymbol(suggestion.symbol);
     setAssetName(suggestion.name);
+    setAssetIsin(suggestion.isin ?? "");
     setAssetType(suggestion.assetType);
     setAssetMarket(suggestion.market);
     if (suggestion.currency && SUPPORTED_ASSET_CURRENCIES.includes(suggestion.currency)) {
       setAssetCurrency(suggestion.currency);
     }
     setAssetSuggestions([]);
+    void (async () => {
+      try {
+        const response = await fetch("/api/investments/lookup-price", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            assetType: suggestion.assetType,
+            symbol: suggestion.symbol,
+            market: suggestion.market
+          })
+        });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as { price?: number | null };
+        if (typeof data.price === "number" && Number.isFinite(data.price)) {
+          setCurrentPrice(String(data.price));
+        }
+      } catch {
+        // Leave manual price entry available when lookup fails.
+      }
+    })();
   };
 
   useEffect(() => {
@@ -307,7 +334,7 @@ export default function InvestmentsPage() {
     async (uid: string) => {
       const { data, error } = await supabase
         .from("investments")
-        .select("id, asset_name, asset_symbol, asset_type, asset_currency, asset_market, quantity, average_buy_price, current_price, purchase_date")
+        .select("id, asset_name, asset_symbol, asset_isin, asset_type, asset_currency, asset_market, quantity, average_buy_price, current_price, purchase_date")
         .eq("user_id", uid)
         .in("asset_type", ASSET_TYPES.map((type) => type.value))
         .order("purchase_date", { ascending: false });
@@ -714,6 +741,7 @@ export default function InvestmentsPage() {
       user_id: userId,
       asset_name: validation.cleanName,
       asset_symbol: validation.cleanSymbol || null,
+      asset_isin: assetIsin.trim() || null,
       asset_type: assetType,
       asset_currency: assetCurrency,
       asset_market: assetMarket,
@@ -746,6 +774,7 @@ export default function InvestmentsPage() {
     setEditingId(row.id);
     setAssetName(row.asset_name);
     setAssetSymbol(row.asset_symbol ?? "");
+    setAssetIsin(row.asset_isin ?? "");
     setLookupQuery(row.asset_symbol ?? row.asset_name);
     setAssetSuggestions([]);
     setAssetType(row.asset_type);
@@ -929,6 +958,12 @@ export default function InvestmentsPage() {
               Nombre
               <input className={inputClass(Boolean(errors.assetName))} value={assetName} onChange={(e) => setAssetName(e.target.value)} maxLength={80} />
               {errors.assetName ? <span className="text-xs text-red-700">{errors.assetName}</span> : null}
+            </label>
+
+            <label className="grid gap-2 text-sm text-slate-200">
+              ISIN
+              <input className={inputClass(false)} value={assetIsin} onChange={(e) => setAssetIsin(e.target.value.toUpperCase())} maxLength={12} placeholder="Opcional" />
+              <span className="text-xs text-slate-400">Si eliges una sugerencia con ISIN disponible, este campo se completa automaticamente.</span>
             </label>
 
             <label className="grid gap-2 text-sm text-slate-200">

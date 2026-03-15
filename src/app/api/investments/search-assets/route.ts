@@ -7,6 +7,7 @@ type SupportedCurrency = "EUR" | "USD" | "GBP" | "DKK";
 type AssetSuggestion = {
   symbol: string;
   name: string;
+  isin: string | null;
   assetType: AssetType;
   market: AssetMarket;
   currency: SupportedCurrency | null;
@@ -154,26 +155,29 @@ async function searchYahoo(query: string): Promise<AssetSuggestion[]> {
   }
 
   const data = (await response.json()) as { quotes?: YahooSearchQuote[] };
-  return (data.quotes ?? [])
-    .map((quote) => {
+  const suggestions: AssetSuggestion[] = [];
+
+  for (const quote of data.quotes ?? []) {
       const assetType = mapYahooQuoteType(quote.quoteType);
       const symbol = quote.symbol?.trim().toUpperCase() ?? "";
       const name = quote.longname ?? quote.shortname ?? symbol;
 
       if (!assetType || !symbol || !name) {
-        return null;
+        continue;
       }
 
-      return {
+      suggestions.push({
         symbol,
         name,
+        isin: null,
         assetType,
         market: inferMarket(symbol, quote.exchDisp ?? quote.exchange),
         currency: mapCurrency(quote.currency),
         exchange: quote.exchDisp ?? quote.exchange ?? null
-      };
-    })
-    .filter((item): item is AssetSuggestion => Boolean(item));
+      });
+  }
+
+  return suggestions;
 }
 
 async function searchOpenFigiByIsin(isin: string): Promise<AssetSuggestion[]> {
@@ -192,26 +196,29 @@ async function searchOpenFigiByIsin(isin: string): Promise<AssetSuggestion[]> {
   }
 
   const data = (await response.json()) as Array<{ data?: OpenFigiMappingResult[] }>;
-  return (data[0]?.data ?? [])
-    .map((item) => {
+  const suggestions: AssetSuggestion[] = [];
+
+  for (const item of data[0]?.data ?? []) {
       const symbol = item.ticker?.trim().toUpperCase() ?? "";
       const name = item.name?.trim() ?? symbol;
       const assetType = mapOpenFigiType(item.securityType, item.securityType2, item.marketSector);
 
       if (!symbol || !name || !assetType) {
-        return null;
+        continue;
       }
 
-      return {
+      suggestions.push({
         symbol,
         name,
+        isin,
         assetType,
         market: inferMarket(symbol, item.exchange ?? item.exchCode),
         currency: mapCurrency(item.currency),
         exchange: item.exchange ?? item.exchCode ?? null
-      };
-    })
-    .filter((item): item is AssetSuggestion => Boolean(item));
+      });
+  }
+
+  return suggestions;
 }
 
 async function searchOpenFigiFallback(query: string): Promise<AssetSuggestion[]> {
@@ -233,26 +240,29 @@ async function searchOpenFigiFallback(query: string): Promise<AssetSuggestion[]>
   }
 
   const data = (await response.json()) as OpenFigiSearchResult[];
-  return data
-    .map((item) => {
+  const suggestions: AssetSuggestion[] = [];
+
+  for (const item of data) {
       const symbol = item.ticker?.trim().toUpperCase() ?? "";
       const name = item.name?.trim() ?? symbol;
       const assetType = mapOpenFigiType(item.securityType, item.securityType2, item.marketSector);
 
       if (!symbol || !name || !assetType) {
-        return null;
+        continue;
       }
 
-      return {
+      suggestions.push({
         symbol,
         name,
+        isin: null,
         assetType,
         market: inferMarket(symbol, item.exchangeName ?? item.exchCode),
         currency: mapCurrency(item.currency),
         exchange: item.exchangeName ?? item.exchCode ?? null
-      };
-    })
-    .filter((item): item is AssetSuggestion => Boolean(item));
+      });
+  }
+
+  return suggestions;
 }
 
 export async function GET(request: Request) {
