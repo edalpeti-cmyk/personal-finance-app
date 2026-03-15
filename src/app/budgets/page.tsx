@@ -446,7 +446,9 @@ export default function BudgetsPage() {
     const budgetDelta = totals.totalBudget - prevTotals.totalBudget;
     const actualDelta = totals.totalActual - prevTotals.totalActual;
     const actualDeltaPct = prevTotals.totalActual > 0 ? (actualDelta / prevTotals.totalActual) * 100 : null;
-    return { budgetDelta, actualDelta, actualDeltaPct };
+    const prevSpentPercent = prevTotals.totalBudget > 0 ? (prevTotals.totalActual / prevTotals.totalBudget) * 100 : 0;
+    const spentPercentDelta = totals.totalSpentPercent - prevSpentPercent;
+    return { budgetDelta, actualDelta, actualDeltaPct, prevSpentPercent, spentPercentDelta };
   }, [totals, prevTotals]);
 
   const incomeComparison = useMemo(() => ({
@@ -769,10 +771,20 @@ export default function BudgetsPage() {
               <p className="mt-3 text-sm leading-6 text-slate-300">Cambio de ingresos comparado con el mes anterior.</p>
             </div>
             <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consumo presupuesto</p>
-              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{totals.totalSpentPercent.toFixed(1)}%</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Porcentaje del presupuesto total que ya has consumido.</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ahorro objetivo</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${incomeComparison.savingsDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">Cambio del ahorro objetivo frente al mes anterior.</p>
             </div>
+          </div>
+          <div className="mt-4 rounded-3xl border border-white/8 bg-white/5 p-4 text-sm text-slate-300">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consumo del presupuesto</p>
+            <p className="mt-2 text-white">
+              Actual: <span className="font-medium">{totals.totalSpentPercent.toFixed(1)}%</span>
+              {" · "}
+              Anterior: <span className="font-medium">{monthOverMonth.prevSpentPercent.toFixed(1)}%</span>
+              {" · "}
+              Delta: <span className={`font-medium ${monthOverMonth.spentPercentDelta > 0 ? "text-red-300" : monthOverMonth.spentPercentDelta < 0 ? "text-emerald-300" : "text-slate-100"}`}>{monthOverMonth.spentPercentDelta >= 0 ? "+" : ""}{monthOverMonth.spentPercentDelta.toFixed(1)} pts</span>
+            </p>
           </div>
         </section>
 
