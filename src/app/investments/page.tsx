@@ -76,6 +76,7 @@ type EnrichedInvestment = InvestmentRow & {
   investedEur: number;
   currentValueEur: number;
   gainEur: number;
+  gainPct: number | null;
   weightPct: number;
 };
 
@@ -394,6 +395,7 @@ export default function InvestmentsPage() {
       const investedEur = convertToEur(investedLocal, row.asset_currency, ratesToEur);
       const currentValueEur = convertToEur(currentLocal, row.asset_currency, ratesToEur);
       const gainEur = currentValueEur - investedEur;
+      const gainPct = investedEur > 0 ? (gainEur / investedEur) * 100 : null;
       const weightPct = metrics.totalValueEur > 0 ? (currentValueEur / metrics.totalValueEur) * 100 : 0;
 
       return {
@@ -404,6 +406,7 @@ export default function InvestmentsPage() {
         investedEur,
         currentValueEur,
         gainEur,
+        gainPct,
         weightPct
       };
     });
@@ -1055,6 +1058,9 @@ export default function InvestmentsPage() {
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(profitEur, "EUR")}
             </p>
+            <p className={`mt-3 text-sm font-medium ${profitability === null ? "text-slate-300" : profitability >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {profitability === null ? "Sin porcentaje" : `${profitability >= 0 ? "+" : ""}${formatNumber(profitability, 2)}%`}
+            </p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Resultado total de la cartera despues de convertir todas las posiciones.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
@@ -1158,7 +1164,10 @@ export default function InvestmentsPage() {
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 text-sm">
                     <span className="text-slate-400">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</span>
-                    <span className={row.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}>{formatCurrencyByPreference(row.gainEur, "EUR")}</span>
+                    <span className={row.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}>
+                      {formatCurrencyByPreference(row.gainEur, "EUR")}
+                      {row.gainPct === null ? "" : ` · ${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}
+                    </span>
                   </div>
                 </article>
               ))
@@ -1328,7 +1337,14 @@ export default function InvestmentsPage() {
                             <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                               <p>Valor EUR: <span className="font-medium text-white">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</span></p>
                               <p>Peso: <span className="font-medium text-white">{row.weightPct.toFixed(1)}%</span></p>
-                              <p>Plusvalia: <span className={row.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{formatCurrencyByPreference(row.gainEur, "EUR")}</span></p>
+                              <p>
+                                Plusvalia:{" "}
+                                <span className={row.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>
+                                  {formatCurrencyByPreference(row.gainEur, "EUR")}
+                                  {row.gainPct === null ? "" : ` · ${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}
+                                </span>
+                              </p>
+                              <p>Rentabilidad: <span className={row.gainPct !== null && row.gainPct >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{row.gainPct === null ? "Sin datos" : `${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}</span></p>
                               <p>Cambio EUR: <span className="font-medium text-white">{fxRate.toFixed(4)}</span></p>
                             </div>
                           </div>
@@ -1411,6 +1427,13 @@ export default function InvestmentsPage() {
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia</p>
                   <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${selectedAsset.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(selectedAsset.gainEur, "EUR")}</p>
                   <p className="mt-3 text-sm leading-6 text-slate-300">Resultado acumulado de la posicion a precio actual.</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Rentabilidad</p>
+                  <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${selectedAsset.gainPct !== null && selectedAsset.gainPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                    {selectedAsset.gainPct === null ? "Sin datos" : `${selectedAsset.gainPct >= 0 ? "+" : ""}${formatNumber(selectedAsset.gainPct, 2)}%`}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">Porcentaje de rentabilidad sobre el capital invertido.</p>
                 </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Peso cartera</p>
