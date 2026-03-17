@@ -697,6 +697,7 @@ export default function InvestmentsPage() {
 
   const profitEur = metrics.totalValueEur - metrics.investedCapitalEur;
   const profitability = metrics.investedCapitalEur > 0 ? (profitEur / metrics.investedCapitalEur) * 100 : null;
+  const combinedProfitEur = profitEur + realizedGainTotalEur;
 
   const enrichedInvestments = useMemo<EnrichedInvestment[]>(() => {
     return investments.map((row) => {
@@ -1766,14 +1767,14 @@ export default function InvestmentsPage() {
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma del valor actual de tus posiciones, consolidada en EUR.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Rentabilidad en EUR</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia latente</p>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(profitEur, "EUR")}
             </p>
             <p className={`mt-3 text-sm font-medium ${profitability === null ? "text-slate-300" : profitability >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {profitability === null ? "Sin porcentaje" : `${profitability >= 0 ? "+" : ""}${formatNumber(profitability, 2)}%`}
             </p>
-            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Resultado total de la cartera despues de convertir todas las posiciones.</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Resultado aun no realizado de las posiciones que sigues manteniendo en cartera.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia realizada</p>
@@ -1781,6 +1782,13 @@ export default function InvestmentsPage() {
               {formatCurrencyByPreference(realizedGainTotalEur, "EUR")}
             </p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma acumulada de ganancias o perdidas cerradas en tus ventas.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Resultado total</p>
+            <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${combinedProfitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {formatCurrencyByPreference(combinedProfitEur, "EUR")}
+            </p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de la plusvalia latente actual y la plusvalia ya realizada en ventas.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
