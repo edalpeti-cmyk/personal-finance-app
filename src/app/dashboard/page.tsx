@@ -221,19 +221,54 @@ function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange, date
   return points;
 }
 
-function calculateTimelineVariationPct(points: TimelinePoint[]) {
-  if (points.length < 2) {
-    return null;
+function getVariationStartDate(range: ChartRange, now: Date) {
+  if (range === "daily") return addDays(now, -1);
+  if (range === "monthly") return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+  if (range === "six_months") return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  if (range === "annual") return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  return new Date(now.getFullYear(), 0, 1);
+}
+
+function getCashflowValueAtDate(events: CashflowEvent[], checkpoint: Date) {
+  let total = 0;
+  for (const event of events) {
+    if (normalizeDate(event.date) <= checkpoint) {
+      total += event.delta;
+    }
+  }
+  return total;
+}
+
+function getSnapshotValueAtDate(snapshots: SnapshotRow[], checkpoint: Date) {
+  let latestValue = Number(snapshots[0]?.total_net_worth ?? 0);
+  for (const snapshot of snapshots) {
+    if (normalizeDate(snapshot.snapshot_date) <= checkpoint) {
+      latestValue = Number(snapshot.total_net_worth) || 0;
+    } else {
+      break;
+    }
+  }
+  return latestValue;
+}
+
+function calculateRangeVariationPct(
+  range: ChartRange,
+  snapshots: SnapshotRow[],
+  events: CashflowEvent[]
+) {
+  const now = new Date();
+  const endDate = endOfDay(now);
+  const startDate = getVariationStartDate(range, now);
+  const useSnapshots = snapshots.length > 1;
+
+  const startValue = useSnapshots ? getSnapshotValueAtDate(snapshots, startDate) : getCashflowValueAtDate(events, startDate);
+  const endValue = useSnapshots ? getSnapshotValueAtDate(snapshots, endDate) : getCashflowValueAtDate(events, endDate);
+
+  if (startValue === 0) {
+    return endValue === 0 ? 0 : null;
   }
 
-  const firstValue = Number(points[0]?.value ?? 0);
-  const lastValue = Number(points[points.length - 1]?.value ?? 0);
-
-  if (firstValue === 0) {
-    return lastValue === 0 ? 0 : null;
-  }
-
-  return ((lastValue - firstValue) / Math.abs(firstValue)) * 100;
+  return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
 export default function DashboardPage() {
@@ -273,15 +308,10 @@ export default function DashboardPage() {
   }, [cashflowEvents, chartRange, dateFormat, snapshotRows]);
 
   const timelineRangeVariations = useMemo(() => {
-    const sourceBuilder =
-      snapshotRows.length > 1
-        ? (range: ChartRange) => buildSnapshotTimeline(snapshotRows, range, dateFormat)
-        : (range: ChartRange) => buildCashflowTimeline(cashflowEvents, range, dateFormat);
-
     return Object.fromEntries(
-      RANGE_OPTIONS.map((option) => [option.value, calculateTimelineVariationPct(sourceBuilder(option.value))])
+      RANGE_OPTIONS.map((option) => [option.value, calculateRangeVariationPct(option.value, snapshotRows, cashflowEvents)])
     ) as Record<ChartRange, number | null>;
-  }, [cashflowEvents, dateFormat, snapshotRows]);
+  }, [cashflowEvents, snapshotRows]);
 
   const timelineChartData = useMemo(
     () => ({
