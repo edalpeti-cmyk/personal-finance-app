@@ -52,6 +52,7 @@ type ToastState = { type: "success" | "error"; text: string } | null;
 type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "gainPct" | "weightPct";
 type SortDirection = "asc" | "desc";
+type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
 type HistoryPoint = {
   snapshot_date: string;
   total_value_eur: number;
@@ -116,6 +117,14 @@ const MARKET_OPTIONS: Array<{ value: AssetMarket; label: string }> = [
   { value: "SE", label: "Suecia" },
   { value: "FI", label: "Finlandia" },
   { value: "NO", label: "Noruega" }
+];
+const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
+  { value: "daily", label: "Diaria" },
+  { value: "weekly", label: "Semanal" },
+  { value: "monthly", label: "Mensual" },
+  { value: "six_months", label: "6 meses" },
+  { value: "annual", label: "Anual" },
+  { value: "current_year", label: "Ano actual" }
 ];
 
 function inputClass(hasError: boolean) {
@@ -212,6 +221,110 @@ function calculatePeriodPerformance(history: HistoryPoint[], days: number): Peri
   return { amount, pct };
 }
 
+function normalizeDate(dateString: string) {
+  return new Date(`${dateString}T00:00:00`);
+}
+
+function addDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function endOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+}
+
+function endOfWeek(date: Date) {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const diff = day === 0 ? 0 : 7 - day;
+  copy.setDate(copy.getDate() + diff);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+}
+
+function endOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+function endOfYear(date: Date) {
+  return new Date(date.getFullYear(), 11, 31, 23, 59, 59, 999);
+}
+
+function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
+  const now = new Date();
+  const checkpoints: Array<{ date: Date; label: string }> = [];
+
+  if (range === "daily") {
+    const start = addDays(now, -29);
+    for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 1)) {
+      checkpoints.push({ date: endOfDay(cursor), label: cursor.toISOString().slice(5, 10) });
+    }
+  }
+
+  if (range === "weekly") {
+    const start = addDays(now, -84);
+    for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 7)) {
+      checkpoints.push({ date: endOfWeek(cursor), label: `Sem ${cursor.toISOString().slice(5, 10)}` });
+    }
+  }
+
+  if (range === "monthly") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    for (let cursor = new Date(start); cursor <= now; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
+      checkpoints.push({ date: endOfMonth(cursor), label: `${cursor.toLocaleString("es-ES", { month: "short" })} ${String(cursor.getFullYear()).slice(-2)}` });
+    }
+  }
+
+  if (range === "six_months") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    for (let cursor = new Date(start); cursor <= now; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
+      checkpoints.push({ date: endOfMonth(cursor), label: `${cursor.toLocaleString("es-ES", { month: "short" })} ${String(cursor.getFullYear()).slice(-2)}` });
+    }
+  }
+
+  if (range === "current_year") {
+    const start = new Date(now.getFullYear(), 0, 1);
+    for (let cursor = new Date(start); cursor <= now; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
+      checkpoints.push({ date: endOfMonth(cursor), label: cursor.toLocaleString("es-ES", { month: "short" }) });
+    }
+  }
+
+  if (range === "annual") {
+    const startYear = Math.max(firstDate.getFullYear(), now.getFullYear() - 4);
+    for (let year = startYear; year <= now.getFullYear(); year++) {
+      checkpoints.push({ date: endOfYear(new Date(year, 0, 1)), label: String(year) });
+    }
+  }
+
+  return checkpoints;
+}
+
+function buildTypeHistoryTimeline(history: HistoryPoint[], range: TypeChartRange) {
+  if (history.length === 0) {
+    return [] as Array<{ label: string; value: number }>;
+  }
+
+  const checkpoints = getTypeRangeCheckpoints(range, normalizeDate(history[0].snapshot_date));
+  let historyIndex = 0;
+  let latestValue = Number(history[0].total_value_eur) || 0;
+  const points: Array<{ label: string; value: number }> = [];
+
+  for (const checkpoint of checkpoints) {
+    while (historyIndex < history.length && normalizeDate(history[historyIndex].snapshot_date) <= checkpoint.date) {
+      latestValue = Number(history[historyIndex].total_value_eur) || 0;
+      historyIndex += 1;
+    }
+
+    points.push({ label: checkpoint.label, value: Number(latestValue.toFixed(2)) });
+  }
+
+  return points;
+}
+
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -249,6 +362,8 @@ export default function InvestmentsPage() {
   const [selectedType, setSelectedType] = useState<AssetType | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
+  const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
+  const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -602,6 +717,27 @@ export default function InvestmentsPage() {
     }),
     [selectedAssetHistory]
   );
+  const selectedTypeTimeline = useMemo(
+    () => buildTypeHistoryTimeline(selectedTypeHistory, selectedTypeRange),
+    [selectedTypeHistory, selectedTypeRange]
+  );
+  const selectedTypeChartData = useMemo(
+    () => ({
+      labels: selectedTypeTimeline.map((point) => point.label),
+      datasets: [
+        {
+          label: "Valor agregado EUR",
+          data: selectedTypeTimeline.map((point) => point.value),
+          borderColor: "#14b8a6",
+          backgroundColor: "rgba(20, 184, 166, 0.14)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.25
+        }
+      ]
+    }),
+    [selectedTypeTimeline]
+  );
 
   const allocationChartData = useMemo(
     () => ({
@@ -659,6 +795,41 @@ export default function InvestmentsPage() {
       setSelectedAssetId(null);
     }
   }, [selectedAssetId, selectedTypeAssets]);
+
+  useEffect(() => {
+    const loadTypeHistory = async () => {
+      if (!selectedType || !userId || selectedTypeAssets.length === 0) {
+        setSelectedTypeHistory([]);
+        return;
+      }
+
+      const assetIds = selectedTypeAssets.map((row) => row.id);
+      const { data, error } = await supabase
+        .from("investment_price_history")
+        .select("snapshot_date, total_value_eur, investment_id")
+        .eq("user_id", userId)
+        .in("investment_id", assetIds)
+        .order("snapshot_date", { ascending: true });
+
+      if (error) {
+        setSelectedTypeHistory([]);
+        return;
+      }
+
+      const grouped = new Map<string, number>();
+      for (const row of (data as Array<HistoryPoint & { investment_id: string }>) ?? []) {
+        grouped.set(row.snapshot_date, (grouped.get(row.snapshot_date) ?? 0) + Number(row.total_value_eur));
+      }
+
+      setSelectedTypeHistory(
+        Array.from(grouped.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([snapshot_date, total_value_eur]) => ({ snapshot_date, total_value_eur: Number(total_value_eur.toFixed(2)) }))
+      );
+    };
+
+    void loadTypeHistory();
+  }, [selectedType, selectedTypeAssets, supabase, userId]);
 
   useEffect(() => {
     const loadAssetHistory = async () => {
@@ -1502,6 +1673,57 @@ export default function InvestmentsPage() {
               </div>
 
               <div className="mt-6 flex-1 overflow-y-auto pr-1">
+                <section className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-white">Evolucion del tipo de activo</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Evolucion agregada de todas las posiciones de este tipo segun el historico real guardado.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {TYPE_RANGE_OPTIONS.map((option) => {
+                        const active = selectedTypeRange === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setSelectedTypeRange(option.value)}
+                            className={`rounded-full px-3 py-1.5 text-xs transition ${
+                              active ? "bg-emerald-500 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="mt-4 h-[220px]">
+                    {selectedTypeTimeline.length > 0 ? (
+                      <Line
+                        data={selectedTypeChartData}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: { legend: { display: false } },
+                          scales: {
+                            x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+                            y: {
+                              grid: { color: "rgba(148, 163, 184, 0.16)" },
+                              ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
+                            }
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/12 text-sm text-slate-400">
+                        Sin historico suficiente para este tipo de activo.
+                      </div>
+                    )}
+                  </div>
+                </section>
+
                 <div className="grid gap-3">
                   {selectedTypeAssets.map((row) => {
                     const fxRate = ratesToEur[row.asset_currency] ?? 1;
