@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { generateRuleBasedInsights, type FinancialSnapshot } from "@/lib/ai-insights";
 import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 
@@ -45,7 +46,7 @@ function parseInsightsFromText(rawText: string) {
 }
 
 async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const ratesToEur = await fetchRatesToEur();
 
   const [{ data: expenses }, { data: income }, { data: investments }, { data: savingsTargets }] = await Promise.all([
@@ -108,11 +109,13 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   return {
     monthlyIncome,
     monthlyExpenses,
+    monthlySavingsTarget,
     annualIncome,
     annualExpenses,
     annualSavings,
     savingsRate,
     hasAnyIncome: incomeRows.length > 0,
+    hasCurrentMonthIncome: monthlyIncome > 0,
     netWorth,
     fireTarget,
     fireProgress,
@@ -143,6 +146,10 @@ export async function POST(request: Request) {
       "Eres un asesor financiero digital y prudente.",
       "Analiza estos datos y genera 3-5 insights accionables en espanol.",
       "Incluye recomendaciones de ahorro e inversion y una accion concreta para esta semana.",
+      "Usa exactamente los datos entregados. No inventes ausencia de ingresos si hasAnyIncome es true.",
+      "Si hasAnyIncome es true pero hasCurrentMonthIncome es false, explica que faltan ingresos en el mes actual, no que falten ingresos registrados.",
+      "Interpreta annualSavings como ahorro objetivo anual acumulado, no como ingresos menos gastos.",
+      "Interpreta monthlySavingsTarget como el ahorro objetivo del mes actual.",
       "No des consejo legal/fiscal. Usa lenguaje claro.",
       'Devuelve solo JSON valido con formato: {"insights": ["..."]}',
       `Datos: ${JSON.stringify(snapshot)}`

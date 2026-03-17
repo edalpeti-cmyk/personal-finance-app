@@ -1,11 +1,13 @@
 export type FinancialSnapshot = {
   monthlyIncome: number;
   monthlyExpenses: number;
+  monthlySavingsTarget: number;
   annualIncome: number;
   annualExpenses: number;
   annualSavings: number;
   savingsRate: number | null;
   hasAnyIncome: boolean;
+  hasCurrentMonthIncome: boolean;
   netWorth: number;
   fireTarget: number;
   fireProgress: number;
@@ -41,8 +43,10 @@ export function generateRuleBasedInsights(snapshot: FinancialSnapshot): string[]
     }
   }
 
-  if (snapshot.annualSavings <= 0) {
-    insights.push("Tu ahorro anual es nulo o negativo. Ajusta presupuesto y aporta primero a un fondo de emergencia.");
+  if (snapshot.annualSavings < 0) {
+    insights.push("Tu ahorro anual objetivo es negativo. Revisa tu plan mensual y protege primero un fondo de emergencia.");
+  } else if (snapshot.annualSavings === 0) {
+    insights.push("Aun no has definido ahorro objetivo para este ano. Si fijas una cifra mensual, la IA podra darte recomendaciones mas utiles.");
   } else {
     const extraInvested = snapshot.annualSavings * 0.1;
     insights.push(
