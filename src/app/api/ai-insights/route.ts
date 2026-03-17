@@ -169,6 +169,9 @@ export async function POST(request: Request) {
       "Si hasAnyIncome es true pero hasCurrentMonthIncome es false, explica que faltan ingresos en el mes actual, no que falten ingresos registrados.",
       "Interpreta annualSavings como ahorro objetivo anual acumulado, no como ingresos menos gastos.",
       "Interpreta monthlySavingsTarget como el ahorro objetivo del mes actual.",
+      "Si mencionas FIRE, usa literalmente fireProgress y fireTarget entregados en los datos.",
+      "Si mencionas patrimonio, usa netWorth entregado en los datos.",
+      "No contradigas ni recalcules las metricas principales del snapshot.",
       "No des consejo legal/fiscal. Usa lenguaje claro.",
       'Devuelve solo JSON valido con formato: {"insights": ["..."]}',
       `Datos: ${JSON.stringify(snapshot)}`
