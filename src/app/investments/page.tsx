@@ -58,6 +58,18 @@ type HistoryPoint = {
   snapshot_date: string;
   total_value_eur: number;
 };
+type InvestmentTransactionRow = {
+  id: string;
+  investment_id: string | null;
+  transaction_type: "buy" | "sell";
+  quantity: number;
+  price_local: number;
+  total_local: number;
+  total_eur: number;
+  asset_currency: AssetCurrency;
+  realized_gain_eur: number | null;
+  executed_at: string;
+};
 type PeriodPerformance = {
   amount: number | null;
   pct: number | null;
@@ -399,6 +411,7 @@ export default function InvestmentsPage() {
   const [selectedType, setSelectedType] = useState<AssetType | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
+  const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const formRef = useRef<HTMLElement | null>(null);
@@ -554,6 +567,33 @@ export default function InvestmentsPage() {
       ) ?? null
     );
   }, [assetCurrency, assetIsin, assetMarket, assetName, assetSymbol, assetType, editingId, investments, transactionMode]);
+
+  const sellPreview = useMemo(() => {
+    if (!matchedSellPosition || editingId || transactionMode !== "sell") {
+      return null;
+    }
+
+    const sellQty = Number(quantity);
+    if (!Number.isFinite(sellQty) || sellQty <= 0) {
+      return null;
+    }
+
+    const heldAverage = Number(matchedSellPosition.average_buy_price) || 0;
+    const salePrice = currentPrice ? Number(currentPrice) : Number(matchedSellPosition.current_price ?? matchedSellPosition.average_buy_price) || 0;
+    if (!Number.isFinite(salePrice) || salePrice < 0) {
+      return null;
+    }
+
+    const currency = matchedSellPosition.asset_currency ?? assetCurrency;
+    const totalLocal = sellQty * salePrice;
+    const realizedLocal = sellQty * (salePrice - heldAverage);
+
+    return {
+      totalLocal,
+      totalEur: convertToEur(totalLocal, currency, ratesToEur),
+      realizedGainEur: convertToEur(realizedLocal, currency, ratesToEur)
+    };
+  }, [assetCurrency, currentPrice, editingId, matchedSellPosition, quantity, ratesToEur, transactionMode]);
 
   useEffect(() => {
     if (!matchedSellPosition || editingId || transactionMode !== "sell") {
@@ -957,6 +997,27 @@ export default function InvestmentsPage() {
     void loadAssetHistory();
   }, [selectedAssetId, supabase, userId]);
 
+  useEffect(() => {
+    const loadAssetTransactions = async () => {
+      if (!selectedAssetId || !userId) {
+        setSelectedAssetTransactions([]);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("investment_transactions")
+        .select("id, investment_id, transaction_type, quantity, price_local, total_local, total_eur, asset_currency, realized_gain_eur, executed_at")
+        .eq("user_id", userId)
+        .eq("investment_id", selectedAssetId)
+        .order("executed_at", { ascending: false })
+        .limit(12);
+
+      setSelectedAssetTransactions((data as InvestmentTransactionRow[]) ?? []);
+    };
+
+    void loadAssetTransactions();
+  }, [selectedAssetId, supabase, userId]);
+
   const evolution = useMemo(() => {
     const byMonth = new Map<string, { invested: number; current: number }>();
 
@@ -1147,6 +1208,26 @@ export default function InvestmentsPage() {
         return;
       }
 
+      const salePrice = validation.curr;
+      const realizedGainEur = convertToEur(
+        (salePrice - (Number(existingPosition.average_buy_price) || 0)) * validation.qty,
+        existingPosition.asset_currency ?? assetCurrency,
+        ratesToEur
+      );
+
+      await supabase.from("investment_transactions").insert({
+        investment_id: existingPosition.id,
+        user_id: userId,
+        transaction_type: "sell",
+        quantity: validation.qty,
+        price_local: salePrice,
+        total_local: Number((validation.qty * salePrice).toFixed(4)),
+        total_eur: Number(convertToEur(validation.qty * salePrice, existingPosition.asset_currency ?? assetCurrency, ratesToEur).toFixed(4)),
+        asset_currency: existingPosition.asset_currency ?? assetCurrency,
+        realized_gain_eur: Number(realizedGainEur.toFixed(4)),
+        executed_at: purchaseDate
+      });
+
       resetForm();
       await loadInvestments(userId);
       showToast({
@@ -1157,42 +1238,63 @@ export default function InvestmentsPage() {
       return;
     }
 
-    const query =
-      editingId
-        ? supabase.from("investments").update(payload).eq("id", editingId).eq("user_id", userId)
-        : existingPosition
-          ? (() => {
-              const existingQty = Number(existingPosition.quantity) || 0;
-              const mergedQty = existingQty + validation.qty;
-              const existingAvg = Number(existingPosition.average_buy_price) || 0;
-              const mergedAverage =
-                mergedQty > 0
-                  ? ((existingQty * existingAvg) + (validation.qty * validation.avg)) / mergedQty
-                  : validation.avg;
-              const existingPurchaseDate = existingPosition.purchase_date ?? purchaseDate;
-              const mergedPurchaseDate =
-                existingPurchaseDate && existingPurchaseDate <= purchaseDate ? existingPurchaseDate : purchaseDate;
+    let error: { message: string } | null = null;
+    let transactionInvestmentId: string | null = null;
 
-              return supabase
-                .from("investments")
-                .update({
-                  ...payload,
-                  quantity: Number(mergedQty.toFixed(8)),
-                  average_buy_price: Number(mergedAverage.toFixed(6)),
-                  purchase_date: mergedPurchaseDate
-                })
-                .eq("id", existingPosition.id)
-                .eq("user_id", userId);
-            })()
-          : supabase.from("investments").insert(payload);
+    if (editingId) {
+      const result = await supabase.from("investments").update(payload).eq("id", editingId).eq("user_id", userId);
+      error = result.error;
+    } else if (existingPosition) {
+      const existingQty = Number(existingPosition.quantity) || 0;
+      const mergedQty = existingQty + validation.qty;
+      const existingAvg = Number(existingPosition.average_buy_price) || 0;
+      const mergedAverage =
+        mergedQty > 0
+          ? ((existingQty * existingAvg) + (validation.qty * validation.avg)) / mergedQty
+          : validation.avg;
+      const existingPurchaseDate = existingPosition.purchase_date ?? purchaseDate;
+      const mergedPurchaseDate =
+        existingPurchaseDate && existingPurchaseDate <= purchaseDate ? existingPurchaseDate : purchaseDate;
 
-    const { error } = await query;
+      const result = await supabase
+        .from("investments")
+        .update({
+          ...payload,
+          quantity: Number(mergedQty.toFixed(8)),
+          average_buy_price: Number(mergedAverage.toFixed(6)),
+          purchase_date: mergedPurchaseDate
+        })
+        .eq("id", existingPosition.id)
+        .eq("user_id", userId);
+
+      error = result.error;
+      transactionInvestmentId = existingPosition.id;
+    } else {
+      const result = await supabase.from("investments").insert(payload).select("id").single();
+      error = result.error;
+      transactionInvestmentId = (result.data as { id: string } | null)?.id ?? null;
+    }
 
     if (error) {
       setMessage(error.message);
       showToast({ type: "error", text: editingId ? "No se pudo actualizar la posicion." : "No se pudo guardar la posicion." });
       setSaving(false);
       return;
+    }
+
+    if (!editingId && transactionInvestmentId) {
+      await supabase.from("investment_transactions").insert({
+        investment_id: transactionInvestmentId,
+        user_id: userId,
+        transaction_type: "buy",
+        quantity: validation.qty,
+        price_local: validation.avg,
+        total_local: Number((validation.qty * validation.avg).toFixed(4)),
+        total_eur: Number(convertToEur(validation.qty * validation.avg, assetCurrency, ratesToEur).toFixed(4)),
+        asset_currency: assetCurrency,
+        realized_gain_eur: null,
+        executed_at: purchaseDate
+      });
     }
 
     resetForm();
@@ -1473,13 +1575,33 @@ export default function InvestmentsPage() {
                 {transactionMode === "sell" ? (
                   <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
                     {matchedSellPosition ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <span>
-                          Posicion detectada: <span className="font-medium text-white">{matchedSellPosition.asset_name}</span>
-                        </span>
-                        <span className="text-emerald-300">
-                          Disponible: {formatNumber(Number(matchedSellPosition.quantity) || 0, 8)} unidades
-                        </span>
+                      <div className="grid gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <span>
+                            Posicion detectada: <span className="font-medium text-white">{matchedSellPosition.asset_name}</span>
+                          </span>
+                          <span className="text-emerald-300">
+                            Disponible: {formatNumber(Number(matchedSellPosition.quantity) || 0, 8)} unidades
+                          </span>
+                        </div>
+                        {sellPreview ? (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Importe estimado</p>
+                              <p className="mt-2 text-lg font-semibold text-white">
+                                {formatCurrencyByPreference(sellPreview.totalLocal, matchedSellPosition.asset_currency ?? assetCurrency)}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-400">{formatCurrencyByPreference(sellPreview.totalEur, "EUR")} en EUR</p>
+                            </div>
+                            <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Plusvalia realizada</p>
+                              <p className={`mt-2 text-lg font-semibold ${sellPreview.realizedGainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                                {formatCurrencyByPreference(sellPreview.realizedGainEur, "EUR")}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-400">Estimacion segun precio medio y precio de venta.</p>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <span className="text-slate-300">Selecciona o escribe un activo existente para rellenar la posicion disponible.</span>
@@ -2168,6 +2290,51 @@ export default function InvestmentsPage() {
                     }}
                   />
                 </div>
+              </div>
+
+              <div className="mt-4 rounded-3xl border border-white/8 bg-white/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">Historial de operaciones</p>
+                    <p className="mt-1 text-xs text-slate-400">Compras y ventas guardadas para este activo.</p>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                    {selectedAssetTransactions.length} movimientos
+                  </div>
+                </div>
+
+                {selectedAssetTransactions.length > 0 ? (
+                  <div className="mt-4 grid gap-3">
+                    {selectedAssetTransactions.map((transaction) => (
+                      <article key={transaction.id} className="rounded-2xl border border-white/8 bg-slate-950/45 px-4 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className={`text-sm font-medium ${transaction.transaction_type === "buy" ? "text-emerald-300" : "text-amber-300"}`}>
+                              {transaction.transaction_type === "buy" ? "Compra" : "Venta"}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-400">{transaction.executed_at}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-white">{formatNumber(Number(transaction.quantity) || 0, 8)} unidades</p>
+                            <p className="mt-1 text-xs text-slate-400">{formatCurrencyByPreference(Number(transaction.price_local) || 0, transaction.asset_currency)}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+                          <span className="text-slate-300">Importe: {formatCurrencyByPreference(Number(transaction.total_eur) || 0, "EUR")}</span>
+                          {transaction.transaction_type === "sell" ? (
+                            <span className={(Number(transaction.realized_gain_eur) || 0) >= 0 ? "text-emerald-300" : "text-red-300"}>
+                              Realizada: {transaction.realized_gain_eur === null ? "Sin datos" : formatCurrencyByPreference(Number(transaction.realized_gain_eur), "EUR")}
+                            </span>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-white/8 bg-slate-950/35 px-4 py-4 text-sm text-slate-300">
+                    Aun no hay operaciones guardadas para este activo.
+                  </div>
+                )}
               </div>
             </div>
           </aside>
