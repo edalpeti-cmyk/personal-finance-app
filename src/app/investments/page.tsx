@@ -53,6 +53,7 @@ type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "gainPct" | "weightPct";
 type SortDirection = "asc" | "desc";
 type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
+type TransactionMode = "buy" | "sell";
 type HistoryPoint = {
   snapshot_date: string;
   total_value_eur: number;
@@ -380,6 +381,7 @@ export default function InvestmentsPage() {
   const [assetType, setAssetType] = useState<AssetType>("stock");
   const [assetCurrency, setAssetCurrency] = useState<AssetCurrency>("EUR");
   const [assetMarket, setAssetMarket] = useState<AssetMarket>("AUTO");
+  const [transactionMode, setTransactionMode] = useState<TransactionMode>("buy");
   const [quantity, setQuantity] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
@@ -409,6 +411,7 @@ export default function InvestmentsPage() {
 
   const resetForm = useCallback(() => {
     setEditingId(null);
+    setTransactionMode("buy");
     setAssetName("");
     setAssetSymbol("");
     setAssetIsin("");
@@ -1037,6 +1040,60 @@ export default function InvestmentsPage() {
       purchase_date: purchaseDate
     };
 
+    if (!editingId && transactionMode === "sell") {
+      if (!existingPosition) {
+        showToast({ type: "error", text: "No existe una posicion previa para registrar esta venta." });
+        setSaving(false);
+        return;
+      }
+
+      const existingQty = Number(existingPosition.quantity) || 0;
+      if (validation.qty > existingQty) {
+        showToast({ type: "error", text: "No puedes vender mas cantidad de la que tienes en cartera." });
+        setSaving(false);
+        return;
+      }
+
+      const remainingQty = Number((existingQty - validation.qty).toFixed(8));
+      const sellQuery =
+        remainingQty <= 0
+          ? supabase.from("investments").delete().eq("id", existingPosition.id).eq("user_id", userId)
+          : supabase
+              .from("investments")
+              .update({
+                ...payload,
+                asset_name: existingPosition.asset_name,
+                asset_symbol: existingPosition.asset_symbol,
+                asset_isin: existingPosition.asset_isin,
+                asset_type: existingPosition.asset_type,
+                asset_currency: existingPosition.asset_currency,
+                asset_market: existingPosition.asset_market,
+                quantity: remainingQty,
+                average_buy_price: Number(existingPosition.average_buy_price),
+                purchase_date: existingPosition.purchase_date
+              })
+              .eq("id", existingPosition.id)
+              .eq("user_id", userId);
+
+      const { error } = await sellQuery;
+
+      if (error) {
+        setMessage(error.message);
+        showToast({ type: "error", text: "No se pudo registrar la venta." });
+        setSaving(false);
+        return;
+      }
+
+      resetForm();
+      await loadInvestments(userId);
+      showToast({
+        type: "success",
+        text: remainingQty <= 0 ? "Venta registrada y posicion cerrada." : "Venta registrada y cantidad restada de la posicion existente."
+      });
+      setSaving(false);
+      return;
+    }
+
     const query =
       editingId
         ? supabase.from("investments").update(payload).eq("id", editingId).eq("user_id", userId)
@@ -1318,6 +1375,41 @@ export default function InvestmentsPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
+            {!editingId ? (
+              <div className="grid gap-3">
+                <span className="text-sm text-slate-200">Operacion</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setTransactionMode("buy")}
+                    className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition ${
+                      transactionMode === "buy"
+                        ? "border-emerald-400/40 bg-emerald-500 text-slate-950"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                    }`}
+                  >
+                    Compra
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTransactionMode("sell")}
+                    className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition ${
+                      transactionMode === "sell"
+                        ? "border-red-300/40 bg-red-400 text-slate-950"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                    }`}
+                  >
+                    Venta
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  {transactionMode === "sell"
+                    ? "La venta descuenta cantidad de la posicion existente y la cierra si la dejas a cero."
+                    : "Si compras mas del mismo activo, la app consolidara la posicion y recalculara el precio medio."}
+                </p>
+              </div>
+            ) : null}
+
             <label className="grid gap-2 text-sm text-slate-200">
               Tipo de activo
               <select className={inputClass(false)} value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
@@ -1416,7 +1508,7 @@ export default function InvestmentsPage() {
               </label>
 
               <label className="grid gap-2 text-sm text-slate-200">
-                Fecha de compra
+                {editingId ? "Fecha de compra" : transactionMode === "sell" ? "Fecha de venta" : "Fecha de compra"}
                 <input className={inputClass(Boolean(errors.purchaseDate))} type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
                 {errors.purchaseDate ? <span className="text-xs text-red-700">{errors.purchaseDate}</span> : null}
               </label>
@@ -1424,20 +1516,20 @@ export default function InvestmentsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-sm text-slate-200">
-                Precio medio ({assetCurrency})
+                {editingId ? `Precio medio (${assetCurrency})` : transactionMode === "sell" ? `Precio medio en cartera (${assetCurrency})` : `Precio medio (${assetCurrency})`}
                 <input className={inputClass(Boolean(errors.averageBuyPrice))} type="number" min="0" step="0.0001" value={averageBuyPrice} onChange={(e) => setAverageBuyPrice(e.target.value)} />
                 {errors.averageBuyPrice ? <span className="text-xs text-red-700">{errors.averageBuyPrice}</span> : null}
               </label>
 
               <label className="grid gap-2 text-sm text-slate-200">
-                Precio actual ({assetCurrency})
+                {editingId ? `Precio actual (${assetCurrency})` : transactionMode === "sell" ? `Precio de venta / actual (${assetCurrency})` : `Precio actual (${assetCurrency})`}
                 <input className={inputClass(Boolean(errors.currentPrice))} type="number" min="0" step="0.0001" value={currentPrice} onChange={(e) => setCurrentPrice(e.target.value)} placeholder="Opcional" />
                 {errors.currentPrice ? <span className="text-xs text-red-700">{errors.currentPrice}</span> : null}
               </label>
             </div>
 
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
-              {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Anadir activo"}
+              {saving ? "Guardando..." : editingId ? "Guardar cambios" : transactionMode === "sell" ? "Registrar venta" : "Anadir activo"}
             </button>
           </form>
         </section>
