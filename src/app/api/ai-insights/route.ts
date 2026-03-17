@@ -15,6 +15,20 @@ type FireSettingsRow = {
   expected_return: number;
   current_age: number;
 };
+type AiInsightDebug = {
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  monthlySavingsTarget: number;
+  annualIncome: number;
+  annualExpenses: number;
+  annualSavings: number;
+  savingsRate: number | null;
+  hasAnyIncome: boolean;
+  hasCurrentMonthIncome: boolean;
+  netWorth: number;
+  fireTarget: number;
+  fireProgress: number;
+};
 
 function isSameMonth(dateString: string, now: Date) {
   const date = new Date(`${dateString}T00:00:00`);
@@ -142,6 +156,23 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   };
 }
 
+function buildDebugSnapshot(snapshot: FinancialSnapshot): AiInsightDebug {
+  return {
+    monthlyIncome: snapshot.monthlyIncome,
+    monthlyExpenses: snapshot.monthlyExpenses,
+    monthlySavingsTarget: snapshot.monthlySavingsTarget,
+    annualIncome: snapshot.annualIncome,
+    annualExpenses: snapshot.annualExpenses,
+    annualSavings: snapshot.annualSavings,
+    savingsRate: snapshot.savingsRate,
+    hasAnyIncome: snapshot.hasAnyIncome,
+    hasCurrentMonthIncome: snapshot.hasCurrentMonthIncome,
+    netWorth: snapshot.netWorth,
+    fireTarget: snapshot.fireTarget,
+    fireProgress: snapshot.fireProgress
+  };
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const authHeader = request.headers.get("authorization");
@@ -153,11 +184,12 @@ export async function POST(request: Request) {
   }
 
   const snapshot = await getSnapshot(authData.user.id);
+  const debug = buildDebugSnapshot(snapshot);
   const fallbackInsights = generateRuleBasedInsights(snapshot);
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ source: "rule_based", insights: fallbackInsights });
+    return NextResponse.json({ source: "rule_based", insights: fallbackInsights, debug });
   }
 
   try {
@@ -190,7 +222,7 @@ export async function POST(request: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ source: "rule_based", insights: fallbackInsights });
+      return NextResponse.json({ source: "rule_based", insights: fallbackInsights, debug });
     }
 
     const data = (await response.json()) as { output_text?: string };
@@ -198,11 +230,11 @@ export async function POST(request: Request) {
     const parsed = parseInsightsFromText(rawText);
 
     if (parsed.length === 0) {
-      return NextResponse.json({ source: "rule_based", insights: fallbackInsights });
+      return NextResponse.json({ source: "rule_based", insights: fallbackInsights, debug });
     }
 
-    return NextResponse.json({ source: "openai", insights: parsed });
+    return NextResponse.json({ source: "openai", insights: parsed, debug });
   } catch {
-    return NextResponse.json({ source: "rule_based", insights: fallbackInsights });
+    return NextResponse.json({ source: "rule_based", insights: fallbackInsights, debug });
   }
 }
