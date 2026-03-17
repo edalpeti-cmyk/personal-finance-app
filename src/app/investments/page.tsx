@@ -775,6 +775,30 @@ export default function InvestmentsPage() {
       .slice(0, 5);
   }, [enrichedInvestments]);
 
+  const allocationByCurrency = useMemo(() => {
+    const totals = new Map<AssetCurrency, number>();
+    for (const row of enrichedInvestments) {
+      const currency = row.asset_currency ?? "EUR";
+      totals.set(currency, (totals.get(currency) ?? 0) + row.currentValueEur);
+    }
+
+    return Array.from(totals.entries())
+      .map(([currency, value]) => ({
+        currency,
+        value,
+        weightPct: metrics.totalValueEur > 0 ? (value / metrics.totalValueEur) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [enrichedInvestments, metrics.totalValueEur]);
+
+  const averagePositionGainPct = useMemo(() => {
+    const gains = enrichedInvestments.map((row) => row.gainPct).filter((value): value is number => value !== null);
+    if (gains.length === 0) {
+      return null;
+    }
+    return gains.reduce((sum, value) => sum + value, 0) / gains.length;
+  }, [enrichedInvestments]);
+
   const biggestPosition = topHoldings[0] ?? null;
   const profitablePositions = enrichedInvestments.filter((row) => row.gainEur >= 0).length;
   const diversificationScore = allocationByType.length;
@@ -1900,6 +1924,59 @@ export default function InvestmentsPage() {
               ))
             ) : (
               <p className="text-sm text-slate-300">Aun no hay posiciones para analizar.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analitica avanzada</p>
+              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura extra de cartera</h2>
+            </div>
+            <p className="text-sm text-slate-400">Distribucion por divisa y calidad media de las posiciones abiertas.</p>
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-3">
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia latente</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                {formatCurrencyByPreference(profitEur, "EUR")}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Resultado no realizado de las posiciones que siguen abiertas.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia realizada</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${realizedGainTotalEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                {formatCurrencyByPreference(realizedGainTotalEur, "EUR")}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Beneficio o perdida ya consolidada tras las ventas registradas.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Rentabilidad media</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${averagePositionGainPct !== null && averagePositionGainPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                {averagePositionGainPct === null ? "Sin datos" : `${averagePositionGainPct >= 0 ? "+" : ""}${formatNumber(averagePositionGainPct, 2)}%`}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Media simple de la rentabilidad porcentual de tus posiciones abiertas.</p>
+            </article>
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            {allocationByCurrency.length > 0 ? (
+              allocationByCurrency.map((item) => (
+                <article key={item.currency} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium text-white">{item.currency}</p>
+                    <p className="text-sm text-slate-200">{formatCurrencyByPreference(item.value, "EUR")}</p>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#1d4ed8_0%,#38bdf8_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">{item.weightPct.toFixed(1)}% del valor total de cartera</p>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-3xl border border-white/8 bg-white/5 p-5 text-sm text-slate-300">Aun no hay divisas suficientes para analizar la distribucion monetaria.</div>
             )}
           </div>
         </section>

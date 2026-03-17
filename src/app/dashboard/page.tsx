@@ -23,7 +23,14 @@ import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/curren
 
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
-type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: AssetCurrency | null };
+type InvestmentRow = {
+  asset_name: string;
+  asset_type: string;
+  quantity: number;
+  average_buy_price: number;
+  current_price: number | null;
+  asset_currency: AssetCurrency | null;
+};
 type SnapshotRow = { snapshot_date: string; total_net_worth: number };
 type SavingsTargetRow = { savings_target: number; month: string };
 type FireSettingsRow = {
@@ -47,6 +54,16 @@ type DashboardMetrics = {
   annualSavings: number;
   cashPosition: number;
   investmentsValue: number;
+};
+type DashboardAlert = {
+  tone: "warning" | "info" | "success";
+  title: string;
+  body: string;
+};
+type MonthlyTrendPoint = {
+  label: string;
+  income: number;
+  savingsTarget: number;
 };
 type AiInsightDebug = {
   monthlyIncome: number;
@@ -294,6 +311,25 @@ function calculateRangeVariationPct(
   return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
+function getMonthlyTrendPoints(incomeRows: IncomeRow[], savingsTargets: SavingsTargetRow[], dateFormat: "es" | "us") {
+  const now = new Date();
+  const months: string[] = [];
+  for (let offset = 5; offset >= 0; offset--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    months.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  return months.map((month) => {
+    const income = incomeRows.reduce((acc, row) => (row.income_date.slice(0, 7) === month ? acc + Number(row.amount) : acc), 0);
+    const savingsTarget = savingsTargets.reduce((acc, row) => (row.month.slice(0, 7) === month ? acc + Number(row.savings_target) : acc), 0);
+    return {
+      label: formatDateByPreference(`${month}-01`, dateFormat, { month: "short", year: "2-digit" }),
+      income: Number(income.toFixed(2)),
+      savingsTarget: Number(savingsTarget.toFixed(2))
+    };
+  });
+}
+
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -304,6 +340,8 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
+  const [savingsTargetRows, setSavingsTargetRows] = useState<SavingsTargetRow[]>([]);
   const [snapshotRows, setSnapshotRows] = useState<SnapshotRow[]>([]);
   const [chartRange, setChartRange] = useState<ChartRange>("monthly");
 
@@ -385,6 +423,205 @@ export default function DashboardPage() {
     }),
     [currency]
   );
+
+  const monthlyTrendPoints = useMemo(
+    () => getMonthlyTrendPoints(incomeRows, savingsTargetRows, dateFormat),
+    [dateFormat, incomeRows, savingsTargetRows]
+  );
+
+  const monthlyTrendChartData = useMemo(
+    () => ({
+      labels: monthlyTrendPoints.map((point) => point.label),
+      datasets: [
+        {
+          label: "Ingresos",
+          data: monthlyTrendPoints.map((point) => point.income),
+          borderColor: "#38bdf8",
+          backgroundColor: "rgba(56, 189, 248, 0.18)",
+          fill: false,
+          tension: 0.3,
+          borderWidth: 3
+        },
+        {
+          label: "Ahorro objetivo",
+          data: monthlyTrendPoints.map((point) => point.savingsTarget),
+          borderColor: "#22c55e",
+          backgroundColor: "rgba(34, 197, 94, 0.18)",
+          fill: false,
+          tension: 0.3,
+          borderWidth: 3
+        }
+      ]
+    }),
+    [monthlyTrendPoints]
+  );
+
+  const monthlyTrendChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#cbd5e1", usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            label: (context: TooltipItem<"line">) => ` ${formatCurrencyByPreference(Number(context.parsed.y ?? 0), currency)}`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+        y: {
+          grid: { color: "rgba(148, 163, 184, 0.16)" },
+          ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency) }
+        }
+      }
+    }),
+    [currency]
+  );
+
+  const dashboardAlerts = useMemo<DashboardAlert[]>(() => {
+    if (!metrics) {
+      return [];
+    }
+
+    const alerts: DashboardAlert[] = [];
+    const topHolding = investmentRows
+      .map((row) => {
+        const qty = Number(row.quantity) || 0;
+        const price = Number(row.current_price ?? row.average_buy_price) || 0;
+        const valueEur = convertToEur(qty * price, row.asset_currency, ratesToEur);
+        const weight = metrics.investmentsValue > 0 ? (valueEur / metrics.investmentsValue) * 100 : 0;
+        return { name: row.asset_name, valueEur, weight };
+      })
+      .sort((a, b) => b.valueEur - a.valueEur)[0];
+
+    if (metrics.savingsRate !== null && metrics.savingsRate < 10) {
+      alerts.push({
+        tone: "warning",
+        title: "Tasa de ahorro baja",
+        body: `Tu tasa de ahorro del mes esta en ${metrics.savingsRate.toFixed(1)}%. Revisar gasto variable puede darte margen rapido.`
+      });
+    }
+
+    if (metrics.annualSavings === 0) {
+      alerts.push({
+        tone: "info",
+        title: "Ahorro anual sin objetivo",
+        body: "Aun no has acumulado ahorro objetivo en el ano actual. Definir una cifra mensual hara mas util el seguimiento."
+      });
+    }
+
+    if (metrics.fireProgress < 25) {
+      alerts.push({
+        tone: "info",
+        title: "FIRE aun en fase inicial",
+        body: "Tu progreso FIRE sigue en una fase temprana. La consistencia mensual importa mas que buscar rentabilidades puntuales."
+      });
+    }
+
+    if (topHolding && topHolding.weight >= 35) {
+      alerts.push({
+        tone: "warning",
+        title: "Concentracion elevada",
+        body: `${topHolding.name} pesa ${topHolding.weight.toFixed(1)}% de tu cartera. Puede valer la pena diversificar gradualmente.`
+      });
+    }
+
+    if (alerts.length === 0) {
+      alerts.push({
+        tone: "success",
+        title: "Panel estable",
+        body: "No hay alertas criticas ahora mismo. Tus metricas principales no muestran desequilibrios relevantes."
+      });
+    }
+
+    return alerts.slice(0, 4);
+  }, [investmentRows, metrics, ratesToEur]);
+
+  const handleExportCsvReport = useCallback(() => {
+    if (!metrics) {
+      return;
+    }
+
+    const rows = [
+      ["seccion", "metrica", "valor"],
+      ["dashboard", "patrimonio_total", metrics.totalNetWorth.toFixed(2)],
+      ["dashboard", "tasa_ahorro_pct", metrics.savingsRate === null ? "" : metrics.savingsRate.toFixed(2)],
+      ["dashboard", "ahorro_anual", metrics.annualSavings.toFixed(2)],
+      ["dashboard", "objetivo_fire", metrics.fireTarget.toFixed(2)],
+      ["dashboard", "progreso_fire_pct", metrics.fireProgress.toFixed(2)],
+      ["dashboard", "anos_hasta_fire", metrics.yearsToFire === null ? "" : String(metrics.yearsToFire)],
+      ...investmentRows.map((row) => [
+        "inversion",
+        row.asset_name,
+        convertToEur((Number(row.quantity) || 0) * (Number(row.current_price ?? row.average_buy_price) || 0), row.asset_currency, ratesToEur).toFixed(2)
+      ])
+    ];
+
+    const csv = rows.map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `reporte_financiero_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [investmentRows, metrics, ratesToEur]);
+
+  const handleExportPdfReport = useCallback(() => {
+    if (!metrics) {
+      return;
+    }
+
+    const reportWindow = window.open("", "_blank", "width=980,height=780");
+    if (!reportWindow) {
+      return;
+    }
+
+    const html = `
+      <html>
+        <head>
+          <title>Reporte financiero</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+            h1, h2 { margin-bottom: 8px; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+            .card { border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte financiero</h1>
+          <p>Generado el ${new Date().toLocaleDateString("es-ES")}</p>
+          <div class="grid">
+            <div class="card"><h2>Patrimonio</h2><p>${formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p></div>
+            <div class="card"><h2>Tasa ahorro</h2><p>${metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}</p></div>
+            <div class="card"><h2>Ahorro anual</h2><p>${formatCurrencyByPreference(metrics.annualSavings, currency)}</p></div>
+            <div class="card"><h2>Objetivo FIRE</h2><p>${formatCurrencyByPreference(metrics.fireTarget, currency)}</p></div>
+          </div>
+          <h2>Alertas</h2>
+          <ul>${dashboardAlerts.map((alert) => `<li><strong>${alert.title}:</strong> ${alert.body}</li>`).join("")}</ul>
+          <h2>Cartera</h2>
+          <table>
+            <thead><tr><th>Activo</th><th>Tipo</th><th>Valor EUR</th></tr></thead>
+            <tbody>
+              ${investmentRows
+                .map((row) => {
+                  const valueEur = convertToEur((Number(row.quantity) || 0) * (Number(row.current_price ?? row.average_buy_price) || 0), row.asset_currency, ratesToEur);
+                  return `<tr><td>${row.asset_name}</td><td>${row.asset_type}</td><td>${formatCurrencyByPreference(valueEur, "EUR")}</td></tr>`;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>`;
+
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.print();
+  }, [currency, dashboardAlerts, investmentRows, metrics, ratesToEur]);
 
   const persistSnapshot = useCallback(
     async (snapshotUserId: string, totalNetWorth: number, cashPosition: number, investmentsValue: number) => {
@@ -497,7 +734,7 @@ export default function DashboardPage() {
       const [expensesResult, incomeResult, investmentsResult, savingsTargetsResult, fireSettingsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
-        supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
+        supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
       ]);
@@ -524,6 +761,8 @@ export default function DashboardPage() {
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
+      setInvestmentRows(investmentRows);
+      setSavingsTargetRows(savingsTargetRows);
 
       const investmentsValue = investmentRows.reduce((acc, row) => {
         const qty = Number(row.quantity) || 0;
@@ -719,14 +958,32 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveSnapshot}
-                    disabled={snapshotSaving || !metrics}
-                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {snapshotSaving ? "Guardando..." : "Guardar snapshot ahora"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveSnapshot}
+                      disabled={snapshotSaving || !metrics}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {snapshotSaving ? "Guardando..." : "Guardar snapshot ahora"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportCsvReport}
+                      disabled={!metrics}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Exportar CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportPdfReport}
+                      disabled={!metrics}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Exportar PDF
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -740,6 +997,37 @@ export default function DashboardPage() {
                     Aun no hay suficientes datos para dibujar la evolucion del patrimonio.
                   </div>
                 )}
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Alertas automaticas</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Senales que conviene vigilar</h2>
+                </div>
+              </div>
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {dashboardAlerts.map((alert) => (
+                  <article key={alert.title} className="rounded-3xl border border-white/8 bg-white/6 p-5">
+                    <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
+                      {alert.title}
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-white/80">{alert.body}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Historico mensual</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ingresos frente a ahorro objetivo</h2>
+                </div>
+              </div>
+              <div className="mt-6 h-[280px]">
+                <Line data={monthlyTrendChartData} options={monthlyTrendChartOptions} />
               </div>
             </section>
 
