@@ -477,6 +477,33 @@ export default function InvestmentsPage() {
       setAssetCurrency(suggestion.currency);
     }
     setAssetSuggestions([]);
+
+    if (!editingId && transactionMode === "sell") {
+      const matchingPosition =
+        investments.find((row) =>
+          isSameInvestmentPosition(row, {
+            assetName: suggestion.name,
+            assetSymbol: suggestion.symbol,
+            assetIsin: suggestion.isin ?? "",
+            assetType: suggestion.assetType,
+            assetCurrency:
+              suggestion.currency && SUPPORTED_ASSET_CURRENCIES.includes(suggestion.currency) ? suggestion.currency : assetCurrency,
+            assetMarket: suggestion.market
+          })
+        ) ?? null;
+
+      if (matchingPosition) {
+        setAssetName(matchingPosition.asset_name);
+        setAssetSymbol(matchingPosition.asset_symbol ?? suggestion.symbol);
+        setAssetIsin(matchingPosition.asset_isin ?? suggestion.isin ?? "");
+        setAssetType(matchingPosition.asset_type);
+        setAssetCurrency(matchingPosition.asset_currency ?? "EUR");
+        setAssetMarket(matchingPosition.asset_market ?? "AUTO");
+        setAverageBuyPrice(String(Number(matchingPosition.average_buy_price) || 0));
+        setCurrentPrice(String(Number(matchingPosition.current_price ?? matchingPosition.average_buy_price) || 0));
+      }
+    }
+
     void (async () => {
       try {
         const response = await fetch("/api/investments/lookup-price", {
@@ -500,6 +527,42 @@ export default function InvestmentsPage() {
       }
     })();
   };
+
+  const matchedSellPosition = useMemo(() => {
+    if (editingId || transactionMode !== "sell") {
+      return null;
+    }
+
+    const normalizedName = assetName.trim();
+    const normalizedSymbol = assetSymbol.trim().toUpperCase();
+    const normalizedIsin = assetIsin.trim().toUpperCase();
+
+    if (!normalizedName && !normalizedSymbol && !normalizedIsin) {
+      return null;
+    }
+
+    return (
+      investments.find((row) =>
+        isSameInvestmentPosition(row, {
+          assetName: normalizedName,
+          assetSymbol: normalizedSymbol,
+          assetIsin: normalizedIsin,
+          assetType,
+          assetCurrency,
+          assetMarket
+        })
+      ) ?? null
+    );
+  }, [assetCurrency, assetIsin, assetMarket, assetName, assetSymbol, assetType, editingId, investments, transactionMode]);
+
+  useEffect(() => {
+    if (!matchedSellPosition || editingId || transactionMode !== "sell") {
+      return;
+    }
+
+    setAverageBuyPrice(String(Number(matchedSellPosition.average_buy_price) || 0));
+    setCurrentPrice(String(Number(matchedSellPosition.current_price ?? matchedSellPosition.average_buy_price) || 0));
+  }, [editingId, matchedSellPosition, transactionMode]);
 
   useEffect(() => {
     const loadRates = async () => {
@@ -1407,6 +1470,22 @@ export default function InvestmentsPage() {
                     ? "La venta descuenta cantidad de la posicion existente y la cierra si la dejas a cero."
                     : "Si compras mas del mismo activo, la app consolidara la posicion y recalculara el precio medio."}
                 </p>
+                {transactionMode === "sell" ? (
+                  <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                    {matchedSellPosition ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span>
+                          Posicion detectada: <span className="font-medium text-white">{matchedSellPosition.asset_name}</span>
+                        </span>
+                        <span className="text-emerald-300">
+                          Disponible: {formatNumber(Number(matchedSellPosition.quantity) || 0, 8)} unidades
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">Selecciona o escribe un activo existente para rellenar la posicion disponible.</span>
+                    )}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -1991,6 +2070,11 @@ export default function InvestmentsPage() {
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cantidad</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatNumber(Number(selectedAsset.quantity) || 0, 8)}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">Unidades actuales de este activo en cartera.</p>
+                </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Valor EUR</p>
                   <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(selectedAsset.currentValueEur, "EUR")}</p>
