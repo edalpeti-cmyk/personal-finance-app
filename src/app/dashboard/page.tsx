@@ -52,9 +52,9 @@ type DashboardMetrics = {
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
   { value: "weekly", label: "Semanal" },
+  { value: "monthly", label: "Mensual" },
   { value: "six_months", label: "6 meses" },
   { value: "annual", label: "Anual" },
-  { value: "monthly", label: "Mensual" },
   { value: "current_year", label: "Ano actual" }
 ];
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
