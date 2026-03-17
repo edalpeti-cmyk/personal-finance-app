@@ -221,6 +221,21 @@ function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange, date
   return points;
 }
 
+function calculateTimelineVariationPct(points: TimelinePoint[]) {
+  if (points.length < 2) {
+    return null;
+  }
+
+  const firstValue = Number(points[0]?.value ?? 0);
+  const lastValue = Number(points[points.length - 1]?.value ?? 0);
+
+  if (firstValue === 0) {
+    return lastValue === 0 ? 0 : null;
+  }
+
+  return ((lastValue - firstValue) / Math.abs(firstValue)) * 100;
+}
+
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -256,6 +271,17 @@ export default function DashboardPage() {
 
     return buildCashflowTimeline(cashflowEvents, chartRange, dateFormat);
   }, [cashflowEvents, chartRange, dateFormat, snapshotRows]);
+
+  const timelineRangeVariations = useMemo(() => {
+    const sourceBuilder =
+      snapshotRows.length > 1
+        ? (range: ChartRange) => buildSnapshotTimeline(snapshotRows, range, dateFormat)
+        : (range: ChartRange) => buildCashflowTimeline(cashflowEvents, range, dateFormat);
+
+    return Object.fromEntries(
+      RANGE_OPTIONS.map((option) => [option.value, calculateTimelineVariationPct(sourceBuilder(option.value))])
+    ) as Record<ChartRange, number | null>;
+  }, [cashflowEvents, dateFormat, snapshotRows]);
 
   const timelineChartData = useMemo(
     () => ({
@@ -618,6 +644,7 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap gap-2">
                     {RANGE_OPTIONS.map((option) => {
                       const active = chartRange === option.value;
+                      const variation = timelineRangeVariations[option.value];
                       return (
                         <button
                           key={option.value}
@@ -627,7 +654,12 @@ export default function DashboardPage() {
                             active ? "bg-emerald-500 text-slate-950" : "bg-white/6 text-white/78 hover:bg-white/12"
                           }`}
                         >
-                          {option.label}
+                          <span className="flex items-center gap-2">
+                            <span>{option.label}</span>
+                            <span className={`text-xs ${active ? "text-slate-950/80" : "text-white/58"}`}>
+                              {variation === null ? "n/d" : `${variation >= 0 ? "+" : ""}${variation.toFixed(1)}%`}
+                            </span>
+                          </span>
                         </button>
                       );
                     })}
