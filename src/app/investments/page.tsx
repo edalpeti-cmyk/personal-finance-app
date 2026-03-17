@@ -385,6 +385,7 @@ export default function InvestmentsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
+  const [realizedGainTotalEur, setRealizedGainTotalEur] = useState(0);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
 
   const [assetName, setAssetName] = useState("");
@@ -640,6 +641,28 @@ export default function InvestmentsPage() {
     [supabase]
   );
 
+  const loadRealizedGainTotal = useCallback(
+    async (uid: string) => {
+      const { data, error } = await supabase
+        .from("investment_transactions")
+        .select("realized_gain_eur")
+        .eq("user_id", uid)
+        .eq("transaction_type", "sell");
+
+      if (error) {
+        return;
+      }
+
+      const total = ((data as Array<{ realized_gain_eur: number | null }>) ?? []).reduce(
+        (sum, row) => sum + Number(row.realized_gain_eur ?? 0),
+        0
+      );
+
+      setRealizedGainTotalEur(Number(total.toFixed(2)));
+    },
+    [supabase]
+  );
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -647,12 +670,12 @@ export default function InvestmentsPage() {
         return;
       }
 
-      await loadInvestments(userId);
+      await Promise.all([loadInvestments(userId), loadRealizedGainTotal(userId)]);
       setLoading(false);
     };
 
     void init();
-  }, [authLoading, loadInvestments, userId]);
+  }, [authLoading, loadInvestments, loadRealizedGainTotal, userId]);
 
   const metrics = useMemo(() => {
     return investments.reduce(
@@ -1230,6 +1253,7 @@ export default function InvestmentsPage() {
 
       resetForm();
       await loadInvestments(userId);
+      await loadRealizedGainTotal(userId);
       showToast({
         type: "success",
         text: remainingQty <= 0 ? "Venta registrada y posicion cerrada." : "Venta registrada y cantidad restada de la posicion existente."
@@ -1750,6 +1774,13 @@ export default function InvestmentsPage() {
               {profitability === null ? "Sin porcentaje" : `${profitability >= 0 ? "+" : ""}${formatNumber(profitability, 2)}%`}
             </p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Resultado total de la cartera despues de convertir todas las posiciones.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia realizada</p>
+            <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${realizedGainTotalEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {formatCurrencyByPreference(realizedGainTotalEur, "EUR")}
+            </p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma acumulada de ganancias o perdidas cerradas en tus ventas.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
