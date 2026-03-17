@@ -35,7 +35,7 @@ type FireSettingsRow = {
 };
 type CashflowEvent = { date: string; delta: number };
 type TimelinePoint = { label: string; value: number };
-type ChartRange = "daily" | "monthly" | "annual" | "six_months" | "current_year";
+type ChartRange = "daily" | "weekly" | "monthly" | "annual" | "six_months" | "current_year";
 
 type DashboardMetrics = {
   totalNetWorth: number;
@@ -51,9 +51,10 @@ type DashboardMetrics = {
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
-  { value: "monthly", label: "Mensual" },
-  { value: "annual", label: "Anual" },
+  { value: "weekly", label: "Semanal" },
   { value: "six_months", label: "6 meses" },
+  { value: "annual", label: "Anual" },
+  { value: "monthly", label: "Mensual" },
   { value: "current_year", label: "Ano actual" }
 ];
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
@@ -127,6 +128,13 @@ function getRangeCheckpoints(range: ChartRange, firstDate: Date, dateFormat: "es
   if (range === "daily") {
     const start = addDays(now, -29);
     for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 1)) {
+      checkpoints.push({ date: endOfDay(cursor), label: formatDateByPreference(cursor, dateFormat, { day: "2-digit", month: "short" }) });
+    }
+  }
+
+  if (range === "weekly") {
+    const start = addDays(now, -83);
+    for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 7)) {
       checkpoints.push({ date: endOfDay(cursor), label: formatDateByPreference(cursor, dateFormat, { day: "2-digit", month: "short" }) });
     }
   }
@@ -223,6 +231,7 @@ function buildSnapshotTimeline(snapshots: SnapshotRow[], range: ChartRange, date
 
 function getVariationStartDate(range: ChartRange, now: Date) {
   if (range === "daily") return addDays(now, -1);
+  if (range === "weekly") return addDays(now, -7);
   if (range === "monthly") return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
   if (range === "six_months") return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
   if (range === "annual") return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
