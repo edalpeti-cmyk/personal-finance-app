@@ -5,6 +5,7 @@ export type FinancialSnapshot = {
   annualExpenses: number;
   annualSavings: number;
   savingsRate: number | null;
+  hasAnyIncome: boolean;
   netWorth: number;
   fireTarget: number;
   fireProgress: number;
@@ -15,7 +16,11 @@ export function generateRuleBasedInsights(snapshot: FinancialSnapshot): string[]
   const insights: string[] = [];
 
   if (snapshot.savingsRate === null) {
-    insights.push("Registra al menos una fuente de ingresos para calcular la tasa de ahorro de forma fiable.");
+    insights.push(
+      snapshot.hasAnyIncome
+        ? "Ya tienes ingresos registrados, pero no hay ingresos en el mes actual para calcular la tasa de ahorro mensual con precision."
+        : "Registra al menos una fuente de ingresos para calcular la tasa de ahorro de forma fiable."
+    );
   } else if (snapshot.savingsRate < 20) {
     insights.push(
       `Tu tasa de ahorro es ${snapshot.savingsRate.toFixed(1)}%. Objetivo recomendado: 20%-30%. Prioriza recortar gastos variables este mes.`

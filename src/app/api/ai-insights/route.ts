@@ -6,6 +6,7 @@ import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 type ExpenseRow = { amount: number; expense_date: string; category: string };
 type IncomeRow = { amount: number; income_date: string };
 type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
+type SavingsTargetRow = { savings_target: number; month: string };
 
 function isSameMonth(dateString: string, now: Date) {
   const date = new Date(`${dateString}T00:00:00`);
@@ -17,6 +18,11 @@ function isWithinLast12Months(dateString: string, now: Date) {
   const cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
   cutoff.setMonth(cutoff.getMonth() - 11);
   return date >= cutoff;
+}
+
+function isCurrentYear(dateString: string, now: Date) {
+  const date = new Date(`${dateString}T00:00:00`);
+  return date.getFullYear() === now.getFullYear();
 }
 
 function parseInsightsFromText(rawText: string) {
@@ -42,23 +48,29 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   const supabase = await createClient();
   const ratesToEur = await fetchRatesToEur();
 
-  const [{ data: expenses }, { data: income }, { data: investments }] = await Promise.all([
+  const [{ data: expenses }, { data: income }, { data: investments }, { data: savingsTargets }] = await Promise.all([
     supabase.from("expenses").select("amount, expense_date, category").eq("user_id", userId),
     supabase.from("income").select("amount, income_date").eq("user_id", userId),
-    supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId)
+    supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
+    supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId)
   ]);
 
   const now = new Date();
   const expenseRows = (expenses as ExpenseRow[]) ?? [];
   const incomeRows = (income as IncomeRow[]) ?? [];
   const investmentRows = (investments as InvestmentRow[]) ?? [];
+  const savingsTargetRows = (savingsTargets as SavingsTargetRow[]) ?? [];
 
   const monthlyExpenses = expenseRows.reduce(
     (acc, row) => (isSameMonth(row.expense_date, now) ? acc + Number(row.amount) : acc),
     0
   );
   const monthlyIncome = incomeRows.reduce((acc, row) => (isSameMonth(row.income_date, now) ? acc + Number(row.amount) : acc), 0);
-  const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : null;
+  const monthlySavingsTarget = savingsTargetRows.reduce(
+    (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.savings_target) : acc),
+    0
+  );
+  const savingsRate = monthlyIncome > 0 ? (monthlySavingsTarget / monthlyIncome) * 100 : null;
 
   const annualExpenses = expenseRows.reduce(
     (acc, row) => (isWithinLast12Months(row.expense_date, now) ? acc + Number(row.amount) : acc),
@@ -68,7 +80,10 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
     (acc, row) => (isWithinLast12Months(row.income_date, now) ? acc + Number(row.amount) : acc),
     0
   );
-  const annualSavings = annualIncome - annualExpenses;
+  const annualSavings = savingsTargetRows.reduce(
+    (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.savings_target) : acc),
+    0
+  );
 
   const netWorth = investmentRows.reduce((acc, row) => {
     const qty = Number(row.quantity) || 0;
@@ -97,6 +112,7 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
     annualExpenses,
     annualSavings,
     savingsRate,
+    hasAnyIncome: incomeRows.length > 0,
     netWorth,
     fireTarget,
     fireProgress,
