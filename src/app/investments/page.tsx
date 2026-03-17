@@ -137,6 +137,41 @@ function formatNumber(value: number, digits: number) {
   return Number(value).toFixed(digits);
 }
 
+function isSameInvestmentPosition(
+  existing: InvestmentRow,
+  candidate: {
+    assetName: string;
+    assetSymbol: string;
+    assetIsin: string;
+    assetType: AssetType;
+    assetCurrency: AssetCurrency;
+    assetMarket: AssetMarket;
+  }
+) {
+  const existingIsin = (existing.asset_isin ?? "").trim().toUpperCase();
+  const candidateIsin = candidate.assetIsin.trim().toUpperCase();
+  if (existingIsin && candidateIsin) {
+    return existingIsin === candidateIsin;
+  }
+
+  const existingSymbol = (existing.asset_symbol ?? "").trim().toUpperCase();
+  const candidateSymbol = candidate.assetSymbol.trim().toUpperCase();
+  if (existingSymbol && candidateSymbol) {
+    return (
+      existingSymbol === candidateSymbol &&
+      existing.asset_type === candidate.assetType &&
+      existing.asset_currency === candidate.assetCurrency &&
+      (existing.asset_market ?? "AUTO") === candidate.assetMarket
+    );
+  }
+
+  return (
+    existing.asset_name.trim().toLowerCase() === candidate.assetName.trim().toLowerCase() &&
+    existing.asset_type === candidate.assetType &&
+    existing.asset_currency === candidate.assetCurrency
+  );
+}
+
 function parseCsvLine(line: string) {
   const values: string[] = [];
   let current = "";
@@ -973,11 +1008,26 @@ export default function InvestmentsPage() {
 
     setSaving(true);
 
+    const normalizedIsin = assetIsin.trim().toUpperCase();
+    const existingPosition =
+      !editingId
+        ? investments.find((row) =>
+            isSameInvestmentPosition(row, {
+              assetName: validation.cleanName,
+              assetSymbol: validation.cleanSymbol,
+              assetIsin: normalizedIsin,
+              assetType,
+              assetCurrency,
+              assetMarket
+            })
+          ) ?? null
+        : null;
+
     const payload = {
       user_id: userId,
       asset_name: validation.cleanName,
       asset_symbol: validation.cleanSymbol || null,
-      asset_isin: assetIsin.trim() || null,
+      asset_isin: normalizedIsin || null,
       asset_type: assetType,
       asset_currency: assetCurrency,
       asset_market: assetMarket,
@@ -987,9 +1037,34 @@ export default function InvestmentsPage() {
       purchase_date: purchaseDate
     };
 
-    const query = editingId
-      ? supabase.from("investments").update(payload).eq("id", editingId).eq("user_id", userId)
-      : supabase.from("investments").insert(payload);
+    const query =
+      editingId
+        ? supabase.from("investments").update(payload).eq("id", editingId).eq("user_id", userId)
+        : existingPosition
+          ? (() => {
+              const existingQty = Number(existingPosition.quantity) || 0;
+              const mergedQty = existingQty + validation.qty;
+              const existingAvg = Number(existingPosition.average_buy_price) || 0;
+              const mergedAverage =
+                mergedQty > 0
+                  ? ((existingQty * existingAvg) + (validation.qty * validation.avg)) / mergedQty
+                  : validation.avg;
+              const existingPurchaseDate = existingPosition.purchase_date ?? purchaseDate;
+              const mergedPurchaseDate =
+                existingPurchaseDate && existingPurchaseDate <= purchaseDate ? existingPurchaseDate : purchaseDate;
+
+              return supabase
+                .from("investments")
+                .update({
+                  ...payload,
+                  quantity: Number(mergedQty.toFixed(8)),
+                  average_buy_price: Number(mergedAverage.toFixed(6)),
+                  purchase_date: mergedPurchaseDate
+                })
+                .eq("id", existingPosition.id)
+                .eq("user_id", userId);
+            })()
+          : supabase.from("investments").insert(payload);
 
     const { error } = await query;
 
@@ -1002,7 +1077,14 @@ export default function InvestmentsPage() {
 
     resetForm();
     await loadInvestments(userId);
-    showToast({ type: "success", text: editingId ? "Posicion actualizada." : "Posicion guardada correctamente." });
+    showToast({
+      type: "success",
+      text: editingId
+        ? "Posicion actualizada."
+        : existingPosition
+          ? "Compra sumada a la posicion existente y precio medio recalculado."
+          : "Posicion guardada correctamente."
+    });
     setSaving(false);
   };
 
