@@ -131,6 +131,10 @@ const MARKET_OPTIONS: Array<{ value: AssetMarket; label: string }> = [
   { value: "FI", label: "Finlandia" },
   { value: "NO", label: "Noruega" }
 ];
+
+const MARKET_LABELS: Record<AssetMarket, string> = Object.fromEntries(
+  MARKET_OPTIONS.map((option) => [option.value, option.label])
+) as Record<AssetMarket, string>;
 const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
   { value: "weekly", label: "Semanal" },
@@ -148,6 +152,31 @@ function inputClass(hasError: boolean) {
 
 function formatNumber(value: number, digits: number) {
   return Number(value).toFixed(digits);
+}
+
+function formatCompactList(items: string[], maxVisible = 5) {
+  if (items.length <= maxVisible) {
+    return items.join(", ");
+  }
+
+  const visible = items.slice(0, maxVisible).join(", ");
+  return `${visible} y ${items.length - maxVisible} mas`;
+}
+
+function formatProviderLabel(provider: string) {
+  switch (provider) {
+    case "coingecko":
+      return "CoinGecko";
+    case "alphavantage":
+      return "Alpha Vantage";
+    case "twelvedata":
+      return "Twelve Data";
+    case "stooq":
+      return "Stooq";
+    case "yahoo":
+    default:
+      return "Yahoo";
+  }
 }
 
 function isSameInvestmentPosition(
@@ -1422,8 +1451,8 @@ export default function InvestmentsPage() {
       }
 
       const data = (await response.json()) as {
-        updated?: Array<{ id: string; price: number; symbol: string | null }>;
-        skipped?: Array<{ id: string; symbol: string | null; reason: string }>;
+        updated?: Array<{ id: string; asset_name: string; price: number; symbol: string | null; provider: string; resolvedSymbol: string }>;
+        skipped?: Array<{ id: string; asset_name: string; symbol: string | null; reason: string }>;
       };
 
       await loadInvestments(userId as string);
@@ -1437,13 +1466,26 @@ export default function InvestmentsPage() {
             : "No hubo precios disponibles para actualizar."
       });
 
-      if (skippedCount > 0) {
-        const sample = data.skipped?.find((item) => item.symbol)?.symbol;
-        setMessage(
-          sample
-            ? `Algunos tickers no devolvieron precio. Si son activos europeos, prueba con el ticker completo de Yahoo, por ejemplo SAN.MC, BMW.DE o VUSA.AS. Ejemplo detectado: ${sample}.`
-            : "Algunos activos no devolvieron precio. Revisa que el ticker sea el de Yahoo Finance y que incluya sufijo de mercado si hace falta."
-        );
+      const updatedExamples = (data.updated ?? []).map((item) => {
+        const resolved = item.resolvedSymbol && item.resolvedSymbol !== item.symbol ? ` -> ${item.resolvedSymbol}` : "";
+        return `${item.asset_name}${resolved} (${formatProviderLabel(item.provider)})`;
+      });
+      const skippedExamples = (data.skipped ?? []).map((item) => item.asset_name || item.symbol || "Activo sin nombre");
+
+      if (skippedCount > 0 || updatedExamples.length > 0) {
+        const parts: string[] = [];
+        if (updatedExamples.length > 0) {
+          parts.push(`Actualizados: ${formatCompactList(updatedExamples, 4)}.`);
+        }
+        if (skippedExamples.length > 0) {
+          parts.push(`No devolvieron precio: ${formatCompactList(skippedExamples, 8)}.`);
+        }
+        if (skippedCount > 0) {
+          parts.push("Si son activos europeos, revisa bolsa y ticker completo, por ejemplo SAN.MC, BMW.DE o VUSA.AS.");
+        }
+        setMessage(parts.join(" "));
+      } else {
+        setMessage(null);
       }
     } catch {
       showToast({ type: "error", text: "Error de red al actualizar precios." });
@@ -1735,13 +1777,16 @@ export default function InvestmentsPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="font-medium text-white">{suggestion.name}</p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            {suggestion.symbol} · {ASSET_TYPE_LABELS[suggestion.assetType]} · {suggestion.market}
-                            {suggestion.exchange ? ` · ${suggestion.exchange}` : ""}
-                          </p>
+                          <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-slate-300">{suggestion.symbol}</span>
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">{ASSET_TYPE_LABELS[suggestion.assetType]}</span>
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">Mercado: {MARKET_LABELS[suggestion.market]}</span>
+                            {suggestion.exchange ? <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">Bolsa: {suggestion.exchange}</span> : null}
+                            {suggestion.currency ? <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-emerald-300">Moneda: {suggestion.currency}</span> : null}
+                          </div>
+                          {suggestion.isin ? <p className="mt-2 text-[11px] text-slate-500">ISIN: {suggestion.isin}</p> : null}
                         </div>
                         <div className="text-right text-xs text-slate-300">
-                          <p>{suggestion.currency ?? "Sin moneda"}</p>
                           <p className="mt-1 text-emerald-300">Elegir</p>
                         </div>
                       </div>
