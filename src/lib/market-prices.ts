@@ -230,6 +230,19 @@ function getStooqCandidates(symbol: string, market?: string | null) {
   return Array.from(candidates);
 }
 
+function normalizeQuotedPrice(rawPrice: number, resolvedSymbol: string, market?: string | null, assetCurrency: AssetCurrency = "EUR") {
+  const upperSymbol = resolvedSymbol.toUpperCase();
+  const upperMarket = (market ?? "AUTO").toUpperCase();
+
+  // Many London-listed equities/ETFs are quoted in pence (GBX/GBp) by market data providers.
+  // In the app we store the asset currency as GBP, so normalize pence to pounds.
+  if (assetCurrency === "GBP" && (upperMarket === "UK" || upperSymbol.endsWith(".L") || upperSymbol.endsWith(".UK"))) {
+    return rawPrice / 100;
+  }
+
+  return rawPrice;
+}
+
 export async function fetchMarketQuote(
   assetType: string,
   symbol: string,
@@ -251,21 +264,21 @@ export async function fetchMarketQuote(
   for (const candidate of candidates) {
     const yahoo = await fetchYahooQuote(candidate);
     if (yahoo) {
-      return yahoo;
+      return { ...yahoo, price: normalizeQuotedPrice(yahoo.price, yahoo.resolvedSymbol, market, assetCurrency) };
     }
   }
 
   for (const candidate of candidates) {
     const twelveData = await fetchTwelveDataQuote(candidate);
     if (twelveData) {
-      return twelveData;
+      return { ...twelveData, price: normalizeQuotedPrice(twelveData.price, twelveData.resolvedSymbol, market, assetCurrency) };
     }
   }
 
   for (const candidate of candidates) {
     const alphaVantage = await fetchAlphaVantageQuote(candidate);
     if (alphaVantage) {
-      return alphaVantage;
+      return { ...alphaVantage, price: normalizeQuotedPrice(alphaVantage.price, alphaVantage.resolvedSymbol, market, assetCurrency) };
     }
   }
 
@@ -273,7 +286,7 @@ export async function fetchMarketQuote(
   for (const candidate of stooqCandidates) {
     const stooq = await fetchStooqQuote(candidate);
     if (stooq) {
-      return stooq;
+      return { ...stooq, price: normalizeQuotedPrice(stooq.price, stooq.resolvedSymbol, market, assetCurrency) };
     }
   }
 
