@@ -526,7 +526,9 @@ export default function InvestmentsPage() {
           body: JSON.stringify({
             assetType: suggestion.assetType,
             symbol: suggestion.symbol,
-            market: suggestion.market
+            market: suggestion.market,
+            assetCurrency:
+              suggestion.currency && SUPPORTED_ASSET_CURRENCIES.includes(suggestion.currency) ? suggestion.currency : assetCurrency
           })
         });
 

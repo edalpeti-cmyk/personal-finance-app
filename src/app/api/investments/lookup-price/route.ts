@@ -6,6 +6,7 @@ export async function POST(request: Request) {
     assetType?: string;
     symbol?: string;
     market?: string | null;
+    assetCurrency?: "EUR" | "USD" | "GBP" | "DKK";
   };
 
   if (!body.assetType || !body.symbol) {
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const price = await fetchMarketPrice(body.assetType, body.symbol, body.market);
+    const price = await fetchMarketPrice(body.assetType, body.symbol, body.market, body.assetCurrency ?? "EUR");
     return NextResponse.json({ price: price === null ? null : Number(price.toFixed(4)) });
   } catch {
     return NextResponse.json({ price: null });

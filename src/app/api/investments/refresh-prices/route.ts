@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchMarketPrice } from "@/lib/market-prices";
+import { fetchMarketQuote } from "@/lib/market-prices";
 import { convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
 
 type InvestmentPriceRow = {
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   }
 
   const rows = (data as InvestmentPriceRow[]) ?? [];
-  const updated: Array<{ id: string; price: number; symbol: string | null }> = [];
+  const updated: Array<{ id: string; price: number; symbol: string | null; provider: string; resolvedSymbol: string }> = [];
   const skipped: Array<{ id: string; symbol: string | null; reason: string }> = [];
 
   for (const row of rows) {
@@ -53,13 +53,13 @@ export async function POST(request: Request) {
     }
 
     try {
-      const price = await fetchMarketPrice(row.asset_type, row.asset_symbol, row.asset_market);
-      if (price === null) {
+      const quote = await fetchMarketQuote(row.asset_type, row.asset_symbol, row.asset_market, (row.asset_currency as "EUR" | "USD" | "GBP" | "DKK" | null) ?? "EUR");
+      if (quote === null) {
         skipped.push({ id: row.id, symbol: row.asset_symbol, reason: "price_not_available" });
         continue;
       }
 
-      const roundedPrice = Number(price.toFixed(4));
+      const roundedPrice = Number(quote.price.toFixed(4));
       const { error: updateError } = await db
         .from("investments")
         .update({ current_price: roundedPrice })
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         continue;
       }
 
-      updated.push({ id: row.id, symbol: row.asset_symbol, price: roundedPrice });
+      updated.push({ id: row.id, symbol: row.asset_symbol, price: roundedPrice, provider: quote.provider, resolvedSymbol: quote.resolvedSymbol });
     } catch (fetchError) {
       skipped.push({ id: row.id, symbol: row.asset_symbol, reason: fetchError instanceof Error ? fetchError.message : "fetch_failed" });
     }
