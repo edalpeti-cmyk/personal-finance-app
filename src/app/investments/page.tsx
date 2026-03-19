@@ -179,6 +179,28 @@ function formatProviderLabel(provider: string) {
   }
 }
 
+function resolveRefreshAssetLabel(item: {
+  asset_name?: string | null;
+  assetName?: string | null;
+  symbol?: string | null;
+  resolvedSymbol?: string | null;
+  id?: string | null;
+}) {
+  const candidates = [item.asset_name, item.assetName, item.symbol, item.resolvedSymbol]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  if (candidates.length > 0) {
+    return candidates[0];
+  }
+
+  if (item.id) {
+    return `Activo ${item.id.slice(0, 8)}`;
+  }
+
+  return "Activo sin nombre";
+}
+
 function isSameInvestmentPosition(
   existing: InvestmentRow,
   candidate: {
@@ -1451,8 +1473,8 @@ export default function InvestmentsPage() {
       }
 
       const data = (await response.json()) as {
-        updated?: Array<{ id: string; asset_name: string; price: number; symbol: string | null; provider: string; resolvedSymbol: string }>;
-        skipped?: Array<{ id: string; asset_name: string; symbol: string | null; reason: string }>;
+        updated?: Array<{ id: string; asset_name?: string | null; assetName?: string | null; price: number; symbol: string | null; provider: string; resolvedSymbol: string }>;
+        skipped?: Array<{ id: string; asset_name?: string | null; assetName?: string | null; symbol: string | null; reason: string }>;
       };
 
       await loadInvestments(userId as string);
@@ -1467,10 +1489,11 @@ export default function InvestmentsPage() {
       });
 
       const updatedExamples = (data.updated ?? []).map((item) => {
+        const assetLabel = resolveRefreshAssetLabel(item);
         const resolved = item.resolvedSymbol && item.resolvedSymbol !== item.symbol ? ` -> ${item.resolvedSymbol}` : "";
-        return `${item.asset_name}${resolved} (${formatProviderLabel(item.provider)})`;
+        return `${assetLabel}${resolved} (${formatProviderLabel(item.provider)})`;
       });
-      const skippedExamples = (data.skipped ?? []).map((item) => item.asset_name || item.symbol || "Activo sin nombre");
+      const skippedExamples = (data.skipped ?? []).map((item) => resolveRefreshAssetLabel(item));
 
       if (skippedCount > 0 || updatedExamples.length > 0) {
         const parts: string[] = [];
