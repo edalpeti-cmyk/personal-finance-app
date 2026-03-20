@@ -17,6 +17,7 @@ import AuthLoadingState from "@/components/auth-loading-state";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 
@@ -673,13 +674,11 @@ export default function ExpensesPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista por niveles</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias de gasto</h2>
-            </div>
-            <p className="text-sm text-slate-400">Primero entras en una categoria y despues abres los gastos concretos de ese grupo.</p>
-          </div>
+          <SectionHeader
+            eyebrow="Vista por niveles"
+            title="Categorias de gasto"
+            description="Primero entras en una categoria y despues abres los gastos concretos de ese grupo."
+          />
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando gastos...</p> : null}
           {!loading && expenses.length === 0 ? (
@@ -689,6 +688,7 @@ export default function ExpensesPage() {
                 title="Todavia no hay gastos registrados"
                 description="Empieza registrando un gasto real o importa el presupuesto mensual para convertirlo en base de seguimiento."
                 actionLabel="Usa el formulario o Copiar presupuesto"
+                actionHref="/expenses"
                 compact
               />
             </div>
@@ -805,5 +805,6 @@ export default function ExpensesPage() {
     </>
   );
 }
+
 
 

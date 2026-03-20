@@ -17,6 +17,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
@@ -2474,13 +2475,11 @@ export default function InvestmentsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Posiciones</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tipos de activo</h2>
-            </div>
-            <p className="text-sm text-slate-400">Primero eliges el tipo de activo y luego abres los activos concretos dentro de ese grupo.</p>
-          </div>
+          <SectionHeader
+            eyebrow="Posiciones"
+            title="Tipos de activo"
+            description="Primero eliges el tipo de activo y luego abres los activos concretos dentro de ese grupo."
+          />
 
           <div className="mt-6 grid gap-4 xl:grid-cols-6">
             <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2">
@@ -2591,6 +2590,7 @@ export default function InvestmentsPage() {
                 title="Todavia no hay inversiones registradas"
                 description="Anade tu primera posicion, importa un CSV o usa el buscador por ticker/ISIN para montar la cartera mas rapido."
                 actionLabel="Empieza con Nueva posicion o Importar CSV"
+                actionHref="/investments"
                 compact
               />
             </div>
@@ -2602,6 +2602,7 @@ export default function InvestmentsPage() {
                 title="No hay resultados con los filtros actuales"
                 description="Prueba a limpiar filtros o ampliar la busqueda para volver a ver tipos de activo y posiciones."
                 actionLabel="Usa Limpiar filtros"
+                actionHref="/investments"
                 compact
               />
             </div>
@@ -3033,5 +3034,6 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
 
 

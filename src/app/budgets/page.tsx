@@ -6,6 +6,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { type CurrencyCode, formatCurrencyByPreference, formatDateByPreference, formatMonthByPreference } from "@/lib/preferences-format";
 
@@ -747,13 +748,13 @@ export default function BudgetsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Resumen</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Comparativa mensual</h2>
-            </div>
-            <button className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10" type="button" onClick={handleExportCsv}>Exportar CSV</button>
-          </div>
+          <SectionHeader
+            eyebrow="Resumen"
+            title="Comparativa mensual"
+            aside={
+              <button className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10" type="button" onClick={handleExportCsv}>Exportar CSV</button>
+            }
+          />
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
@@ -790,13 +791,11 @@ export default function BudgetsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto vs real</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias del mes</h2>
-            </div>
-            <p className="text-sm text-slate-400">Ahora puedes editar y borrar categorias presupuestadas desde la tabla.</p>
-          </div>
+          <SectionHeader
+            eyebrow="Presupuesto vs real"
+            title="Categorias del mes"
+            description="Ahora puedes editar y borrar categorias presupuestadas desde la tabla."
+          />
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando presupuesto...</p> : null}
           {!loading && rows.length === 0 ? (
@@ -806,6 +805,7 @@ export default function BudgetsPage() {
                 title="Todavia no hay categorias presupuestadas"
                 description="Crea una categoria nueva o copia el presupuesto de otro mes para no empezar desde cero."
                 actionLabel="Usa Crear presupuesto o Copiar otro mes"
+                actionHref="/budgets"
                 compact
               />
             </div>
@@ -868,6 +868,7 @@ export default function BudgetsPage() {
                 title="Aun no hay base suficiente para comparar"
                 description="Necesitas datos en el mes actual y en el anterior para que la comparativa mensual tenga sentido."
                 actionLabel="Completa al menos dos meses"
+                actionHref="/budgets"
                 compact
               />
             </div>
@@ -909,5 +910,6 @@ export default function BudgetsPage() {
     </>
   );
 }
+
 
 

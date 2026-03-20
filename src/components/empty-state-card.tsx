@@ -1,8 +1,11 @@
+import Link from "next/link";
+
 type EmptyStateCardProps = {
   eyebrow: string;
   title: string;
   description: string;
   actionLabel?: string;
+  actionHref?: string;
   compact?: boolean;
 };
 
@@ -11,6 +14,7 @@ export default function EmptyStateCard({
   title,
   description,
   actionLabel,
+  actionHref,
   compact = false
 }: EmptyStateCardProps) {
   return (
@@ -28,9 +32,18 @@ export default function EmptyStateCard({
           <h3 className={`mt-2 font-[var(--font-heading)] font-semibold text-white ${compact ? "text-xl" : "text-2xl"}`}>{title}</h3>
           <p className="mt-3 max-w-[44ch] text-sm leading-6 text-slate-300">{description}</p>
           {actionLabel ? (
-            <div className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
-              {actionLabel}
-            </div>
+            actionHref ? (
+              <Link
+                href={actionHref}
+                className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10"
+              >
+                {actionLabel}
+              </Link>
+            ) : (
+              <div className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                {actionLabel}
+              </div>
+            )
           ) : null}
         </div>
       </div>

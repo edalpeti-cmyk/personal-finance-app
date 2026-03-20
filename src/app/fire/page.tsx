@@ -16,6 +16,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
 
@@ -398,8 +399,7 @@ export default function FirePage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tabla</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion del patrimonio</h2>
+          <SectionHeader eyebrow="Tabla" title="Evolucion del patrimonio" />
 
           {simulation.points.length === 0 ? (
             <div className="mt-6">
@@ -408,6 +408,7 @@ export default function FirePage() {
                 title="Faltan datos para proyectar FIRE"
                 description="Completa gastos anuales, patrimonio actual y aportacion anual para generar la tabla de evolucion."
                 actionLabel="Rellena el formulario superior"
+                actionHref="/fire"
                 compact
               />
             </div>

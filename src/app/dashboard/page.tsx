@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -18,6 +19,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
@@ -66,6 +68,7 @@ type DashboardReminder = {
   title: string;
   body: string;
   cta: string;
+  href?: string;
 };
 type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "monthlyTrend" | "fireOverview" | "aiInsights";
 type DashboardWidgetSize = "compact" | "expanded";
@@ -863,7 +866,8 @@ export default function DashboardPage() {
         id: "missing-income-month",
         title: "Ingresos del mes pendientes",
         body: "Este mes no tiene ingresos registrados. Sin eso, tasa de ahorro e insights pierden contexto.",
-        cta: "Anade ingresos en Presupuestos"
+        cta: "Anade ingresos en Presupuestos",
+        href: "/budgets"
       });
     }
 
@@ -872,7 +876,8 @@ export default function DashboardPage() {
         id: "missing-savings-target-month",
         title: "Ahorro objetivo sin definir",
         body: "Todavia no hay ahorro objetivo para el mes actual. Eso afecta al dashboard, FIRE y a la IA.",
-        cta: "Define el ahorro en Presupuestos"
+        cta: "Define el ahorro en Presupuestos",
+        href: "/budgets"
       });
     }
 
@@ -890,7 +895,8 @@ export default function DashboardPage() {
         id: "missing-current-prices",
         title: "Precios pendientes de actualizar",
         body: `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado. Eso limita la precision del patrimonio y de la cartera.`,
-        cta: "Actualiza precios en Inversiones"
+        cta: "Actualiza precios en Inversiones",
+        href: "/investments"
       });
     }
 
@@ -899,7 +905,8 @@ export default function DashboardPage() {
         id: "missing-fire-config",
         title: "Configuracion FIRE sin cerrar",
         body: "El objetivo FIRE sigue sin una base completa. Guardar tu configuracion mejora el seguimiento real.",
-        cta: "Actualiza FIRE"
+        cta: "Actualiza FIRE",
+        href: "/fire"
       });
     }
 
@@ -1259,21 +1266,21 @@ export default function DashboardPage() {
         case "reminders":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Recordatorios automaticos</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Pequenos pendientes para mantener el panel al dia</h2>
-                </div>
-                {dismissedReminderIds.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={restoreReminders}
-                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
-                  >
-                    Reactivar recordatorios
-                  </button>
-                ) : null}
-              </div>
+              <SectionHeader
+                eyebrow="Recordatorios automaticos"
+                title="Pequenos pendientes para mantener el panel al dia"
+                aside={
+                  dismissedReminderIds.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={restoreReminders}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
+                    >
+                      Reactivar recordatorios
+                    </button>
+                  ) : null
+                }
+              />
 
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {dashboardReminders.length > 0 ? (
@@ -1290,7 +1297,13 @@ export default function DashboardPage() {
                         </button>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-white/80">{reminder.body}</p>
-                      <p className="mt-3 text-xs font-medium text-emerald-300">{reminder.cta}</p>
+                      {reminder.href ? (
+                        <Link href={reminder.href} className="mt-3 inline-flex text-xs font-medium text-emerald-300 transition hover:text-emerald-200">
+                          {reminder.cta}
+                        </Link>
+                      ) : (
+                        <p className="mt-3 text-xs font-medium text-emerald-300">{reminder.cta}</p>
+                      )}
                     </article>
                   ))
                 ) : (
@@ -1307,12 +1320,7 @@ export default function DashboardPage() {
         case "alerts":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Alertas automaticas</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Senales que conviene vigilar</h2>
-                </div>
-              </div>
+              <SectionHeader eyebrow="Alertas automaticas" title="Senales que conviene vigilar" />
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {dashboardAlerts.map((alert) => (
                   <article key={alert.title} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
@@ -1328,12 +1336,7 @@ export default function DashboardPage() {
         case "monthlyTrend":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Historico mensual</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ingresos frente a ahorro objetivo</h2>
-                </div>
-              </div>
+              <SectionHeader eyebrow="Historico mensual" title="Ingresos frente a ahorro objetivo" />
               <div className={`mt-6 ${isCompact ? "h-[220px]" : "h-[280px]"}`}>
                 <Line data={monthlyTrendChartData} options={monthlyTrendChartOptions} />
               </div>
@@ -1383,20 +1386,20 @@ export default function DashboardPage() {
         case "aiInsights":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">IA financiera</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura automatica de tus habitos</h2>
-                </div>
-                <button
-                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={generateInsights}
-                  disabled={aiLoading || !hasFinancialData}
-                  type="button"
-                >
-                  {aiLoading ? "Analizando..." : "Regenerar insights IA"}
-                </button>
-              </div>
+              <SectionHeader
+                eyebrow="IA financiera"
+                title="Lectura automatica de tus habitos"
+                aside={
+                  <button
+                    className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={generateInsights}
+                    disabled={aiLoading || !hasFinancialData}
+                    type="button"
+                  >
+                    {aiLoading ? "Analizando..." : "Regenerar insights IA"}
+                  </button>
+                }
+              />
 
               {!hasFinancialData ? (
                 <p className="mt-4 text-sm text-white/64">Sin datos financieros suficientes para generar insights utiles.</p>
@@ -1673,6 +1676,7 @@ export default function DashboardPage() {
                     title="Todavia no hay suficiente contexto financiero"
                     description="Registra ingresos, gastos o inversiones para activar metricas, alertas, IA y seguimiento historico del patrimonio."
                     actionLabel="Empieza por Presupuestos o Inversiones"
+                    actionHref="/budgets"
                   />
                 </section>
               ) : null}
@@ -1706,13 +1710,11 @@ export default function DashboardPage() {
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Centro del mes</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lo importante antes de entrar al detalle</h2>
-                </div>
-                <p className="text-sm text-white/64">Un resumen operativo para saber si toca registrar, ajustar o revisar.</p>
-              </div>
+              <SectionHeader
+                eyebrow="Centro del mes"
+                title="Lo importante antes de entrar al detalle"
+                description="Un resumen operativo para saber si toca registrar, ajustar o revisar."
+              />
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
                 <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
@@ -1748,22 +1750,20 @@ export default function DashboardPage() {
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Widgets del dashboard</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Personaliza lo que quieres ver primero</h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
-                    Puedes ocultar bloques que ahora no te aporten valor y mover arriba los que quieres revisar siempre primero.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={resetWidgets}
-                  className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
-                >
-                  Restaurar orden
-                </button>
-              </div>
+              <SectionHeader
+                eyebrow="Widgets del dashboard"
+                title="Personaliza lo que quieres ver primero"
+                description="Puedes ocultar bloques que ahora no te aporten valor y mover arriba los que quieres revisar siempre primero."
+                aside={
+                  <button
+                    type="button"
+                    onClick={resetWidgets}
+                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    Restaurar orden
+                  </button>
+                }
+              />
 
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {widgetOrder.map((widgetId, index) => {
@@ -1855,6 +1855,10 @@ export default function DashboardPage() {
     </>
   );
 }
+
+
+
+
 
 
 
