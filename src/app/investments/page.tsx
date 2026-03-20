@@ -1860,7 +1860,7 @@ export default function InvestmentsPage() {
 
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section> : null}
 
-        <section ref={formRef} className={`panel rounded-[28px] p-5 text-white xl:col-span-5 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
+        <section ref={formRef} className={`panel rounded-[28px] p-5 text-white xl:col-span-6 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
@@ -2087,7 +2087,7 @@ export default function InvestmentsPage() {
           </form>
         </section>
 
-        <section className="grid gap-3 xl:col-span-7 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-3 xl:col-span-6 md:grid-cols-2">
           <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total en EUR</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
@@ -2122,7 +2122,7 @@ export default function InvestmentsPage() {
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{metrics.trackedPositions}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Activos con simbolo valido para actualizar precio automaticamente.</p>
           </article>
-          <article className="kpi-card rounded-[24px] p-4 md:col-span-2 xl:col-span-1">
+          <article className="kpi-card rounded-[24px] p-4 md:col-span-2">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mayor posicion</p>
             <p className="mt-4 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{biggestPosition ? biggestPosition.asset_name : "Sin datos"}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">
