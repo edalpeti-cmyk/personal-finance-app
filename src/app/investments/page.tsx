@@ -43,6 +43,7 @@ type InvestmentFormErrors = {
   assetName?: string;
   assetSymbol?: string;
   quantity?: string;
+  commission?: string;
   averageBuyPrice?: string;
   currentPrice?: string;
   purchaseDate?: string;
@@ -67,6 +68,8 @@ type InvestmentTransactionRow = {
   total_local: number;
   total_eur: number;
   asset_currency: AssetCurrency;
+  commission_local: number | null;
+  commission_eur: number | null;
   realized_gain_eur: number | null;
   executed_at: string;
 };
@@ -291,6 +294,36 @@ function buildEstimatedAssetEvolution(row: EnrichedInvestment) {
   return { labels, values };
 }
 
+function buildEstimatedTypeEvolution(rows: EnrichedInvestment[], ratesToEur: Record<AssetCurrency, number>) {
+  const byMonth = new Map<string, number>();
+
+  for (const row of rows) {
+    const date = row.purchase_date ? new Date(`${row.purchase_date}T00:00:00`) : new Date();
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const current = Number(row.current ?? row.average_buy_price) || 0;
+    const qty = Number(row.quantity) || 0;
+    const valueEur = convertToEur(qty * current, row.asset_currency, ratesToEur);
+    byMonth.set(key, (byMonth.get(key) ?? 0) + valueEur);
+  }
+
+  const labels: string[] = [];
+  const values: number[] = [];
+  let running = 0;
+
+  Array.from(byMonth.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([month, value]) => {
+      running += value;
+      const [year, monthNumber] = month.split("-");
+      labels.push(
+        new Date(Number(year), Number(monthNumber) - 1, 1).toLocaleString("es-ES", { month: "short", year: "2-digit" })
+      );
+      values.push(Number(running.toFixed(2)));
+    });
+
+  return { labels, values };
+}
+
 function calculatePeriodPerformance(history: HistoryPoint[], days: number): PeriodPerformance {
   if (history.length < 2) {
     return { amount: null, pct: null };
@@ -321,6 +354,9 @@ function calculatePeriodPerformance(history: HistoryPoint[], days: number): Peri
 }
 
 function normalizeDate(dateString: string) {
+  if (dateString.includes("T")) {
+    return new Date(dateString);
+  }
   return new Date(`${dateString}T00:00:00`);
 }
 
@@ -447,6 +483,7 @@ export default function InvestmentsPage() {
   const [assetMarket, setAssetMarket] = useState<AssetMarket>("AUTO");
   const [transactionMode, setTransactionMode] = useState<TransactionMode>("buy");
   const [quantity, setQuantity] = useState("");
+  const [commission, setCommission] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -488,6 +525,7 @@ export default function InvestmentsPage() {
     setAssetCurrency("EUR");
     setAssetMarket("AUTO");
     setQuantity("");
+    setCommission("");
     setAverageBuyPrice("");
     setCurrentPrice("");
     setPurchaseDate(new Date().toISOString().slice(0, 10));
@@ -644,14 +682,20 @@ export default function InvestmentsPage() {
 
     const currency = matchedSellPosition.asset_currency ?? assetCurrency;
     const totalLocal = sellQty * salePrice;
-    const realizedLocal = sellQty * (salePrice - heldAverage);
+    const fee = commission.trim() ? Number(commission) : 0;
+    const realizedLocal = sellQty * (salePrice - heldAverage) - fee;
+    const netLocal = totalLocal - fee;
 
     return {
       totalLocal,
       totalEur: convertToEur(totalLocal, currency, ratesToEur),
+      feeLocal: fee,
+      feeEur: convertToEur(fee, currency, ratesToEur),
+      netLocal,
+      netEur: convertToEur(netLocal, currency, ratesToEur),
       realizedGainEur: convertToEur(realizedLocal, currency, ratesToEur)
     };
-  }, [assetCurrency, currentPrice, editingId, matchedSellPosition, quantity, ratesToEur, transactionMode]);
+  }, [assetCurrency, commission, currentPrice, editingId, matchedSellPosition, quantity, ratesToEur, transactionMode]);
 
   useEffect(() => {
     if (!matchedSellPosition || editingId || transactionMode !== "sell") {
@@ -964,9 +1008,17 @@ export default function InvestmentsPage() {
     [selectedAssetHistory]
   );
   const selectedTypeTimeline = useMemo(
-    () => buildTypeHistoryTimeline(selectedTypeHistory, selectedTypeRange),
-    [selectedTypeHistory, selectedTypeRange]
+    () => {
+      if (selectedTypeHistory.length > 1) {
+        return buildTypeHistoryTimeline(selectedTypeHistory, selectedTypeRange);
+      }
+
+      const estimated = buildEstimatedTypeEvolution(selectedTypeAssets, ratesToEur);
+      return estimated.labels.map((label, index) => ({ label, value: estimated.values[index] ?? 0 }));
+    },
+    [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeRange]
   );
+  const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
   const selectedTypeChartData = useMemo(
     () => ({
       labels: selectedTypeTimeline.map((point) => point.label),
@@ -1064,7 +1116,8 @@ export default function InvestmentsPage() {
 
       const grouped = new Map<string, number>();
       for (const row of (data as Array<HistoryPoint & { investment_id: string }>) ?? []) {
-        grouped.set(row.snapshot_date, (grouped.get(row.snapshot_date) ?? 0) + Number(row.total_value_eur));
+        const dayKey = row.snapshot_date.slice(0, 10);
+        grouped.set(dayKey, (grouped.get(dayKey) ?? 0) + Number(row.total_value_eur));
       }
 
       setSelectedTypeHistory(
@@ -1111,7 +1164,7 @@ export default function InvestmentsPage() {
 
       const { data } = await supabase
         .from("investment_transactions")
-        .select("id, investment_id, transaction_type, quantity, price_local, total_local, total_eur, asset_currency, realized_gain_eur, executed_at")
+        .select("id, investment_id, transaction_type, quantity, price_local, total_local, total_eur, asset_currency, commission_local, commission_eur, realized_gain_eur, executed_at")
         .eq("user_id", userId)
         .eq("investment_id", selectedAssetId)
         .order("executed_at", { ascending: false })
@@ -1203,6 +1256,7 @@ export default function InvestmentsPage() {
     const cleanName = assetName.trim();
     const cleanSymbol = assetSymbol.trim();
     const qty = Number(quantity);
+    const fee = commission.trim() ? Number(commission) : 0;
     const avg = Number(averageBuyPrice);
     const curr = currentPrice ? Number(currentPrice) : avg;
     const parsedDate = new Date(`${purchaseDate}T00:00:00`);
@@ -1213,13 +1267,14 @@ export default function InvestmentsPage() {
     if (cleanSymbol.length > 24) nextErrors.assetSymbol = "El ticker o identificador no puede superar 24 caracteres.";
     else if (cleanSymbol && !/^[A-Z0-9.-]+$/.test(cleanSymbol)) nextErrors.assetSymbol = "El ticker solo admite A-Z, 0-9, punto y guion.";
     if (!Number.isFinite(qty) || qty <= 0) nextErrors.quantity = "La cantidad debe ser mayor que 0.";
+    if (!Number.isFinite(fee) || fee < 0) nextErrors.commission = "La comision debe ser un numero valido >= 0.";
     if (!Number.isFinite(avg) || avg < 0) nextErrors.averageBuyPrice = "El precio medio debe ser un numero valido >= 0.";
     if (!Number.isFinite(curr) || curr < 0) nextErrors.currentPrice = "El precio actual debe ser un numero valido >= 0.";
     if (Number.isNaN(parsedDate.getTime())) nextErrors.purchaseDate = "La fecha de compra es obligatoria.";
     else if (parsedDate > today) nextErrors.purchaseDate = "La fecha no puede estar en el futuro.";
 
     setErrors(nextErrors);
-    return { isValid: Object.keys(nextErrors).length === 0, cleanName, cleanSymbol, qty, avg, curr };
+    return { isValid: Object.keys(nextErrors).length === 0, cleanName, cleanSymbol, qty, fee, avg, curr };
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -1314,11 +1369,15 @@ export default function InvestmentsPage() {
       }
 
       const salePrice = validation.curr;
+      const commissionLocal = Number(validation.fee || 0);
       const realizedGainEur = convertToEur(
-        (salePrice - (Number(existingPosition.average_buy_price) || 0)) * validation.qty,
+        ((salePrice - (Number(existingPosition.average_buy_price) || 0)) * validation.qty) - commissionLocal,
         existingPosition.asset_currency ?? assetCurrency,
         ratesToEur
       );
+      const totalLocal = Number((validation.qty * salePrice).toFixed(4));
+      const totalEur = Number(convertToEur(validation.qty * salePrice, existingPosition.asset_currency ?? assetCurrency, ratesToEur).toFixed(4));
+      const commissionEur = Number(convertToEur(commissionLocal, existingPosition.asset_currency ?? assetCurrency, ratesToEur).toFixed(4));
 
       await supabase.from("investment_transactions").insert({
         investment_id: existingPosition.id,
@@ -1326,9 +1385,11 @@ export default function InvestmentsPage() {
         transaction_type: "sell",
         quantity: validation.qty,
         price_local: salePrice,
-        total_local: Number((validation.qty * salePrice).toFixed(4)),
-        total_eur: Number(convertToEur(validation.qty * salePrice, existingPosition.asset_currency ?? assetCurrency, ratesToEur).toFixed(4)),
+        total_local: totalLocal,
+        total_eur: totalEur,
         asset_currency: existingPosition.asset_currency ?? assetCurrency,
+        commission_local: Number(commissionLocal.toFixed(4)),
+        commission_eur: commissionEur,
         realized_gain_eur: Number(realizedGainEur.toFixed(4)),
         executed_at: purchaseDate
       });
@@ -1398,6 +1459,8 @@ export default function InvestmentsPage() {
         total_local: Number((validation.qty * validation.avg).toFixed(4)),
         total_eur: Number(convertToEur(validation.qty * validation.avg, assetCurrency, ratesToEur).toFixed(4)),
         asset_currency: assetCurrency,
+        commission_local: Number((validation.fee || 0).toFixed(4)),
+        commission_eur: Number(convertToEur(validation.fee || 0, assetCurrency, ratesToEur).toFixed(4)),
         realized_gain_eur: null,
         executed_at: purchaseDate
       });
@@ -1427,6 +1490,7 @@ export default function InvestmentsPage() {
     setAssetCurrency(row.asset_currency ?? "EUR");
     setAssetMarket(row.asset_market ?? "AUTO");
     setQuantity(String(row.quantity));
+    setCommission("");
     setAverageBuyPrice(String(row.average_buy_price));
     setCurrentPrice(row.current_price === null ? "" : String(row.current_price));
     setPurchaseDate(row.purchase_date ?? new Date().toISOString().slice(0, 10));
@@ -1714,13 +1778,22 @@ export default function InvestmentsPage() {
                           </span>
                         </div>
                         {sellPreview ? (
-                          <div className="grid gap-3 md:grid-cols-2">
+                          <div className="grid gap-3 md:grid-cols-3">
                             <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
                               <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Importe estimado</p>
                               <p className="mt-2 text-lg font-semibold text-white">
                                 {formatCurrencyByPreference(sellPreview.totalLocal, matchedSellPosition.asset_currency ?? assetCurrency)}
                               </p>
                               <p className="mt-1 text-xs text-slate-400">{formatCurrencyByPreference(sellPreview.totalEur, "EUR")} en EUR</p>
+                            </div>
+                            <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Impacto neto</p>
+                              <p className="mt-2 text-lg font-semibold text-white">
+                                {formatCurrencyByPreference(sellPreview.netLocal, matchedSellPosition.asset_currency ?? assetCurrency)}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Comision: {formatCurrencyByPreference(sellPreview.feeLocal, matchedSellPosition.asset_currency ?? assetCurrency)} · {formatCurrencyByPreference(sellPreview.netEur, "EUR")} en EUR
+                              </p>
                             </div>
                             <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
                               <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Plusvalia realizada</p>
@@ -1833,11 +1906,17 @@ export default function InvestmentsPage() {
               {errors.assetSymbol ? <span className="text-xs text-red-700">{errors.assetSymbol}</span> : null}
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <label className="grid gap-2 text-sm text-slate-200">
                 Cantidad
                 <input className={inputClass(Boolean(errors.quantity))} type="number" min="0" step="0.00000001" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
                 {errors.quantity ? <span className="text-xs text-red-700">{errors.quantity}</span> : null}
+              </label>
+
+              <label className="grid gap-2 text-sm text-slate-200">
+                Comision ({assetCurrency})
+                <input className={inputClass(Boolean(errors.commission))} type="number" min="0" step="0.0001" value={commission} onChange={(e) => setCommission(e.target.value)} placeholder="Opcional" />
+                {errors.commission ? <span className="text-xs text-red-700">{errors.commission}</span> : <span className="text-xs text-slate-400">Se usa para calcular impacto neto y plusvalia realizada.</span>}
               </label>
 
               <label className="grid gap-2 text-sm text-slate-200">
@@ -2252,7 +2331,9 @@ export default function InvestmentsPage() {
                     <div>
                       <p className="text-sm font-medium text-white">Evolucion del tipo de activo</p>
                       <p className="mt-1 text-xs text-slate-400">
-                        Evolucion agregada de todas las posiciones de este tipo segun el historico real guardado.
+                        {selectedTypeUsesRealHistory
+                          ? "Evolucion agregada real de todas las posiciones de este tipo segun el historico guardado."
+                          : "Estimacion agregada del tipo construida con las posiciones actuales hasta que haya historico suficiente."}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -2292,7 +2373,7 @@ export default function InvestmentsPage() {
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/12 text-sm text-slate-400">
-                        Sin historico suficiente para este tipo de activo.
+                        Sin datos suficientes para construir la evolucion de este tipo de activo.
                       </div>
                     )}
                   </div>
@@ -2391,38 +2472,38 @@ export default function InvestmentsPage() {
               </div>
 
               <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
-              <div className="grid gap-4 md:grid-cols-2">
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cantidad</p>
                   <p className="mt-3 break-words font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{formatNumber(Number(selectedAsset.quantity) || 0, 4)}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">Unidades actuales de este activo en cartera.</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Unidades actuales en cartera.</p>
                 </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Valor EUR</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(selectedAsset.currentValueEur, "EUR")}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">Valor consolidado de la posicion convertido a EUR.</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{formatCurrencyByPreference(selectedAsset.currentValueEur, "EUR")}</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Valor consolidado en EUR.</p>
                 </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Invertido EUR</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(selectedAsset.investedEur, "EUR")}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">Capital aportado a esta posicion desde la compra.</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{formatCurrencyByPreference(selectedAsset.investedEur, "EUR")}</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Capital aportado desde la compra.</p>
                 </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia</p>
-                  <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${selectedAsset.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(selectedAsset.gainEur, "EUR")}</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">Resultado acumulado de la posicion a precio actual.</p>
+                  <p className={`mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight ${selectedAsset.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(selectedAsset.gainEur, "EUR")}</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Resultado acumulado a precio actual.</p>
                 </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Rentabilidad</p>
-                  <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${selectedAsset.gainPct !== null && selectedAsset.gainPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                  <p className={`mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight ${selectedAsset.gainPct !== null && selectedAsset.gainPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                     {selectedAsset.gainPct === null ? "Sin datos" : `${selectedAsset.gainPct >= 0 ? "+" : ""}${formatNumber(selectedAsset.gainPct, 2)}%`}
                   </p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">Porcentaje de rentabilidad sobre el capital invertido.</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Rentabilidad sobre el capital invertido.</p>
                 </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Peso cartera</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">Porcentaje que ocupa este activo dentro de la cartera.</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Peso dentro de la cartera.</p>
                 </article>
               </div>
 
@@ -2521,11 +2602,17 @@ export default function InvestmentsPage() {
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
                           <span className="text-slate-300">Importe: {formatCurrencyByPreference(Number(transaction.total_eur) || 0, "EUR")}</span>
+                          <span className="text-slate-300">
+                            Comision: {formatCurrencyByPreference(Number(transaction.commission_eur) || 0, "EUR")}
+                          </span>
                           {transaction.transaction_type === "sell" ? (
                             <span className={(Number(transaction.realized_gain_eur) || 0) >= 0 ? "text-emerald-300" : "text-red-300"}>
                               Realizada: {transaction.realized_gain_eur === null ? "Sin datos" : formatCurrencyByPreference(Number(transaction.realized_gain_eur), "EUR")}
                             </span>
                           ) : null}
+                        </div>
+                        <div className="mt-2 text-xs text-slate-400">
+                          Impacto neto: {formatCurrencyByPreference((Number(transaction.total_eur) || 0) - (Number(transaction.commission_eur) || 0), "EUR")}
                         </div>
                       </article>
                     ))}
