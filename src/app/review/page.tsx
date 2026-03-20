@@ -54,6 +54,17 @@ type ReviewTaskRow = {
   completed: boolean;
 };
 
+type ReviewStep = {
+  id: string;
+  eyebrow: string;
+  title: string;
+  summary: string;
+  detail: string;
+  status: "ready" | "attention";
+  href: string;
+  cta: string;
+};
+
 function isSameMonth(dateString: string, month: string) {
   return dateString.slice(0, 7) === month;
 }
@@ -86,6 +97,7 @@ export default function ReviewPage() {
   const [goalRows, setGoalRows] = useState<GoalRow[]>([]);
   const [completedTaskKeys, setCompletedTaskKeys] = useState<string[]>([]);
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
+  const [selectedStepId, setSelectedStepId] = useState("income");
 
   const loadReviewData = useCallback(async (uid: string) => {
     setLoading(true);
@@ -250,6 +262,91 @@ export default function ReviewPage() {
     setTogglingTaskId(null);
   }, [selectedMonth, supabase, userId]);
 
+  const reviewSteps = useMemo<ReviewStep[]>(() => {
+    const budgetStatus: ReviewStep["status"] =
+      reviewMetrics.currentIncome > 0 && reviewMetrics.currentSavingsTarget > 0 ? "ready" : "attention";
+    const portfolioStatus: ReviewStep["status"] =
+      reviewMetrics.investmentCount === 0 || reviewMetrics.pricesConnected === reviewMetrics.investmentCount ? "ready" : "attention";
+    const goalsStatus: ReviewStep["status"] = reviewMetrics.activeGoalsCount > 0 ? "ready" : "attention";
+    const fireStatus: ReviewStep["status"] = reviewMetrics.fireTarget > 0 ? "ready" : "attention";
+
+    return [
+      {
+        id: "income",
+        eyebrow: "Paso 1",
+        title: "Confirma el marco del mes",
+        summary: reviewMetrics.currentIncome > 0
+          ? `Ingresos registrados: ${formatCurrencyByPreference(reviewMetrics.currentIncome, currency)}`
+          : "Aun faltan ingresos registrados en el mes seleccionado.",
+        detail: "Sin ingresos y ahorro objetivo, el resto de la revision pierde contexto. Empieza por dejar bien cerrada esta base.",
+        status: budgetStatus,
+        href: "/budgets",
+        cta: reviewMetrics.currentIncome > 0 ? "Revisar ingresos y ahorro" : "Registrar ingresos"
+      },
+      {
+        id: "budget",
+        eyebrow: "Paso 2",
+        title: "Valida desviaciones del presupuesto",
+        summary: reviewMetrics.overspent.length > 0
+          ? `${reviewMetrics.overspent.length} categoria(s) ya van por encima del presupuesto.`
+          : "No hay categorias excedidas en este mes.",
+        detail: "Aqui decides si el mes esta bajo control o si necesitas ajustar categorias antes de cerrar la foto mensual.",
+        status: reviewMetrics.overspent.length > 0 ? "attention" : "ready",
+        href: "/budgets",
+        cta: "Abrir presupuestos"
+      },
+      {
+        id: "portfolio",
+        eyebrow: "Paso 3",
+        title: "Actualiza la cartera",
+        summary: reviewMetrics.investmentCount === 0
+          ? "No hay cartera registrada este mes."
+          : `${reviewMetrics.pricesConnected}/${reviewMetrics.investmentCount} posiciones tienen precio actual.`,
+        detail: "La revision queda mucho mas fiable si todas las posiciones tienen precio reciente y el patrimonio refleja la foto real.",
+        status: portfolioStatus,
+        href: "/investments",
+        cta: "Abrir inversiones"
+      },
+      {
+        id: "goals",
+        eyebrow: "Paso 4",
+        title: "Alinea el ahorro con tus metas",
+        summary: reviewMetrics.activeGoalsCount > 0
+          ? `${reviewMetrics.activeGoalsCount} objetivo(s) activos conectados al plan.`
+          : "Todavia no hay metas activas vinculadas al ahorro.",
+        detail: "Si el ahorro del mes no aterriza en objetivos concretos, la revision se queda en diagnostico y no en decision.",
+        status: goalsStatus,
+        href: "/goals",
+        cta: reviewMetrics.activeGoalsCount > 0 ? "Revisar objetivos" : "Crear objetivo"
+      },
+      {
+        id: "fire",
+        eyebrow: "Paso 5",
+        title: "Cierra con perspectiva FIRE",
+        summary: reviewMetrics.fireTarget > 0
+          ? `Progreso actual: ${reviewMetrics.fireProgress.toFixed(1)}% del objetivo FIRE.`
+          : "Aun no hay una base FIRE guardada para contextualizar el mes.",
+        detail: "Este ultimo paso conecta el cierre operativo del mes con tu plan de largo plazo para que el dashboard y la revision hablen el mismo idioma.",
+        status: fireStatus,
+        href: "/fire",
+        cta: reviewMetrics.fireTarget > 0 ? "Revisar FIRE" : "Completar FIRE"
+      }
+    ];
+  }, [currency, reviewMetrics]);
+
+  useEffect(() => {
+    if (!reviewSteps.some((step) => step.id === selectedStepId)) {
+      setSelectedStepId(reviewSteps[0]?.id ?? "income");
+    }
+  }, [reviewSteps, selectedStepId]);
+
+  const selectedStep = useMemo(
+    () => reviewSteps.find((step) => step.id === selectedStepId) ?? reviewSteps[0] ?? null,
+    [reviewSteps, selectedStepId]
+  );
+  const selectedStepIndex = selectedStep ? reviewSteps.findIndex((step) => step.id === selectedStep.id) : -1;
+  const completedStepCount = reviewSteps.filter((step) => step.status === "ready").length;
+
   if (authLoading) {
     return (
       <>
@@ -288,6 +385,75 @@ export default function ReviewPage() {
 
         {!loading ? (
           <>
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+              <SectionHeader
+                eyebrow="Cierre guiado"
+                title="Sigue un paso a paso para cerrar el mes"
+                description="La revision ya no es solo una pantalla de lectura: ahora te guía desde la base operativa hasta la perspectiva FIRE."
+                aside={<span className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">{completedStepCount}/{reviewSteps.length} pasos listos</span>}
+              />
+
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)] transition-all" style={{ width: `${(completedStepCount / Math.max(reviewSteps.length, 1)) * 100}%` }} />
+              </div>
+
+              <div className="mt-5 grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
+                <div className="grid gap-3">
+                  {reviewSteps.map((step, index) => (
+                    <button
+                      key={step.id}
+                      type="button"
+                      onClick={() => setSelectedStepId(step.id)}
+                      className={`rounded-[24px] border p-4 text-left transition ${
+                        selectedStepId === step.id
+                          ? "border-emerald-300/30 bg-emerald-400/10 shadow-[0_12px_30px_rgba(15,118,110,0.15)]"
+                          : "border-white/8 bg-white/5 hover:bg-white/8"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{step.eyebrow}</p>
+                          <h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{step.title}</h3>
+                        </div>
+                        <span className={`ui-chip rounded-full border px-3 py-1.5 text-[11px] ${step.status === "ready" ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-200" : "border-amber-300/20 bg-amber-400/10 text-amber-200"}`}>
+                          {step.status === "ready" ? "Listo" : "Revisar"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-300">{step.summary}</p>
+                      <p className="mt-3 text-xs text-slate-500">Paso {index + 1} de {reviewSteps.length}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedStep ? (
+                  <article className="rounded-[28px] border border-white/8 bg-white/5 p-5">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{selectedStep.eyebrow}</p>
+                    <h3 className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{selectedStep.title}</h3>
+                    <p className="mt-4 text-sm leading-7 text-slate-300">{selectedStep.detail}</p>
+                    <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/40 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Lectura rapida</p>
+                      <p className="mt-2 text-lg font-medium text-white">{selectedStep.summary}</p>
+                    </div>
+                    <div className="mt-5 flex flex-wrap gap-3">
+                      <Link href={selectedStep.href} className="rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400">
+                        {selectedStep.cta}
+                      </Link>
+                      {selectedStepIndex > 0 ? (
+                        <button type="button" onClick={() => setSelectedStepId(reviewSteps[selectedStepIndex - 1].id)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10">
+                          Paso anterior
+                        </button>
+                      ) : null}
+                      {selectedStepIndex >= 0 && selectedStepIndex < reviewSteps.length - 1 ? (
+                        <button type="button" onClick={() => setSelectedStepId(reviewSteps[selectedStepIndex + 1].id)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10">
+                          Siguiente paso
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ) : null}
+              </div>
+            </section>
+
             <section className="grid gap-3 xl:col-span-12 md:grid-cols-2 xl:grid-cols-4">
               <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentIncome, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousIncome, currency)}</p></article>
               <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentExpenses, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousExpenses, currency)}</p></article>
