@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import EmptyStateCard from "@/components/empty-state-card";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
@@ -2584,13 +2585,25 @@ export default function InvestmentsPage() {
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
           {!loading && investments.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
-              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">Aun no tienes inversiones registradas.</p>
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Sin cartera"
+                title="Todavia no hay inversiones registradas"
+                description="Anade tu primera posicion, importa un CSV o usa el buscador por ticker/ISIN para montar la cartera mas rapido."
+                actionLabel="Empieza con Nueva posicion o Importar CSV"
+                compact
+              />
             </div>
           ) : null}
           {!loading && investments.length > 0 && groupedAssetTypes.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
-              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">No hay resultados con los filtros actuales.</p>
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Filtros"
+                title="No hay resultados con los filtros actuales"
+                description="Prueba a limpiar filtros o ampliar la busqueda para volver a ver tipos de activo y posiciones."
+                actionLabel="Usa Limpiar filtros"
+                compact
+              />
             </div>
           ) : null}
 

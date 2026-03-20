@@ -16,6 +16,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
 import SideNav from "@/components/side-nav";
+import EmptyStateCard from "@/components/empty-state-card";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 
@@ -681,7 +682,17 @@ export default function ExpensesPage() {
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando gastos...</p> : null}
-          {!loading && expenses.length === 0 ? <p className="mt-6 text-sm text-slate-300">Aun no tienes gastos registrados.</p> : null}
+          {!loading && expenses.length === 0 ? (
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Sin movimientos"
+                title="Todavia no hay gastos registrados"
+                description="Empieza registrando un gasto real o importa el presupuesto mensual para convertirlo en base de seguimiento."
+                actionLabel="Usa el formulario o Copiar presupuesto"
+                compact
+              />
+            </div>
+          ) : null}
 
           {!loading && expenses.length > 0 ? (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

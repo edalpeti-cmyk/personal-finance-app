@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import EmptyStateCard from "@/components/empty-state-card";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
 
@@ -401,7 +402,15 @@ export default function FirePage() {
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion del patrimonio</h2>
 
           {simulation.points.length === 0 ? (
-            <p className="mt-6 text-sm text-slate-300">Sin datos.</p>
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Proyeccion"
+                title="Faltan datos para proyectar FIRE"
+                description="Completa gastos anuales, patrimonio actual y aportacion anual para generar la tabla de evolucion."
+                actionLabel="Rellena el formulario superior"
+                compact
+              />
+            </div>
           ) : (
             <div className="table-scroll mt-6">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">

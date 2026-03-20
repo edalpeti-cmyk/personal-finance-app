@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import EmptyStateCard from "@/components/empty-state-card";
 import { useTheme } from "@/components/theme-provider";
 import { type CurrencyCode, formatCurrencyByPreference, formatDateByPreference, formatMonthByPreference } from "@/lib/preferences-format";
 
@@ -799,8 +800,14 @@ export default function BudgetsPage() {
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando presupuesto...</p> : null}
           {!loading && rows.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
-              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">Aun no hay categorias presupuestadas para este mes.</p>
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Mes vacio"
+                title="Todavia no hay categorias presupuestadas"
+                description="Crea una categoria nueva o copia el presupuesto de otro mes para no empezar desde cero."
+                actionLabel="Usa Crear presupuesto o Copiar otro mes"
+                compact
+              />
             </div>
           ) : null}
 
@@ -855,8 +862,14 @@ export default function BudgetsPage() {
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
 
           {categoryComparison.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
-              <p className="max-w-[40ch] text-sm leading-7 text-slate-300">Sin datos suficientes para comparar meses.</p>
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Comparativa"
+                title="Aun no hay base suficiente para comparar"
+                description="Necesitas datos en el mes actual y en el anterior para que la comparativa mensual tenga sentido."
+                actionLabel="Completa al menos dos meses"
+                compact
+              />
             </div>
           ) : (
             <div className={`table-scroll mt-6 ${categoryComparison.length > 6 ? "max-h-[420px]" : ""}`}>

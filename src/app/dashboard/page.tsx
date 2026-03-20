@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
+import EmptyStateCard from "@/components/empty-state-card";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
@@ -905,6 +906,16 @@ export default function DashboardPage() {
     return reminders.filter((reminder) => !dismissedReminderIds.includes(reminder.id)).slice(0, 4);
   }, [dismissedReminderIds, incomeRows, investmentRows, metrics, savingsTargetRows, snapshotRows]);
 
+  const currentMonthSavingsTarget = useMemo(() => {
+    const now = new Date();
+    return savingsTargetRows.reduce((sum, row) => (isSameMonth(row.month, now) ? sum + Number(row.savings_target) : sum), 0);
+  }, [savingsTargetRows]);
+
+  const currentMonthIncome = useMemo(() => {
+    const now = new Date();
+    return incomeRows.reduce((sum, row) => (isSameMonth(row.income_date, now) ? sum + Number(row.amount) : sum), 0);
+  }, [incomeRows]);
+
   const dismissReminder = useCallback((reminderId: string) => {
     setDismissedReminderIds((current) => {
       const next = Array.from(new Set([...current, reminderId]));
@@ -1653,13 +1664,18 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
-        {!loading && !message && metrics ? (
-          <>
-            {!hasFinancialData ? (
-              <section className="rounded-[28px] border border-amber-200 bg-amber-50/95 p-6 text-amber-900 md:col-span-2 xl:col-span-12">
-                Aun no hay datos suficientes para un analisis completo. Registra ingresos, gastos o inversiones para activar todas las metricas.
-              </section>
-            ) : null}
+          {!loading && !message && metrics ? (
+            <>
+              {!hasFinancialData ? (
+                <section className="md:col-span-2 xl:col-span-12">
+                  <EmptyStateCard
+                    eyebrow="Primeros pasos"
+                    title="Todavia no hay suficiente contexto financiero"
+                    description="Registra ingresos, gastos o inversiones para activar metricas, alertas, IA y seguimiento historico del patrimonio."
+                    actionLabel="Empieza por Presupuestos o Inversiones"
+                  />
+                </section>
+              ) : null}
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio total</p>
@@ -1687,6 +1703,48 @@ export default function DashboardPage() {
                 {metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}
               </p>
               <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Calculado con la misma configuracion que tienes en la pagina FIRE.</p>
+            </section>
+
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Centro del mes</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lo importante antes de entrar al detalle</h2>
+                </div>
+                <p className="text-sm text-white/64">Un resumen operativo para saber si toca registrar, ajustar o revisar.</p>
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Ahorro del mes</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(currentMonthSavingsTarget, currency)}</p>
+                  <p className="mt-2 text-sm leading-6 text-white/72">
+                    {currentMonthIncome > 0
+                      ? `Objetivo sobre ${formatCurrencyByPreference(currentMonthIncome, currency)} de ingresos actuales.`
+                      : "Todavia no hay ingresos del mes para contextualizar la tasa de ahorro."}
+                  </p>
+                </article>
+                <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Siguiente accion</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">
+                    {dashboardReminders[0]?.title ?? "Panel al dia"}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-white/72">
+                    {dashboardReminders[0]?.cta ?? "No hay pendientes urgentes. Puedes usar el dashboard como revisión rápida."}
+                  </p>
+                </article>
+                <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cobertura de cartera</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
+                    {investmentRows.length === 0 ? "Sin cartera" : `${investmentRows.filter((row) => row.current_price !== null).length}/${investmentRows.length}`}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-white/72">
+                    {investmentRows.length === 0
+                      ? "Aun no has registrado inversiones en la cartera."
+                      : "Posiciones con precio actual guardado frente al total de activos registrados."}
+                  </p>
+                </article>
+              </div>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
