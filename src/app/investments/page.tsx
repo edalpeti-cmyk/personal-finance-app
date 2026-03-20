@@ -468,6 +468,10 @@ export default function InvestmentsPage() {
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const investmentNameById = useMemo(
+    () => Object.fromEntries(investments.map((row) => [row.id, row.asset_name])),
+    [investments]
+  );
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -1453,6 +1457,7 @@ export default function InvestmentsPage() {
   const handleRefreshPrices = async (investmentId?: string) => {
     setRefreshingPrices(true);
     setMessage(null);
+    const localNameById = investmentNameById;
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1489,11 +1494,19 @@ export default function InvestmentsPage() {
       });
 
       const updatedExamples = (data.updated ?? []).map((item) => {
-        const assetLabel = resolveRefreshAssetLabel(item);
+        const assetLabel = resolveRefreshAssetLabel({
+          ...item,
+          asset_name: item.asset_name ?? localNameById[item.id] ?? null
+        });
         const resolved = item.resolvedSymbol && item.resolvedSymbol !== item.symbol ? ` -> ${item.resolvedSymbol}` : "";
         return `${assetLabel}${resolved} (${formatProviderLabel(item.provider)})`;
       });
-      const skippedExamples = (data.skipped ?? []).map((item) => resolveRefreshAssetLabel(item));
+      const skippedExamples = (data.skipped ?? []).map((item) =>
+        resolveRefreshAssetLabel({
+          ...item,
+          asset_name: item.asset_name ?? localNameById[item.id] ?? null
+        })
+      );
 
       if (skippedCount > 0 || updatedExamples.length > 0) {
         const parts: string[] = [];
