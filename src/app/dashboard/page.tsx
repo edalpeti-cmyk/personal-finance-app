@@ -895,13 +895,13 @@ export default function DashboardPage() {
               </section>
             ) : null}
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio total</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p>
               <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Caja neta acumulada mas valor actual de inversiones.</p>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}
@@ -909,13 +909,13 @@ export default function DashboardPage() {
               <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Basada en tu ahorro objetivo del mes actual frente a los ingresos del mes.</p>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
               <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los meses del año actual.</p>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}
@@ -1009,7 +1009,7 @@ export default function DashboardPage() {
               </div>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {dashboardAlerts.map((alert) => (
-                  <article key={alert.title} className="rounded-3xl border border-white/8 bg-white/6 p-5">
+                  <article key={alert.title} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
                     <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
                       {alert.title}
                     </p>
@@ -1096,7 +1096,7 @@ export default function DashboardPage() {
                 <>
                   <div className="mt-6 grid gap-3 md:grid-cols-3">
                     {aiInsights.map((insight: string) => (
-                      <article key={insight} className="rounded-3xl border border-white/8 bg-white/6 p-5 shadow-[0_16px_34px_rgba(2,8,23,0.26)]">
+                      <article key={insight} className="rounded-[24px] border border-white/8 bg-white/6 p-4 shadow-[0_16px_34px_rgba(2,8,23,0.26)]">
                         <p className="text-sm leading-6 text-white/84">{insight}</p>
                       </article>
                     ))}

@@ -2087,13 +2087,13 @@ export default function InvestmentsPage() {
           </form>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
-          <article className="kpi-card rounded-[26px] p-6">
+        <section className="grid gap-3 xl:col-span-7 md:grid-cols-2 xl:grid-cols-3">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total en EUR</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma del valor actual de tus posiciones, consolidada en EUR.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia latente</p>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(profitEur, "EUR")}
@@ -2103,26 +2103,26 @@ export default function InvestmentsPage() {
             </p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Resultado aun no realizado de las posiciones que sigues manteniendo en cartera.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia realizada</p>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${realizedGainTotalEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(realizedGainTotalEur, "EUR")}
             </p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma acumulada de ganancias o perdidas cerradas en tus ventas.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Resultado total</p>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${combinedProfitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(combinedProfitEur, "EUR")}
             </p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de la plusvalia latente actual y la plusvalia ya realizada en ventas.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{metrics.trackedPositions}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Activos con simbolo valido para actualizar precio automaticamente.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4 md:col-span-2 xl:col-span-1">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mayor posicion</p>
             <p className="mt-4 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{biggestPosition ? biggestPosition.asset_name : "Sin datos"}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">
@@ -2158,11 +2158,11 @@ export default function InvestmentsPage() {
             <p className="text-sm text-slate-400">{diversificationScore} tipos activos, {profitablePositions} posiciones en positivo</p>
           </div>
 
-          <div className="mt-6 grid gap-6">
+          <div className="mt-5 grid gap-4">
             <div className="min-w-0 grid gap-3 md:grid-cols-2">
             {allocationByType.length > 0 ? (
               allocationByType.map((item) => (
-                <article key={item.type} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                <article key={item.type} className="rounded-[24px] border border-white/8 bg-white/5 p-3.5">
                   <div className="flex items-center gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-sm font-semibold text-emerald-300">
                       {item.weightPct.toFixed(0)}%
@@ -2188,7 +2188,7 @@ export default function InvestmentsPage() {
             )}
             </div>
 
-            <div className="min-w-0 overflow-hidden rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div className="min-w-0 overflow-hidden rounded-[24px] border border-white/8 bg-white/5 p-3.5">
               <p className="text-sm font-medium text-white">Grafico de distribucion</p>
               <div className="relative mt-4 h-[320px] w-full">
                 {allocationByType.length > 0 ? (
@@ -2279,7 +2279,7 @@ export default function InvestmentsPage() {
                 </article>
               ))
             ) : (
-              <div className="rounded-3xl border border-white/8 bg-white/5 p-5 text-sm text-slate-300">Aun no hay divisas suficientes para analizar la distribucion monetaria.</div>
+              <div className="rounded-[24px] border border-white/8 bg-white/5 p-4 text-sm text-slate-300">Aun no hay divisas suficientes para analizar la distribucion monetaria.</div>
             )}
           </div>
         </section>

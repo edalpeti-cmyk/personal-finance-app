@@ -700,23 +700,23 @@ export default function BudgetsPage() {
           </form>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
-          <article className="kpi-card rounded-[26px] p-6">
+        <section className="grid gap-3 xl:col-span-7 md:grid-cols-2">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalBudget, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Total planificado para el mes seleccionado.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalActual, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de los gastos ya registrados en el mes.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeSummary.currentSavings, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Objetivo de ahorro que has marcado para este mes.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6">
+          <article className="kpi-card rounded-[24px] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo dividido entre los ingresos del mes seleccionado.</p>
@@ -754,29 +754,29 @@ export default function BudgetsPage() {
             <button className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10" type="button" onClick={handleExportCsv}>Exportar CSV</button>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta presupuesto</p>
               <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(monthOverMonth.budgetDelta, currency)}</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">Cambio del presupuesto frente al mes anterior.</p>
             </div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta gasto real</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${monthOverMonth.actualDelta > 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(monthOverMonth.actualDelta, currency)}</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">Variacion del gasto registrado respecto al mes previo.</p>
             </div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ingresos</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${incomeComparison.incomeDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.incomeDelta, currency)}</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">Cambio de ingresos comparado con el mes anterior.</p>
             </div>
-            <div className="rounded-3xl border border-white/8 bg-white/5 p-4">
+            <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ahorro objetivo</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${incomeComparison.savingsDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">Cambio del ahorro objetivo frente al mes anterior.</p>
             </div>
           </div>
-          <div className="mt-4 rounded-3xl border border-white/8 bg-white/5 p-4 text-sm text-slate-300">
+          <div className="mt-3 rounded-[24px] border border-white/8 bg-white/5 p-4 text-sm text-slate-300">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Consumo del presupuesto</p>
             <p className="mt-2 text-white">
               Actual: <span className="font-medium">{totals.totalSpentPercent.toFixed(1)}%</span>
