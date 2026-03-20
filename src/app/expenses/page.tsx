@@ -620,7 +620,7 @@ export default function ExpensesPage() {
           </article>
         </section>
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Grafico mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion anual del gasto</h2>
           <div className="mt-6 h-[320px]">
@@ -628,7 +628,7 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
           <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
           <div className="mt-5 grid gap-3 text-sm text-slate-200 2xl:grid-cols-2">
