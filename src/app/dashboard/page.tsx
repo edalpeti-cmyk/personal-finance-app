@@ -66,6 +66,7 @@ type DashboardReminder = {
   body: string;
   cta: string;
 };
+type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "monthlyTrend" | "fireOverview" | "aiInsights";
 type MonthlyTrendPoint = {
   label: string;
   income: number;
@@ -94,6 +95,16 @@ const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "annual", label: "Anual" },
   { value: "current_year", label: "Ano actual" }
 ];
+const DASHBOARD_WIDGETS: Array<{ id: DashboardWidgetId; label: string; description: string }> = [
+  { id: "netWorthChart", label: "Patrimonio", description: "Grafico de evolucion, snapshots y exportes." },
+  { id: "reminders", label: "Recordatorios", description: "Pendientes operativos del mes y de la cartera." },
+  { id: "alerts", label: "Alertas", description: "Riesgos y senales automaticas del panel." },
+  { id: "monthlyTrend", label: "Historico mensual", description: "Ingresos frente a ahorro objetivo." },
+  { id: "fireOverview", label: "FIRE", description: "Progreso y horizonte hacia independencia financiera." },
+  { id: "aiInsights", label: "IA financiera", description: "Lectura automatica de habitos y contexto." }
+];
+const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
+const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function isSameMonth(dateString: string, now: Date) {
@@ -362,6 +373,8 @@ export default function DashboardPage() {
   const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
   const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
+  const [widgetOrder, setWidgetOrder] = useState<DashboardWidgetId[]>(DASHBOARD_WIDGETS.map((widget) => widget.id));
+  const [hiddenWidgets, setHiddenWidgets] = useState<DashboardWidgetId[]>([]);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -559,6 +572,74 @@ export default function DashboardPage() {
     } catch {
       setDismissedReminderIds([]);
     }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const storedOrder = window.localStorage.getItem(DASHBOARD_WIDGET_ORDER_KEY);
+      const storedHidden = window.localStorage.getItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
+
+      if (storedOrder) {
+        const parsedOrder = JSON.parse(storedOrder) as DashboardWidgetId[];
+        if (Array.isArray(parsedOrder)) {
+          const validIds = DASHBOARD_WIDGETS.map((widget) => widget.id);
+          const sanitized = parsedOrder.filter((id): id is DashboardWidgetId => validIds.includes(id));
+          const missing = validIds.filter((id) => !sanitized.includes(id));
+          setWidgetOrder([...sanitized, ...missing]);
+        }
+      }
+
+      if (storedHidden) {
+        const parsedHidden = JSON.parse(storedHidden) as DashboardWidgetId[];
+        if (Array.isArray(parsedHidden)) {
+          const validIds = DASHBOARD_WIDGETS.map((widget) => widget.id);
+          setHiddenWidgets(parsedHidden.filter((id): id is DashboardWidgetId => validIds.includes(id)));
+        }
+      }
+    } catch {
+      setWidgetOrder(DASHBOARD_WIDGETS.map((widget) => widget.id));
+      setHiddenWidgets([]);
+    }
+  }, []);
+
+  const visibleWidgetOrder = useMemo(
+    () => widgetOrder.filter((widgetId) => !hiddenWidgets.includes(widgetId)),
+    [hiddenWidgets, widgetOrder]
+  );
+
+  const toggleWidgetVisibility = useCallback((widgetId: DashboardWidgetId) => {
+    setHiddenWidgets((current) => {
+      const next = current.includes(widgetId) ? current.filter((id) => id !== widgetId) : [...current, widgetId];
+      window.localStorage.setItem(DASHBOARD_HIDDEN_WIDGETS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const moveWidget = useCallback((widgetId: DashboardWidgetId, direction: "up" | "down") => {
+    setWidgetOrder((current) => {
+      const index = current.indexOf(widgetId);
+      if (index === -1) {
+        return current;
+      }
+
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      window.localStorage.setItem(DASHBOARD_WIDGET_ORDER_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const resetWidgets = useCallback(() => {
+    const defaultOrder = DASHBOARD_WIDGETS.map((widget) => widget.id);
+    setWidgetOrder(defaultOrder);
+    setHiddenWidgets([]);
+    window.localStorage.setItem(DASHBOARD_WIDGET_ORDER_KEY, JSON.stringify(defaultOrder));
+    window.localStorage.removeItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
   }, []);
 
   const dashboardReminders = useMemo<DashboardReminder[]>(() => {
@@ -872,6 +953,315 @@ export default function DashboardPage() {
     setSnapshotSaving(false);
   }, [metrics, persistSnapshot, userId]);
 
+  const renderDashboardWidget = useCallback(
+    (widgetId: DashboardWidgetId) => {
+      if (!metrics) {
+        return null;
+      }
+
+      switch (widgetId) {
+        case "netWorthChart":
+          return (
+            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion del patrimonio</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Patrimonio guardado por periodos</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
+                    {snapshotRows.length > 1
+                      ? "Grafico basado en snapshots diarios guardados en tu base de datos."
+                      : "Aun no hay suficiente historico guardado. Mientras tanto mostramos una estimacion basada en flujo de caja acumulado."}
+                  </p>
+                </div>
+                <div className="flex flex-col items-start gap-3 lg:items-end">
+                  <div className="flex flex-wrap gap-2">
+                    {RANGE_OPTIONS.map((option) => {
+                      const active = chartRange === option.value;
+                      const variation = timelineRangeVariations[option.value];
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setChartRange(option.value)}
+                          className={`rounded-full px-4 py-2 text-sm transition ${
+                            active ? "bg-emerald-500 text-slate-950" : "bg-white/6 text-white/78 hover:bg-white/12"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span>{option.label}</span>
+                            <span className={`text-xs ${active ? "text-slate-950/80" : "text-white/58"}`}>
+                              {variation === null ? "n/d" : `${variation >= 0 ? "+" : ""}${variation.toFixed(1)}%`}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveSnapshot}
+                      disabled={snapshotSaving || !metrics}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {snapshotSaving ? "Guardando..." : "Guardar snapshot ahora"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportCsvReport}
+                      disabled={!metrics}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Exportar CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportPdfReport}
+                      disabled={!metrics}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Exportar PDF
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {snapshotMessage ? <p className="mt-4 text-sm text-emerald-300">{snapshotMessage}</p> : null}
+
+              <div className="mt-6 h-[320px]">
+                {timelinePoints.length > 0 ? (
+                  <Line data={timelineChartData} options={timelineChartOptions} />
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/60 text-sm text-slate-500">
+                    Aun no hay suficientes datos para dibujar la evolucion del patrimonio.
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        case "reminders":
+          return (
+            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Recordatorios automaticos</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Pequenos pendientes para mantener el panel al dia</h2>
+                </div>
+                {dismissedReminderIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={restoreReminders}
+                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    Reactivar recordatorios
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {dashboardReminders.length > 0 ? (
+                  dashboardReminders.map((reminder) => (
+                    <article key={reminder.id} className="rounded-[24px] border border-sky-400/12 bg-white/6 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-sky-300">{reminder.title}</p>
+                        <button
+                          type="button"
+                          onClick={() => dismissReminder(reminder.id)}
+                          className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-200 hover:bg-white/10"
+                        >
+                          Ocultar
+                        </button>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-white/80">{reminder.body}</p>
+                      <p className="mt-3 text-xs font-medium text-emerald-300">{reminder.cta}</p>
+                    </article>
+                  ))
+                ) : (
+                  <article className="rounded-[24px] border border-emerald-400/12 bg-white/6 p-4 md:col-span-2 xl:col-span-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Todo en orden</p>
+                    <p className="mt-3 text-sm leading-6 text-white/80">
+                      No hay recordatorios pendientes ahora mismo. El panel tiene los datos clave bastante al dia.
+                    </p>
+                  </article>
+                )}
+              </div>
+            </section>
+          );
+        case "alerts":
+          return (
+            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Alertas automaticas</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Senales que conviene vigilar</h2>
+                </div>
+              </div>
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {dashboardAlerts.map((alert) => (
+                  <article key={alert.title} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
+                      {alert.title}
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-white/80">{alert.body}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          );
+        case "monthlyTrend":
+          return (
+            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Historico mensual</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ingresos frente a ahorro objetivo</h2>
+                </div>
+              </div>
+              <div className="mt-6 h-[280px]">
+                <Line data={monthlyTrendChartData} options={monthlyTrendChartOptions} />
+              </div>
+            </section>
+          );
+        case "fireOverview":
+          return (
+            <>
+              <section key={`${widgetId}-progress`} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-7">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Progreso FIRE</p>
+                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Camino hacia libertad financiera</h2>
+                  </div>
+                  <p className="rounded-full bg-teal-700 px-3 py-1 text-sm font-medium text-white">{metrics.fireProgress.toFixed(2)}%</p>
+                </div>
+
+                <div className="mt-6 h-5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)] transition-all duration-500"
+                    style={{ width: `${metrics.fireProgress.toFixed(2)}%` }}
+                  />
+                </div>
+
+                <div className="mt-5 grid gap-3 text-sm text-white/64 sm:grid-cols-2">
+                  <p>Objetivo estimado: <span className="font-medium text-white/84">{metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}</span></p>
+                  <p>Rentabilidad asumida: <span className="font-medium text-white/84">5% anual</span></p>
+                </div>
+              </section>
+
+              <section key={`${widgetId}-horizon`} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-5">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Horizonte</p>
+                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Anos estimados para independencia</h2>
+                <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-white">
+                  {metrics.fireTarget <= 0
+                    ? "No calculable"
+                    : metrics.yearsToFire === null
+                      ? "No alcanzable"
+                      : `${metrics.yearsToFire} anos`}
+                </p>
+                <p className="mt-4 text-sm leading-6 text-white/64">
+                  La estimacion usa la configuracion guardada en FIRE: gastos anuales, aportacion anual y rentabilidad esperada.
+                </p>
+              </section>
+            </>
+          );
+        case "aiInsights":
+          return (
+            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">IA financiera</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura automatica de tus habitos</h2>
+                </div>
+                <button
+                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={generateInsights}
+                  disabled={aiLoading || !hasFinancialData}
+                  type="button"
+                >
+                  {aiLoading ? "Analizando..." : "Regenerar insights IA"}
+                </button>
+              </div>
+
+              {!hasFinancialData ? (
+                <p className="mt-4 text-sm text-white/64">Sin datos financieros suficientes para generar insights utiles.</p>
+              ) : null}
+              {aiError ? <p className="mt-4 text-sm text-red-700">{aiError}</p> : null}
+              {!aiError && aiInsights.length === 0 && hasFinancialData ? (
+                <p className="mt-4 text-sm text-white/64">Generando recomendaciones personalizadas...</p>
+              ) : null}
+
+              {aiInsights.length > 0 ? (
+                <>
+                  <div className="mt-6 grid gap-3 md:grid-cols-3">
+                    {aiInsights.map((insight: string) => (
+                      <article key={insight} className="rounded-[24px] border border-white/8 bg-white/6 p-4 shadow-[0_16px_34px_rgba(2,8,23,0.26)]">
+                        <p className="text-sm leading-6 text-white/84">{insight}</p>
+                      </article>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-xs text-slate-500">
+                    Fuente: {aiSource === "openai" ? "modelo OpenAI" : "motor local de reglas"}. No es consejo financiero profesional.
+                  </p>
+                  {aiDebug ? (
+                    <details className="mt-4 rounded-3xl border border-white/8 bg-white/6 p-4 text-sm text-white/80">
+                      <summary className="cursor-pointer font-medium text-white">Ver datos usados por la IA</summary>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Mes actual</p>
+                          <p className="mt-2">Ingresos: {formatCurrencyByPreference(aiDebug.monthlyIncome, currency)}</p>
+                          <p className="mt-1">Gastos: {formatCurrencyByPreference(aiDebug.monthlyExpenses, currency)}</p>
+                          <p className="mt-1">Ahorro objetivo: {formatCurrencyByPreference(aiDebug.monthlySavingsTarget, currency)}</p>
+                          <p className="mt-1">Tasa ahorro: {aiDebug.savingsRate === null ? "Sin datos" : `${aiDebug.savingsRate.toFixed(2)}%`}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Ano actual y FIRE</p>
+                          <p className="mt-2">Ahorro anual: {formatCurrencyByPreference(aiDebug.annualSavings, currency)}</p>
+                          <p className="mt-1">Patrimonio: {formatCurrencyByPreference(aiDebug.netWorth, currency)}</p>
+                          <p className="mt-1">Objetivo FIRE: {formatCurrencyByPreference(aiDebug.fireTarget, currency)}</p>
+                          <p className="mt-1">Progreso FIRE: {aiDebug.fireProgress.toFixed(2)}%</p>
+                        </div>
+                      </div>
+                    </details>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          );
+        default:
+          return null;
+      }
+    },
+    [
+      aiDebug,
+      aiError,
+      aiInsights,
+      aiLoading,
+      aiSource,
+      chartRange,
+      currency,
+      dashboardAlerts,
+      dashboardReminders,
+      dateFormat,
+      dismissedReminderIds.length,
+      dismissReminder,
+      generateInsights,
+      handleExportCsvReport,
+      handleExportPdfReport,
+      handleSaveSnapshot,
+      hasFinancialData,
+      metrics,
+      monthlyTrendChartData,
+      monthlyTrendChartOptions,
+      restoreReminders,
+      snapshotMessage,
+      snapshotRows.length,
+      snapshotSaving,
+      timelineChartData,
+      timelineChartOptions,
+      timelinePoints.length,
+      timelineRangeVariations
+    ]
+  );
+
   useEffect(() => {
     const loadRates = async () => {
       try {
@@ -1092,256 +1482,74 @@ export default function DashboardPage() {
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion del patrimonio</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Patrimonio guardado por periodos</h2>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Widgets del dashboard</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Personaliza lo que quieres ver primero</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
-                    {snapshotRows.length > 1
-                      ? "Grafico basado en snapshots diarios guardados en tu base de datos."
-                      : "Aun no hay suficiente historico guardado. Mientras tanto mostramos una estimacion basada en flujo de caja acumulado."}
+                    Puedes ocultar bloques que ahora no te aporten valor y mover arriba los que quieres revisar siempre primero.
                   </p>
                 </div>
-                <div className="flex flex-col items-start gap-3 lg:items-end">
-                  <div className="flex flex-wrap gap-2">
-                    {RANGE_OPTIONS.map((option) => {
-                      const active = chartRange === option.value;
-                      const variation = timelineRangeVariations[option.value];
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setChartRange(option.value)}
-                          className={`rounded-full px-4 py-2 text-sm transition ${
-                            active ? "bg-emerald-500 text-slate-950" : "bg-white/6 text-white/78 hover:bg-white/12"
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span>{option.label}</span>
-                            <span className={`text-xs ${active ? "text-slate-950/80" : "text-white/58"}`}>
-                              {variation === null ? "n/d" : `${variation >= 0 ? "+" : ""}${variation.toFixed(1)}%`}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSaveSnapshot}
-                      disabled={snapshotSaving || !metrics}
-                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {snapshotSaving ? "Guardando..." : "Guardar snapshot ahora"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExportCsvReport}
-                      disabled={!metrics}
-                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Exportar CSV
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExportPdfReport}
-                      disabled={!metrics}
-                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Exportar PDF
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {snapshotMessage ? <p className="mt-4 text-sm text-emerald-300">{snapshotMessage}</p> : null}
-
-              <div className="mt-6 h-[320px]">
-                {timelinePoints.length > 0 ? (
-                  <Line data={timelineChartData} options={timelineChartOptions} />
-                ) : (
-                  <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/60 text-sm text-slate-500">
-                    Aun no hay suficientes datos para dibujar la evolucion del patrimonio.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Recordatorios automaticos</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Pequenos pendientes para mantener el panel al dia</h2>
-                </div>
-                {dismissedReminderIds.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={restoreReminders}
-                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
-                  >
-                    Reactivar recordatorios
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {dashboardReminders.length > 0 ? (
-                  dashboardReminders.map((reminder) => (
-                    <article key={reminder.id} className="rounded-[24px] border border-sky-400/12 bg-white/6 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-sky-300">{reminder.title}</p>
-                        <button
-                          type="button"
-                          onClick={() => dismissReminder(reminder.id)}
-                          className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-200 hover:bg-white/10"
-                        >
-                          Ocultar
-                        </button>
-                      </div>
-                      <p className="mt-3 text-sm leading-6 text-white/80">{reminder.body}</p>
-                      <p className="mt-3 text-xs font-medium text-emerald-300">{reminder.cta}</p>
-                    </article>
-                  ))
-                ) : (
-                  <article className="rounded-[24px] border border-emerald-400/12 bg-white/6 p-4 md:col-span-2 xl:col-span-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Todo en orden</p>
-                    <p className="mt-3 text-sm leading-6 text-white/80">
-                      No hay recordatorios pendientes ahora mismo. El panel tiene los datos clave bastante al dia.
-                    </p>
-                  </article>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Alertas automaticas</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Senales que conviene vigilar</h2>
-                </div>
-              </div>
-              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {dashboardAlerts.map((alert) => (
-                  <article key={alert.title} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                    <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
-                      {alert.title}
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-white/80">{alert.body}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Historico mensual</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ingresos frente a ahorro objetivo</h2>
-                </div>
-              </div>
-              <div className="mt-6 h-[280px]">
-                <Line data={monthlyTrendChartData} options={monthlyTrendChartOptions} />
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-7">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Progreso FIRE</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Camino hacia libertad financiera</h2>
-                </div>
-                <p className="rounded-full bg-teal-700 px-3 py-1 text-sm font-medium text-white">{metrics.fireProgress.toFixed(2)}%</p>
-              </div>
-
-              <div className="mt-6 h-5 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)] transition-all duration-500"
-                  style={{ width: `${metrics.fireProgress.toFixed(2)}%` }}
-                />
-              </div>
-
-              <div className="mt-5 grid gap-3 text-sm text-white/64 sm:grid-cols-2">
-                <p>Objetivo estimado: <span className="font-medium text-white/84">{metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}</span></p>
-                <p>Rentabilidad asumida: <span className="font-medium text-white/84">5% anual</span></p>
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-5">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Horizonte</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Anos estimados para independencia</h2>
-              <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-white">
-                {metrics.fireTarget <= 0
-                  ? "No calculable"
-                  : metrics.yearsToFire === null
-                    ? "No alcanzable"
-                    : `${metrics.yearsToFire} anos`}
-              </p>
-              <p className="mt-4 text-sm leading-6 text-white/64">
-                La estimacion usa la configuracion guardada en FIRE: gastos anuales, aportacion anual y rentabilidad esperada.
-              </p>
-            </section>
-
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">IA financiera</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura automatica de tus habitos</h2>
-                </div>
                 <button
-                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={generateInsights}
-                  disabled={aiLoading || !hasFinancialData}
                   type="button"
+                  onClick={resetWidgets}
+                  className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
                 >
-                  {aiLoading ? "Analizando..." : "Regenerar insights IA"}
+                  Restaurar orden
                 </button>
               </div>
 
-              {!hasFinancialData ? (
-                <p className="mt-4 text-sm text-white/64">Sin datos financieros suficientes para generar insights utiles.</p>
-              ) : null}
-              {aiError ? <p className="mt-4 text-sm text-red-700">{aiError}</p> : null}
-              {!aiError && aiInsights.length === 0 && hasFinancialData ? (
-                <p className="mt-4 text-sm text-white/64">Generando recomendaciones personalizadas...</p>
-              ) : null}
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {widgetOrder.map((widgetId, index) => {
+                  const widget = DASHBOARD_WIDGETS.find((entry) => entry.id === widgetId);
+                  if (!widget) {
+                    return null;
+                  }
 
-              {aiInsights.length > 0 ? (
-                <>
-                  <div className="mt-6 grid gap-3 md:grid-cols-3">
-                    {aiInsights.map((insight: string) => (
-                      <article key={insight} className="rounded-[24px] border border-white/8 bg-white/6 p-4 shadow-[0_16px_34px_rgba(2,8,23,0.26)]">
-                        <p className="text-sm leading-6 text-white/84">{insight}</p>
-                      </article>
-                    ))}
-                  </div>
-                  <p className="mt-4 text-xs text-slate-500">
-                    Fuente: {aiSource === "openai" ? "modelo OpenAI" : "motor local de reglas"}. No es consejo financiero profesional.
-                  </p>
-                  {aiDebug ? (
-                    <details className="mt-4 rounded-3xl border border-white/8 bg-white/6 p-4 text-sm text-white/80">
-                      <summary className="cursor-pointer font-medium text-white">Ver datos usados por la IA</summary>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Mes actual</p>
-                          <p className="mt-2">Ingresos: {formatCurrencyByPreference(aiDebug.monthlyIncome, currency)}</p>
-                          <p className="mt-1">Gastos: {formatCurrencyByPreference(aiDebug.monthlyExpenses, currency)}</p>
-                          <p className="mt-1">Ahorro objetivo: {formatCurrencyByPreference(aiDebug.monthlySavingsTarget, currency)}</p>
-                          <p className="mt-1">Tasa ahorro: {aiDebug.savingsRate === null ? "Sin datos" : `${aiDebug.savingsRate.toFixed(2)}%`}</p>
+                  const hidden = hiddenWidgets.includes(widgetId);
+                  return (
+                    <article key={widget.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{widget.label}</p>
+                          <p className="mt-2 text-sm leading-6 text-white/80">{widget.description}</p>
                         </div>
-                        <div className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Ano actual y FIRE</p>
-                          <p className="mt-2">Ahorro anual: {formatCurrencyByPreference(aiDebug.annualSavings, currency)}</p>
-                          <p className="mt-1">Patrimonio: {formatCurrencyByPreference(aiDebug.netWorth, currency)}</p>
-                          <p className="mt-1">Objetivo FIRE: {formatCurrencyByPreference(aiDebug.fireTarget, currency)}</p>
-                          <p className="mt-1">Progreso FIRE: {aiDebug.fireProgress.toFixed(2)}%</p>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleWidgetVisibility(widget.id)}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                            hidden ? "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                          }`}
+                        >
+                          {hidden ? "Mostrar" : "Visible"}
+                        </button>
                       </div>
-                    </details>
-                  ) : null}
-                </>
-              ) : null}
+                      <div className="mt-4 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => moveWidget(widget.id, "up")}
+                          disabled={index === 0}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Subir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveWidget(widget.id, "down")}
+                          disabled={index === widgetOrder.length - 1}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Bajar
+                        </button>
+                        <span className="text-xs text-slate-400">Posicion {index + 1}</span>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             </section>
+
+            {visibleWidgetOrder.map((widgetId) => renderDashboardWidget(widgetId))}
           </>
         ) : null}
       </main>
