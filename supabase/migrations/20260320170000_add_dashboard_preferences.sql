@@ -4,6 +4,7 @@ create table if not exists public.dashboard_preferences (
   widget_order jsonb not null default '[]'::jsonb,
   hidden_widgets jsonb not null default '[]'::jsonb,
   widget_sizes jsonb not null default '{}'::jsonb,
+  widget_widths jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint dashboard_preferences_user_unique unique (user_id)

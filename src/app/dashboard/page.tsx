@@ -68,10 +68,12 @@ type DashboardReminder = {
 };
 type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "monthlyTrend" | "fireOverview" | "aiInsights";
 type DashboardWidgetSize = "compact" | "expanded";
+type DashboardWidgetWidth = "normal" | "full";
 type DashboardPreferencesRow = {
   widget_order: DashboardWidgetId[] | null;
   hidden_widgets: DashboardWidgetId[] | null;
   widget_sizes: Record<DashboardWidgetId, DashboardWidgetSize> | null;
+  widget_widths: Record<DashboardWidgetId, DashboardWidgetWidth> | null;
 };
 type MonthlyTrendPoint = {
   label: string;
@@ -112,6 +114,7 @@ const DASHBOARD_WIDGETS: Array<{ id: DashboardWidgetId; label: string; descripti
 const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
 const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
+const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function isSameMonth(dateString: string, now: Date) {
@@ -390,7 +393,16 @@ export default function DashboardPage() {
     fireOverview: "compact",
     aiInsights: "expanded"
   });
+  const [widgetWidths, setWidgetWidths] = useState<Record<DashboardWidgetId, DashboardWidgetWidth>>({
+    netWorthChart: "full",
+    reminders: "full",
+    alerts: "full",
+    monthlyTrend: "full",
+    fireOverview: "normal",
+    aiInsights: "full"
+  });
   const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
+  const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -595,6 +607,7 @@ export default function DashboardPage() {
       const storedOrder = window.localStorage.getItem(DASHBOARD_WIDGET_ORDER_KEY);
       const storedHidden = window.localStorage.getItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
       const storedSizes = window.localStorage.getItem(DASHBOARD_WIDGET_SIZES_KEY);
+      const storedWidths = window.localStorage.getItem(DASHBOARD_WIDGET_WIDTHS_KEY);
 
       if (storedOrder) {
         const parsedOrder = JSON.parse(storedOrder) as DashboardWidgetId[];
@@ -628,6 +641,21 @@ export default function DashboardPage() {
           return next;
         });
       }
+
+      if (storedWidths) {
+        const parsedWidths = JSON.parse(storedWidths) as Record<DashboardWidgetId, DashboardWidgetWidth>;
+        const validIds = DASHBOARD_WIDGETS.map((widget) => widget.id);
+        setWidgetWidths((current) => {
+          const next = { ...current };
+          validIds.forEach((id) => {
+            const value = parsedWidths?.[id];
+            if (value === "normal" || value === "full") {
+              next[id] = value;
+            }
+          });
+          return next;
+        });
+      }
     } catch {
       setWidgetOrder(DASHBOARD_WIDGETS.map((widget) => widget.id));
       setHiddenWidgets([]);
@@ -643,7 +671,7 @@ export default function DashboardPage() {
 
       const { data, error } = await supabase
         .from("dashboard_preferences")
-        .select("widget_order, hidden_widgets, widget_sizes")
+        .select("widget_order, hidden_widgets, widget_sizes, widget_widths")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -668,6 +696,19 @@ export default function DashboardPage() {
               const size = remotePrefs.widget_sizes?.[id];
               if (size === "compact" || size === "expanded") {
                 next[id] = size;
+              }
+            });
+            return next;
+          });
+        }
+
+        if (remotePrefs.widget_widths) {
+          setWidgetWidths((current) => {
+            const next = { ...current };
+            validIds.forEach((id) => {
+              const width = remotePrefs.widget_widths?.[id];
+              if (width === "normal" || width === "full") {
+                next[id] = width;
               }
             });
             return next;
@@ -725,9 +766,18 @@ export default function DashboardPage() {
       fireOverview: "compact",
       aiInsights: "expanded"
     });
+    setWidgetWidths({
+      netWorthChart: "full",
+      reminders: "full",
+      alerts: "full",
+      monthlyTrend: "full",
+      fireOverview: "normal",
+      aiInsights: "full"
+    });
     window.localStorage.setItem(DASHBOARD_WIDGET_ORDER_KEY, JSON.stringify(defaultOrder));
     window.localStorage.removeItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
     window.localStorage.removeItem(DASHBOARD_WIDGET_SIZES_KEY);
+    window.localStorage.removeItem(DASHBOARD_WIDGET_WIDTHS_KEY);
   }, []);
 
   const toggleWidgetSize = useCallback((widgetId: DashboardWidgetId) => {
@@ -737,6 +787,37 @@ export default function DashboardPage() {
         [widgetId]: current[widgetId] === "compact" ? "expanded" : "compact"
       };
       window.localStorage.setItem(DASHBOARD_WIDGET_SIZES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const toggleWidgetWidth = useCallback((widgetId: DashboardWidgetId) => {
+    setWidgetWidths((current) => {
+      const next = {
+        ...current,
+        [widgetId]: current[widgetId] === "full" ? "normal" : "full"
+      };
+      window.localStorage.setItem(DASHBOARD_WIDGET_WIDTHS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const moveWidgetByDrop = useCallback((sourceId: DashboardWidgetId, targetId: DashboardWidgetId) => {
+    if (sourceId === targetId) {
+      return;
+    }
+
+    setWidgetOrder((current) => {
+      const sourceIndex = current.indexOf(sourceId);
+      const targetIndex = current.indexOf(targetId);
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return current;
+      }
+
+      const next = [...current];
+      next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, sourceId);
+      window.localStorage.setItem(DASHBOARD_WIDGET_ORDER_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -752,14 +833,15 @@ export default function DashboardPage() {
           user_id: userId,
           widget_order: widgetOrder,
           hidden_widgets: hiddenWidgets,
-          widget_sizes: widgetSizes
+          widget_sizes: widgetSizes,
+          widget_widths: widgetWidths
         },
         { onConflict: "user_id" }
       );
     };
 
     void syncDashboardPreferences();
-  }, [hiddenWidgets, supabase, userId, widgetOrder, widgetPrefsLoaded, widgetSizes]);
+  }, [hiddenWidgets, supabase, userId, widgetOrder, widgetPrefsLoaded, widgetSizes, widgetWidths]);
 
   const dashboardReminders = useMemo<DashboardReminder[]>(() => {
     if (!metrics) {
@@ -1080,11 +1162,13 @@ export default function DashboardPage() {
 
       const widgetSize = widgetSizes[widgetId] ?? "expanded";
       const isCompact = widgetSize === "compact";
+      const widgetWidth = widgetWidths[widgetId] ?? "full";
+      const widthClass = widgetWidth === "full" ? "md:col-span-2 xl:col-span-12" : "";
 
       switch (widgetId) {
         case "netWorthChart":
           return (
-            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion del patrimonio</p>
@@ -1163,7 +1247,7 @@ export default function DashboardPage() {
           );
         case "reminders":
           return (
-            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Recordatorios automaticos</p>
@@ -1211,7 +1295,7 @@ export default function DashboardPage() {
           );
         case "alerts":
           return (
-            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Alertas automaticas</p>
@@ -1232,7 +1316,7 @@ export default function DashboardPage() {
           );
         case "monthlyTrend":
           return (
-            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Historico mensual</p>
@@ -1247,7 +1331,7 @@ export default function DashboardPage() {
         case "fireOverview":
           return (
             <>
-              <section key={`${widgetId}-progress`} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-7`}>
+              <section key={`${widgetId}-progress`} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widgetWidth === "full" ? "md:col-span-2 xl:col-span-7" : "md:col-span-1 xl:col-span-6"}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Progreso FIRE</p>
@@ -1269,7 +1353,7 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              <section key={`${widgetId}-horizon`} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-5`}>
+              <section key={`${widgetId}-horizon`} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widgetWidth === "full" ? "md:col-span-2 xl:col-span-5" : "md:col-span-1 xl:col-span-6"}`}>
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Horizonte</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Anos estimados para independencia</h2>
                 <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-white">
@@ -1287,7 +1371,7 @@ export default function DashboardPage() {
           );
         case "aiInsights":
           return (
-            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">IA financiera</p>
@@ -1381,7 +1465,8 @@ export default function DashboardPage() {
       timelineChartOptions,
       timelinePoints.length,
       timelineRangeVariations,
-      widgetSizes
+      widgetSizes,
+      widgetWidths
     ]
   );
 
@@ -1631,7 +1716,20 @@ export default function DashboardPage() {
 
                   const hidden = hiddenWidgets.includes(widgetId);
                   return (
-                    <article key={widget.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <article
+                      key={widget.id}
+                      draggable
+                      onDragStart={() => setDraggedWidgetId(widget.id)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (draggedWidgetId) {
+                          moveWidgetByDrop(draggedWidgetId, widget.id);
+                        }
+                        setDraggedWidgetId(null);
+                      }}
+                      onDragEnd={() => setDraggedWidgetId(null)}
+                      className={`rounded-[24px] border border-white/8 bg-white/6 p-4 transition ${draggedWidgetId === widget.id ? "opacity-60" : ""}`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{widget.label}</p>
@@ -1648,6 +1746,13 @@ export default function DashboardPage() {
                         </button>
                       </div>
                       <div className="mt-4 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleWidgetWidth(widget.id)}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                        >
+                          {widgetWidths[widget.id] === "full" ? "Ancho normal" : "Ancho completo"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => toggleWidgetSize(widget.id)}
@@ -1671,7 +1776,9 @@ export default function DashboardPage() {
                         >
                           Bajar
                         </button>
-                        <span className="text-xs text-slate-400">Posicion {index + 1} · {widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"}</span>
+                        <span className="text-xs text-slate-400">
+                          Posicion {index + 1} · {widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"} · {widgetWidths[widget.id] === "full" ? "Completo" : "Normal"}
+                        </span>
                       </div>
                     </article>
                   );
