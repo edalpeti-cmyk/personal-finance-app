@@ -54,6 +54,7 @@ type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "gainPct" | "weightPct";
 type SortDirection = "asc" | "desc";
 type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
+type TypeChartMode = "value" | "profitability";
 type TransactionMode = "buy" | "sell";
 type HistoryPoint = {
   snapshot_date: string;
@@ -557,6 +558,7 @@ export default function InvestmentsPage() {
   const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
+  const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const investmentNameById = useMemo(
@@ -962,7 +964,16 @@ export default function InvestmentsPage() {
   const groupedAssetTypes = useMemo(() => {
     const groups = new Map<
       AssetType,
-      { type: AssetType; label: string; count: number; totalValueEur: number; gainEur: number; topAsset: string | null }
+      {
+        type: AssetType;
+        label: string;
+        count: number;
+        totalValueEur: number;
+        investedEur: number;
+        gainEur: number;
+        gainPct: number | null;
+        topAsset: string | null;
+      }
     >();
 
     for (const row of filteredInvestments) {
@@ -971,16 +982,20 @@ export default function InvestmentsPage() {
         label: ASSET_TYPE_LABELS[row.asset_type],
         count: 0,
         totalValueEur: 0,
+        investedEur: 0,
         gainEur: 0,
+        gainPct: null,
         topAsset: null
       };
 
       current.count += 1;
       current.totalValueEur += row.currentValueEur;
+      current.investedEur += row.investedEur;
       current.gainEur += row.gainEur;
       if (!current.topAsset || row.currentValueEur > (filteredInvestments.find((item) => item.asset_name === current.topAsset)?.currentValueEur ?? -1)) {
         current.topAsset = row.asset_name;
       }
+      current.gainPct = current.investedEur > 0 ? (current.gainEur / current.investedEur) * 100 : null;
       groups.set(row.asset_type, current);
     }
 
@@ -990,6 +1005,17 @@ export default function InvestmentsPage() {
     () => (selectedType ? filteredInvestments.filter((row) => row.asset_type === selectedType) : []),
     [filteredInvestments, selectedType]
   );
+  const selectedTypeSummary = useMemo(() => {
+    const totalValueEur = selectedTypeAssets.reduce((sum, row) => sum + row.currentValueEur, 0);
+    const investedEur = selectedTypeAssets.reduce((sum, row) => sum + row.investedEur, 0);
+    const gainEur = totalValueEur - investedEur;
+    const gainPct = investedEur > 0 ? (gainEur / investedEur) * 100 : null;
+    const day = calculatePeriodPerformance(selectedTypeHistory, 1);
+    const week = calculatePeriodPerformance(selectedTypeHistory, 7);
+    const month = calculatePeriodPerformance(selectedTypeHistory, 30);
+
+    return { totalValueEur, investedEur, gainEur, gainPct, day, week, month };
+  }, [selectedTypeAssets, selectedTypeHistory]);
   const selectedAsset = useMemo(
     () => selectedTypeAssets.find((row) => row.id === selectedAssetId) ?? null,
     [selectedAssetId, selectedTypeAssets]
@@ -1096,7 +1122,8 @@ export default function InvestmentsPage() {
           backgroundColor: "rgba(20, 184, 166, 0.14)",
           borderWidth: 3,
           fill: true,
-          tension: 0.25
+          tension: 0.25,
+          hidden: selectedTypeChartMode === "profitability"
         },
         {
           label: "Rentabilidad %",
@@ -1107,11 +1134,58 @@ export default function InvestmentsPage() {
           fill: false,
           tension: 0.22,
           yAxisID: "yPct",
-          pointRadius: 0
+          pointRadius: 0,
+          hidden: selectedTypeChartMode === "value"
         }
       ]
     }),
-    [selectedTypeReturnPctSeries, selectedTypeTimeline]
+    [selectedTypeChartMode, selectedTypeReturnPctSeries, selectedTypeTimeline]
+  );
+  const selectedTypeChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: "#cbd5e1", usePointStyle: true },
+          onClick: () => undefined
+        },
+        tooltip: {
+          callbacks: {
+            label: (context: { dataset: { label?: string }; parsed: { y?: number | null } | number; dataIndex: number }) => {
+              const rawValue =
+                typeof context.parsed === "number"
+                  ? context.parsed
+                  : Number(context.parsed?.y ?? 0);
+              const eurValue = selectedTypeTimeline[context.dataIndex]?.value ?? 0;
+              const pctValue = selectedTypeReturnPctSeries[context.dataIndex] ?? 0;
+
+              if ((context.dataset.label ?? "").includes("Rentabilidad")) {
+                return `Rentabilidad: ${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}% · ${formatCurrencyByPreference(eurValue, "EUR")}`;
+              }
+
+              return `Valor: ${formatCurrencyByPreference(rawValue, "EUR")} · ${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+        y: {
+          display: selectedTypeChartMode === "value",
+          grid: { color: "rgba(148, 163, 184, 0.16)" },
+          ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
+        },
+        yPct: {
+          display: selectedTypeChartMode === "profitability",
+          position: "right" as const,
+          grid: { display: false },
+          ticks: { color: "#fbbf24", callback: (value: string | number) => `${Number(value).toFixed(0)}%` }
+        }
+      }
+    }),
+    [selectedTypeChartMode, selectedTypeReturnPctSeries, selectedTypeTimeline]
   );
 
   const allocationChartData = useMemo(
@@ -2343,6 +2417,14 @@ export default function InvestmentsPage() {
                   <div className="mt-5 grid gap-2 text-sm text-slate-300">
                     <p>Total: <span className="font-medium text-white">{formatCurrencyByPreference(group.totalValueEur, "EUR")}</span></p>
                     <p>Plusvalia: <span className={group.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{formatCurrencyByPreference(group.gainEur, "EUR")}</span></p>
+                    {group.type !== "cash" ? (
+                      <p>
+                        Rentabilidad:{" "}
+                        <span className={group.gainPct !== null && group.gainPct >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>
+                          {group.gainPct === null ? "Sin datos" : `${group.gainPct >= 0 ? "+" : ""}${formatNumber(group.gainPct, 2)}%`}
+                        </span>
+                      </p>
+                    ) : null}
                     <p>Principal: <span className="font-medium text-white">{group.topAsset ?? "Sin datos"}</span></p>
                   </div>
                   <div className="ui-chip mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
@@ -2394,8 +2476,42 @@ export default function InvestmentsPage() {
 
               <div className="mt-6 flex-1 overflow-y-auto pr-1">
                 <section className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <article className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Valor actual</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{formatCurrencyByPreference(selectedTypeSummary.totalValueEur, "EUR")}</p>
+                    </article>
+                    <article className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Rentabilidad</p>
+                      <p className={`mt-2 text-2xl font-semibold ${selectedTypeSummary.gainPct !== null && selectedTypeSummary.gainPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                        {selectedTypeSummary.gainPct === null ? "Sin datos" : `${selectedTypeSummary.gainPct >= 0 ? "+" : ""}${selectedTypeSummary.gainPct.toFixed(2)}%`}
+                      </p>
+                      <p className={`mt-1 text-xs ${selectedTypeSummary.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                        {formatCurrencyByPreference(selectedTypeSummary.gainEur, "EUR")}
+                      </p>
+                    </article>
+                    <article className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Variacion semanal</p>
+                      <p className={`mt-2 text-2xl font-semibold ${selectedTypeSummary.week.amount !== null && selectedTypeSummary.week.amount >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                        {selectedTypeSummary.week.amount === null ? "Sin datos" : formatCurrencyByPreference(selectedTypeSummary.week.amount, "EUR")}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {selectedTypeSummary.week.pct === null ? "n/d" : `${selectedTypeSummary.week.pct >= 0 ? "+" : ""}${selectedTypeSummary.week.pct.toFixed(2)}%`}
+                      </p>
+                    </article>
+                    <article className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300">Variacion mensual</p>
+                      <p className={`mt-2 text-2xl font-semibold ${selectedTypeSummary.month.amount !== null && selectedTypeSummary.month.amount >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                        {selectedTypeSummary.month.amount === null ? "Sin datos" : formatCurrencyByPreference(selectedTypeSummary.month.amount, "EUR")}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {selectedTypeSummary.month.pct === null ? "n/d" : `${selectedTypeSummary.month.pct >= 0 ? "+" : ""}${selectedTypeSummary.month.pct.toFixed(2)}%`}
+                      </p>
+                    </article>
+                  </div>
+
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
+                    <div className="mt-4">
                       <p className="text-sm font-medium text-white">Evolucion del tipo de activo</p>
                       <p className="mt-1 text-xs text-slate-400">
                         {selectedTypeUsesRealHistory
@@ -2403,50 +2519,51 @@ export default function InvestmentsPage() {
                           : "Estimacion agregada del tipo construida con las posiciones actuales hasta que haya historico suficiente."}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {TYPE_RANGE_OPTIONS.map((option) => {
-                        const active = selectedTypeRange === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setSelectedTypeRange(option.value)}
-                            className={`rounded-full px-3 py-1.5 text-xs transition ${
-                              active ? "bg-emerald-500 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
+                    <div className="mt-4 flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTypeChartMode("value")}
+                          className={`rounded-full px-3 py-1.5 text-xs transition ${
+                            selectedTypeChartMode === "value" ? "bg-emerald-500 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                          }`}
+                        >
+                          Valor
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTypeChartMode("profitability")}
+                          className={`rounded-full px-3 py-1.5 text-xs transition ${
+                            selectedTypeChartMode === "profitability" ? "bg-emerald-500 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                          }`}
+                        >
+                          Rentabilidad %
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {TYPE_RANGE_OPTIONS.map((option) => {
+                          const active = selectedTypeRange === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setSelectedTypeRange(option.value)}
+                              className={`rounded-full px-3 py-1.5 text-xs transition ${
+                                active ? "bg-emerald-500 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                   <div className="mt-4 h-[220px]">
                     {selectedTypeTimeline.length > 0 ? (
                       <Line
                         data={selectedTypeChartData}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              display: true,
-                              labels: { color: "#cbd5e1", usePointStyle: true }
-                            }
-                          },
-                          scales: {
-                            x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
-                            y: {
-                              grid: { color: "rgba(148, 163, 184, 0.16)" },
-                              ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
-                            },
-                            yPct: {
-                              position: "right",
-                              grid: { display: false },
-                              ticks: { color: "#fbbf24", callback: (value: string | number) => `${Number(value).toFixed(0)}%` }
-                            }
-                          }
-                        }}
+                        options={selectedTypeChartOptions}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-white/12 text-sm text-slate-400">
