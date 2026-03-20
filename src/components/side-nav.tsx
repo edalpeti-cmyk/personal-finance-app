@@ -6,10 +6,12 @@ import { useTheme } from "@/components/theme-provider";
 
 const ITEMS = [
   { href: "/dashboard", label: "Dashboard", hint: "Resumen general", icon: "dashboard" },
+  { href: "/review", label: "Revision", hint: "Cierre del mes", icon: "review" },
   { href: "/budgets", label: "Presupuestos", hint: "Control mensual", icon: "budgets" },
   { href: "/expenses", label: "Gastos", hint: "Registro y analisis", icon: "expenses" },
   { href: "/investments", label: "Inversiones", hint: "Portfolio tracker", icon: "investments" },
   { href: "/fire", label: "FIRE", hint: "Independencia financiera", icon: "fire" },
+  { href: "/goals", label: "Objetivos", hint: "Metas y progreso", icon: "goals" },
   { href: "/protected", label: "Inicio", hint: "Area privada", icon: "home" }
 ];
 
@@ -18,10 +20,12 @@ function NavIcon({ icon }: { icon: string }) {
   const common = { className, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
   if (icon === "dashboard") return <svg {...common}><path d="M4 13h7V4H4z" /><path d="M13 20h7v-9h-7z" /><path d="M13 11h7V4h-7z" /><path d="M4 20h7v-5H4z" /></svg>;
+  if (icon === "review") return <svg {...common}><path d="M8 6h12" /><path d="M8 12h12" /><path d="M8 18h12" /><path d="M4 6h.01" /><path d="M4 12h.01" /><path d="M4 18h.01" /></svg>;
   if (icon === "budgets") return <svg {...common}><path d="M12 1v22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6" /></svg>;
   if (icon === "expenses") return <svg {...common}><path d="m7 3-4 4 4 4" /><path d="M3 7h10a4 4 0 0 1 4 4v10" /><path d="m17 21 4-4-4-4" /><path d="M21 17H11a4 4 0 0 1-4-4V3" /></svg>;
   if (icon === "investments") return <svg {...common}><path d="M4 19 10 13 13 16 20 9" /><path d="m14 9 6 0 0 6" /></svg>;
   if (icon === "fire") return <svg {...common}><path d="M12 3s4 3 4 7a4 4 0 1 1-8 0c0-2 1-3 2-5" /><path d="M10 14c0 1.5 1 3 2 4 1-1 2-2.5 2-4 0-1.4-.7-2.4-2-3-1.3.6-2 1.6-2 3Z" /></svg>;
+  if (icon === "goals") return <svg {...common}><path d="M12 3 4 7v5c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V7l-8-4Z" /><path d="m9 12 2 2 4-4" /></svg>;
   if (icon === "home") return <svg {...common}><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></svg>;
   if (icon === "settings") return <svg {...common}><path d="M12 8.8A3.2 3.2 0 1 1 8.8 12 3.2 3.2 0 0 1 12 8.8Z" /><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 1 1-4 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 1 1 0-4h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 1 1 4 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a2 2 0 1 1 0 4h-.2a1 1 0 0 0-.9.6Z" /></svg>;
   return null;

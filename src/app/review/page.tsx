@@ -1,0 +1,299 @@
+﻿"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
+import AuthLoadingState from "@/components/auth-loading-state";
+import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
+import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
+import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
+import { formatCurrencyByPreference, formatMonthByPreference } from "@/lib/preferences-format";
+
+type IncomeRow = { amount: number; income_date: string };
+type ExpenseRow = { amount: number; category: string; expense_date: string };
+type BudgetRow = { category: string; budget_amount: number; month: string };
+type SavingsTargetRow = { month: string; savings_target: number };
+type InvestmentRow = {
+  asset_name: string;
+  current_price: number | null;
+  average_buy_price: number;
+  quantity: number;
+  asset_currency: AssetCurrency | null;
+};
+type FireSettingsRow = {
+  annual_expenses: number;
+  annual_contribution: number;
+};
+type GoalRow = {
+  id: string;
+  goal_name: string;
+  goal_type: string;
+  target_amount: number;
+  current_amount: number;
+  monthly_contribution: number | null;
+  status: string;
+  priority: number;
+};
+
+type ReviewAction = {
+  id: string;
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+  tone: "warning" | "info" | "success";
+};
+
+function isSameMonth(dateString: string, month: string) {
+  return dateString.slice(0, 7) === month;
+}
+
+function previousMonth(month: string) {
+  const [year, rawMonth] = month.split("-").map(Number);
+  const date = new Date(year, rawMonth - 1, 1);
+  date.setMonth(date.getMonth() - 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export default function ReviewPage() {
+  const supabase = useMemo(() => createClient(), []);
+  const { userId, authLoading } = useAuthGuard();
+  const { currency, dateFormat } = useTheme();
+
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
+  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
+  const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
+  const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
+  const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
+  const [goalRows, setGoalRows] = useState<GoalRow[]>([]);
+
+  const loadReviewData = useCallback(async (uid: string) => {
+    setLoading(true);
+    setMessage(null);
+
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult] = await Promise.all([
+      supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
+      supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
+      supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
+      supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
+      supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
+      supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
+      supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true })
+    ]);
+
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error].find(Boolean);
+    if (firstError) {
+      setMessage(firstError.message);
+      setLoading(false);
+      return;
+    }
+
+    setIncomeRows((incomeResult.data as IncomeRow[]) ?? []);
+    setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
+    setBudgetRows((budgetResult.data as BudgetRow[]) ?? []);
+    setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
+    setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
+    setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
+    setGoalRows((goalsResult.data as GoalRow[]) ?? []);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    if (authLoading || !userId) return;
+    void loadReviewData(userId);
+  }, [authLoading, loadReviewData, userId]);
+
+  const previousSelectedMonth = useMemo(() => previousMonth(selectedMonth), [selectedMonth]);
+
+  const reviewMetrics = useMemo(() => {
+    const currentIncome = incomeRows.filter((row) => isSameMonth(row.income_date, selectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const previousIncome = incomeRows.filter((row) => isSameMonth(row.income_date, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const currentExpenses = expenseRows.filter((row) => isSameMonth(row.expense_date, selectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const previousExpenses = expenseRows.filter((row) => isSameMonth(row.expense_date, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const currentSavingsTarget = savingsTargets.filter((row) => isSameMonth(row.month, selectedMonth)).reduce((sum, row) => sum + Number(row.savings_target || 0), 0);
+    const previousSavingsTarget = savingsTargets.filter((row) => isSameMonth(row.month, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.savings_target || 0), 0);
+    const actualSavings = currentIncome - currentExpenses;
+    const previousActualSavings = previousIncome - previousExpenses;
+    const savingsDeltaVsTarget = actualSavings - currentSavingsTarget;
+
+    const currentBudgets = budgetRows.filter((row) => isSameMonth(row.month, selectedMonth));
+    const currentExpenseByCategory = new Map<string, number>();
+    for (const expense of expenseRows.filter((row) => isSameMonth(row.expense_date, selectedMonth))) {
+      currentExpenseByCategory.set(expense.category, (currentExpenseByCategory.get(expense.category) ?? 0) + Number(expense.amount || 0));
+    }
+
+    const overspent = currentBudgets
+      .map((row) => {
+        const actual = currentExpenseByCategory.get(row.category) ?? 0;
+        return { category: row.category, budget: Number(row.budget_amount), actual, delta: actual - Number(row.budget_amount) };
+      })
+      .filter((row) => row.delta > 0)
+      .sort((a, b) => b.delta - a.delta);
+
+    const investmentValue = investmentRows.reduce((sum, row) => {
+      const unit = Number(row.current_price ?? row.average_buy_price ?? 0);
+      return sum + convertToEur(unit * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR);
+    }, 0);
+    const pricesConnected = investmentRows.filter((row) => row.current_price !== null).length;
+    const cashPosition = incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) - expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const totalNetWorth = cashPosition + investmentValue;
+    const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
+    const fireProgress = fireTarget > 0 ? (totalNetWorth / fireTarget) * 100 : 0;
+
+    const activeGoals = goalRows.filter((row) => row.status === "active");
+    const topGoals = [...activeGoals]
+      .map((goal) => ({
+        ...goal,
+        progressPct: goal.target_amount > 0 ? Math.min((Number(goal.current_amount || 0) / Number(goal.target_amount)) * 100, 100) : 0
+      }))
+      .sort((a, b) => a.priority - b.priority)
+      .slice(0, 3);
+
+    return {
+      currentIncome,
+      previousIncome,
+      currentExpenses,
+      previousExpenses,
+      currentSavingsTarget,
+      previousSavingsTarget,
+      actualSavings,
+      previousActualSavings,
+      savingsDeltaVsTarget,
+      overspent,
+      pricesConnected,
+      investmentCount: investmentRows.length,
+      totalNetWorth,
+      fireTarget,
+      fireProgress,
+      topGoals,
+      activeGoalsCount: activeGoals.length
+    };
+  }, [budgetRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
+
+  const reviewActions = useMemo<ReviewAction[]>(() => {
+    const actions: ReviewAction[] = [];
+
+    if (reviewMetrics.currentIncome <= 0) {
+      actions.push({ id: "missing-income", title: "Faltan ingresos del mes", body: "Sin ingresos registrados la revision del mes pierde contexto y la tasa de ahorro no es fiable.", href: "/budgets", cta: "Registrar ingresos", tone: "warning" });
+    }
+    if (reviewMetrics.currentSavingsTarget <= 0) {
+      actions.push({ id: "missing-savings-target", title: "Ahorro objetivo pendiente", body: "Define una cifra objetivo para comparar el plan con el ahorro real del mes.", href: "/budgets", cta: "Definir ahorro objetivo", tone: "warning" });
+    }
+    if (reviewMetrics.investmentCount > reviewMetrics.pricesConnected) {
+      actions.push({ id: "prices-pending", title: "Precios de cartera pendientes", body: `${reviewMetrics.investmentCount - reviewMetrics.pricesConnected} posiciones siguen sin precio actual.`, href: "/investments", cta: "Actualizar cartera", tone: "info" });
+    }
+    if (reviewMetrics.activeGoalsCount === 0) {
+      actions.push({ id: "goals-empty", title: "Todavia no hay objetivos activos", body: "Añadir metas te ayuda a convertir la revision mensual en decisiones de ahorro reales.", href: "/goals", cta: "Crear objetivo", tone: "info" });
+    }
+    if (reviewMetrics.fireTarget <= 0) {
+      actions.push({ id: "fire-missing", title: "Configuracion FIRE incompleta", body: "Si guardas tu plan FIRE, la revision mensual gana contexto de largo plazo.", href: "/fire", cta: "Completar FIRE", tone: "info" });
+    }
+    if (actions.length === 0) {
+      actions.push({ id: "stable-month", title: "Revision bien encaminada", body: "Este mes ya tiene ingresos, ahorro objetivo, cartera actualizada y objetivos activos.", href: "/dashboard", cta: "Volver al dashboard", tone: "success" });
+    }
+
+    return actions.slice(0, 4);
+  }, [reviewMetrics]);
+
+  if (authLoading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-6xl p-6 md:pl-72">
+          <AuthLoadingState title="Preparando revision mensual" description="Estamos reuniendo tus datos para montar el cierre del mes." />
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SideNav />
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-8">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Revision mensual</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Cierra el mes con una lectura clara</h1>
+          <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-300">
+            Reune ingresos, gasto real, ahorro objetivo, cartera, FIRE y objetivos activos en una sola vista para decidir el siguiente paso sin ir saltando de pantalla.
+          </p>
+        </section>
+
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-4">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Mes en revision</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)}</p>
+          <label className="mt-4 grid gap-2 text-sm text-slate-200">
+            Cambiar mes
+            <input className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+          </label>
+        </section>
+
+        {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
+
+        {loading ? <section className="panel rounded-[28px] p-5 text-white xl:col-span-12"><p className="text-sm text-slate-300">Cargando revision del mes...</p></section> : null}
+
+        {!loading ? (
+          <>
+            <section className="grid gap-3 xl:col-span-12 md:grid-cols-2 xl:grid-cols-4">
+              <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentIncome, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousIncome, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentExpenses, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousExpenses, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro objetivo</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentSavingsTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousSavingsTarget, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro real</p><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${reviewMetrics.actualSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.actualSavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousActualSavings, currency)}</p></article>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
+              <SectionHeader eyebrow="Lectura del mes" title="Donde merece la pena mirar primero" description="Una capa de interpretacion rapida antes de entrar en tablas y formularios." />
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Desviacion frente al objetivo</p><p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${reviewMetrics.savingsDeltaVsTarget >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.savingsDeltaVsTarget, currency)}</p><p className="mt-2 text-sm leading-6 text-slate-300">Diferencia entre ahorro real del mes y ahorro objetivo marcado.</p></article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"> <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mas tension</p>{reviewMetrics.overspent[0] ? (<><p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">{reviewMetrics.overspent[0].category}</p><p className="mt-2 text-sm leading-6 text-slate-300">Exceso de {formatCurrencyByPreference(reviewMetrics.overspent[0].delta, currency)} sobre presupuesto.</p></>) : (<p className="mt-3 text-sm leading-6 text-slate-300">No hay categorias por encima del presupuesto en este mes.</p>)}</article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Cobertura de cartera</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{reviewMetrics.investmentCount === 0 ? "Sin cartera" : `${reviewMetrics.pricesConnected}/${reviewMetrics.investmentCount}`}</p><p className="mt-2 text-sm leading-6 text-slate-300">Posiciones con precio actual guardado frente al total de activos.</p></article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Progreso FIRE</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{reviewMetrics.fireTarget > 0 ? `${reviewMetrics.fireProgress.toFixed(1)}%` : "Sin base"}</p><p className="mt-2 text-sm leading-6 text-slate-300">Patrimonio total frente al objetivo FIRE guardado.</p></article>
+              </div>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
+              <SectionHeader eyebrow="Checklist" title="Siguiente accion recomendada" description="Atajos rapidos para cerrar el mes sin perder tiempo." />
+              <div className="mt-5 grid gap-3">
+                {reviewActions.map((action) => (
+                  <article key={action.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                    <p className={`text-xs uppercase tracking-[0.18em] ${action.tone === "warning" ? "text-amber-300" : action.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>{action.title}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">{action.body}</p>
+                    <Link href={action.href} className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10">{action.cta}</Link>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
+              <SectionHeader eyebrow="Desviaciones" title="Categorias a revisar" description="Categorias del mes donde el gasto real ya supera el presupuesto." />
+              {reviewMetrics.overspent.length === 0 ? (
+                <div className="mt-6">
+                  <EmptyStateCard eyebrow="Mes estable" title="No hay categorias excedidas" description="De momento no hay categorias por encima del presupuesto del mes seleccionado." actionLabel="Revisar presupuestos" actionHref="/budgets" compact />
+                </div>
+              ) : (
+                <div className="table-scroll mt-6"><table className="min-w-full border-separate border-spacing-y-2 text-sm"><thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Exceso</th></tr></thead><tbody>{reviewMetrics.overspent.map((row) => (<tr key={row.category} className="bg-white/5 shadow-sm"><td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">{row.category}</td><td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.budget, currency)}</td><td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td><td className="rounded-r-2xl px-3 py-4 text-right font-medium text-red-300">{formatCurrencyByPreference(row.delta, currency)}</td></tr>))}</tbody></table></div>
+              )}
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
+              <SectionHeader eyebrow="Objetivos activos" title="Metas conectadas al plan" description="Los objetivos convierten la revision mensual en decisiones de ahorro concretas." aside={<Link href="/goals" className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10">Abrir objetivos</Link>} />
+              {reviewMetrics.topGoals.length === 0 ? (
+                <div className="mt-6">
+                  <EmptyStateCard eyebrow="Sin objetivos" title="Todavia no hay metas activas" description="Crea objetivos como fondo de emergencia, viaje o vivienda para enlazar ahorro y progreso real." actionLabel="Crear objetivos" actionHref="/goals" compact />
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-3">{reviewMetrics.topGoals.map((goal) => (<article key={goal.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{goal.goal_type}</p><h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{goal.goal_name}</h3></div><p className="text-sm text-slate-300">Prioridad {goal.priority}</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(goal.progressPct, 100)}%` }} /></div><div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2"><p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p><p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p><p>Progreso: <span className="font-medium text-white">{goal.progressPct.toFixed(1)}%</span></p><p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p></div></article>))}</div>
+              )}
+            </section>
+          </>
+        ) : null}
+      </main>
+    </>
+  );
+}
