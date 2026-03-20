@@ -1019,6 +1019,18 @@ export default function InvestmentsPage() {
     [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeRange]
   );
   const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
+  const selectedTypeReturnPctSeries = useMemo(() => {
+    if (selectedTypeTimeline.length === 0) {
+      return [] as number[];
+    }
+
+    const base = Number(selectedTypeTimeline[0]?.value ?? 0);
+    if (!base || base <= 0) {
+      return selectedTypeTimeline.map(() => 0);
+    }
+
+    return selectedTypeTimeline.map((point) => Number((((point.value - base) / base) * 100).toFixed(2)));
+  }, [selectedTypeTimeline]);
   const selectedTypeChartData = useMemo(
     () => ({
       labels: selectedTypeTimeline.map((point) => point.label),
@@ -1031,10 +1043,21 @@ export default function InvestmentsPage() {
           borderWidth: 3,
           fill: true,
           tension: 0.25
+        },
+        {
+          label: "Rentabilidad %",
+          data: selectedTypeReturnPctSeries,
+          borderColor: "#f59e0b",
+          backgroundColor: "rgba(245, 158, 11, 0.1)",
+          borderWidth: 2,
+          fill: false,
+          tension: 0.22,
+          yAxisID: "yPct",
+          pointRadius: 0
         }
       ]
     }),
-    [selectedTypeTimeline]
+    [selectedTypeReturnPctSeries, selectedTypeTimeline]
   );
 
   const allocationChartData = useMemo(
@@ -2361,12 +2384,22 @@ export default function InvestmentsPage() {
                         options={{
                           responsive: true,
                           maintainAspectRatio: false,
-                          plugins: { legend: { display: false } },
+                          plugins: {
+                            legend: {
+                              display: true,
+                              labels: { color: "#cbd5e1", usePointStyle: true }
+                            }
+                          },
                           scales: {
                             x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
                             y: {
                               grid: { color: "rgba(148, 163, 184, 0.16)" },
                               ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
+                            },
+                            yPct: {
+                              position: "right",
+                              grid: { display: false },
+                              ticks: { color: "#fbbf24", callback: (value: string | number) => `${Number(value).toFixed(0)}%` }
                             }
                           }
                         }}
