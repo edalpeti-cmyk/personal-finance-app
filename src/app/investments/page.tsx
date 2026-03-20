@@ -1906,7 +1906,7 @@ export default function InvestmentsPage() {
               {errors.assetSymbol ? <span className="text-xs text-red-700">{errors.assetSymbol}</span> : null}
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <label className="grid gap-2 text-sm text-slate-200">
                 Cantidad
                 <input className={inputClass(Boolean(errors.quantity))} type="number" min="0" step="0.00000001" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
@@ -1919,7 +1919,7 @@ export default function InvestmentsPage() {
                 {errors.commission ? <span className="text-xs text-red-700">{errors.commission}</span> : <span className="text-xs text-slate-400">Se usa para calcular impacto neto y plusvalia realizada.</span>}
               </label>
 
-              <label className="grid gap-2 text-sm text-slate-200">
+              <label className="grid gap-2 text-sm text-slate-200 md:col-span-2 xl:col-span-1">
                 {editingId ? "Fecha de compra" : transactionMode === "sell" ? "Fecha de venta" : "Fecha de compra"}
                 <input className={inputClass(Boolean(errors.purchaseDate))} type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
                 {errors.purchaseDate ? <span className="text-xs text-red-700">{errors.purchaseDate}</span> : null}
