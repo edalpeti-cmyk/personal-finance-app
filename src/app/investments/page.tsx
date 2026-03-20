@@ -1248,6 +1248,135 @@ export default function InvestmentsPage() {
 
   const sortLabel = sortDirection === "asc" ? "↑" : "↓";
 
+  const handleExportPdfReport = useCallback(() => {
+    const reportWindow = window.open("", "_blank", "width=1024,height=780");
+    if (!reportWindow) {
+      return;
+    }
+
+    const topRows = [...enrichedInvestments].sort((a, b) => b.currentValueEur - a.currentValueEur).slice(0, 12);
+    const alertLines = [
+      concentrationAlerts.length > 0 ? `${concentrationAlerts.length} activo(s) pesan 25% o mas de la cartera.` : null,
+      drawdownAlerts.length > 0 ? `${drawdownAlerts.length} activo(s) caen 10% o mas frente al capital invertido.` : null,
+      stalePricePositions > 0 ? `${stalePricePositions} posicion(es) siguen sin precio actual.` : null
+    ].filter((value): value is string => Boolean(value));
+
+    const html = `
+      <html>
+        <head>
+          <title>Reporte de inversiones</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 28px; color: #0f172a; background: #f8fafc; }
+            h1, h2 { margin: 0 0 8px; }
+            p { margin: 0; }
+            .muted { color: #475569; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 26px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; background: white; }
+            .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #0f766e; }
+            .metric-value { font-size: 28px; font-weight: 700; margin-top: 8px; }
+            .section { margin-top: 22px; }
+            .section-intro { margin-bottom: 12px; color: #475569; }
+            .pill { display: inline-block; margin: 4px 8px 0 0; padding: 6px 10px; border-radius: 999px; background: #e2e8f0; color: #0f172a; font-size: 12px; }
+            .list { margin: 10px 0 0; padding-left: 18px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 14px; background: white; border-radius: 14px; overflow: hidden; }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; font-size: 14px; }
+            th { background: #e2e8f0; color: #0f172a; }
+            .good { color: #047857; }
+            .bad { color: #b91c1c; }
+            @media print { body { padding: 16px; } .card { break-inside: avoid; } }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte de inversiones</h1>
+          <p class="muted">Generado el ${new Date().toLocaleDateString("es-ES")} · Resumen de cartera, concentracion y rendimiento.</p>
+
+          <div class="grid">
+            <div class="card"><p class="metric-label">Valor total en EUR</p><p class="metric-value">${formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p></div>
+            <div class="card"><p class="metric-label">Plusvalia latente</p><p class="metric-value ${profitEur >= 0 ? "good" : "bad"}">${formatCurrencyByPreference(profitEur, "EUR")}</p></div>
+            <div class="card"><p class="metric-label">Plusvalia realizada</p><p class="metric-value ${realizedGainTotalEur >= 0 ? "good" : "bad"}">${formatCurrencyByPreference(realizedGainTotalEur, "EUR")}</p></div>
+            <div class="card"><p class="metric-label">Resultado total</p><p class="metric-value ${combinedProfitEur >= 0 ? "good" : "bad"}">${formatCurrencyByPreference(combinedProfitEur, "EUR")}</p></div>
+          </div>
+
+          <div class="section">
+            <h2>Senales rapidas</h2>
+            <div>
+              <span class="pill">Win rate: ${winRate === null ? "Sin datos" : `${formatNumber(winRate, 1)}%`}</span>
+              <span class="pill">Top 3 concentracion: ${formatNumber(topThreeConcentration, 1)}%</span>
+              <span class="pill">Precios conectados: ${metrics.trackedPositions}</span>
+              <span class="pill">Cobertura de precios: ${enrichedInvestments.length === 0 ? "Sin datos" : `${enrichedInvestments.length - stalePricePositions}/${enrichedInvestments.length}`}</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Analitica avanzada</h2>
+            <p class="section-intro">Mejor y peor posicion junto con distribucion por tipo.</p>
+            <ul class="list">
+              <li><strong>Mejor posicion:</strong> ${bestPerformer ? `${bestPerformer.asset_name} (${bestPerformer.gainPct === null ? "Sin datos" : `${bestPerformer.gainPct >= 0 ? "+" : ""}${formatNumber(bestPerformer.gainPct, 2)}%`})` : "Sin datos"}</li>
+              <li><strong>Posicion mas debil:</strong> ${worstPerformer ? `${worstPerformer.asset_name} (${worstPerformer.gainPct === null ? "Sin datos" : `${worstPerformer.gainPct >= 0 ? "+" : ""}${formatNumber(worstPerformer.gainPct, 2)}%`})` : "Sin datos"}</li>
+            </ul>
+            <div style="margin-top:12px;">
+              ${allocationByType.map((item) => `<span class="pill">${item.label}: ${formatCurrencyByPreference(item.value, "EUR")} · ${formatNumber(item.weightPct, 1)}%</span>`).join("")}
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Alertas de cartera</h2>
+            ${alertLines.length > 0 ? `<ul class="list">${alertLines.map((line) => `<li>${line}</li>`).join("")}</ul>` : `<p class="muted">Sin alertas relevantes en este momento.</p>`}
+          </div>
+
+          <div class="section">
+            <h2>Posiciones principales</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Activo</th>
+                  <th>Tipo</th>
+                  <th>Valor EUR</th>
+                  <th>Plusvalia</th>
+                  <th>Rentabilidad</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${topRows
+                  .map(
+                    (row) => `
+                      <tr>
+                        <td>${row.asset_name}</td>
+                        <td>${ASSET_TYPE_LABELS[row.asset_type]}</td>
+                        <td>${formatCurrencyByPreference(row.currentValueEur, "EUR")}</td>
+                        <td>${formatCurrencyByPreference(row.gainEur, "EUR")}</td>
+                        <td>${row.gainPct === null ? "Sin datos" : `${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}</td>
+                      </tr>`
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        </body>
+      </html>`;
+
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.print();
+  }, [
+    allocationByType,
+    bestPerformer,
+    combinedProfitEur,
+    concentrationAlerts.length,
+    drawdownAlerts.length,
+    enrichedInvestments,
+    metrics.totalValueEur,
+    metrics.trackedPositions,
+    profitEur,
+    realizedGainTotalEur,
+    stalePricePositions,
+    topThreeConcentration,
+    winRate,
+    worstPerformer
+  ]);
+
   useEffect(() => {
     if (selectedType && !groupedAssetTypes.some((group) => group.type === selectedType)) {
       setSelectedType(null);
@@ -2440,6 +2569,13 @@ export default function InvestmentsPage() {
               className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10"
             >
               Importar cartera CSV
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdfReport}
+              className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10"
+            >
+              Exportar PDF
             </button>
             <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
               CSV: asset_name, asset_symbol, asset_isin, asset_type, asset_currency, asset_market, quantity, average_buy_price, current_price, purchase_date
