@@ -1745,40 +1745,44 @@ export default function DashboardPage() {
                           {hidden ? "Mostrar" : "Visible"}
                         </button>
                       </div>
-                      <div className="mt-4 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleWidgetWidth(widget.id)}
-                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                        >
-                          {widgetWidths[widget.id] === "full" ? "Ancho normal" : "Ancho completo"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleWidgetSize(widget.id)}
-                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                        >
-                          {widgetSizes[widget.id] === "compact" ? "Expandir" : "Compactar"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveWidget(widget.id, "up")}
-                          disabled={index === 0}
-                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Subir
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveWidget(widget.id, "down")}
-                          disabled={index === widgetOrder.length - 1}
-                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Bajar
-                        </button>
-                        <span className="text-xs text-slate-400">
-                          Posicion {index + 1} · {widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"} · {widgetWidths[widget.id] === "full" ? "Completo" : "Normal"}
-                        </span>
+                      <div className="mt-4 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleWidgetWidth(widget.id)}
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                          >
+                            {widgetWidths[widget.id] === "full" ? "Ancho normal" : "Ancho completo"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleWidgetSize(widget.id)}
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                          >
+                            {widgetSizes[widget.id] === "compact" ? "Expandir" : "Compactar"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveWidget(widget.id, "up")}
+                            disabled={index === 0}
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Subir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveWidget(widget.id, "down")}
+                            disabled={index === widgetOrder.length - 1}
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Bajar
+                          </button>
+                        </div>
+                        <div className="grid gap-1 text-xs text-slate-400 sm:grid-cols-3">
+                          <span>Posicion {index + 1}</span>
+                          <span>{widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"}</span>
+                          <span>{widgetWidths[widget.id] === "full" ? "Completo" : "Normal"}</span>
+                        </div>
                       </div>
                     </article>
                   );
