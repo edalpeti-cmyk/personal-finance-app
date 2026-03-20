@@ -2359,8 +2359,8 @@ export default function InvestmentsPage() {
       {selectedAsset ? (
         <>
           <button type="button" className="fixed inset-0 z-40 bg-slate-950/72 backdrop-blur-[2px]" onClick={() => setSelectedAssetId(null)} />
-          <aside className="fixed left-1/2 top-1/2 z-50 h-[min(88vh,760px)] w-[min(92vw,820px)] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,#020817_0%,#071427_56%,#0a1d31_100%)] p-6 text-white shadow-[0_30px_80px_rgba(2,8,23,0.58)]">
-            <div className="flex h-full flex-col">
+          <aside className="fixed left-1/2 top-1/2 z-50 h-[min(88vh,760px)] w-[min(92vw,820px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,#020817_0%,#071427_56%,#0a1d31_100%)] p-5 text-white shadow-[0_30px_80px_rgba(2,8,23,0.58)]">
+            <div className="flex h-full min-h-0 flex-col">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Activo</p>
@@ -2390,10 +2390,11 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="grid gap-4 md:grid-cols-2">
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cantidad</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatNumber(Number(selectedAsset.quantity) || 0, 8)}</p>
+                  <p className="mt-3 break-words font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{formatNumber(Number(selectedAsset.quantity) || 0, 4)}</p>
                   <p className="mt-3 text-sm leading-6 text-slate-300">Unidades actuales de este activo en cartera.</p>
                 </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-4">
@@ -2534,6 +2535,7 @@ export default function InvestmentsPage() {
                     Aun no hay operaciones guardadas para este activo.
                   </div>
                 )}
+              </div>
               </div>
             </div>
           </aside>
