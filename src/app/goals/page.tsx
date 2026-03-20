@@ -23,6 +23,8 @@ type GoalRow = {
   target_date: string | null;
   priority: number;
   status: GoalStatus;
+  linked_category: string | null;
+  linked_account: string | null;
 };
 type SavingsTargetRow = {
   month: string;
@@ -73,6 +75,8 @@ export default function GoalsPage() {
   const [targetDate, setTargetDate] = useState("");
   const [priority, setPriority] = useState("2");
   const [status, setStatus] = useState<GoalStatus>("active");
+  const [linkedCategory, setLinkedCategory] = useState("");
+  const [linkedAccount, setLinkedAccount] = useState("");
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -89,6 +93,8 @@ export default function GoalsPage() {
     setTargetDate("");
     setPriority("2");
     setStatus("active");
+    setLinkedCategory("");
+    setLinkedAccount("");
   }, []);
 
   const loadGoals = useCallback(async (uid: string) => {
@@ -96,7 +102,7 @@ export default function GoalsPage() {
     const [goalsResult, savingsResult] = await Promise.all([
       supabase
         .from("financial_goals")
-        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status")
+        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account")
         .eq("user_id", uid)
         .order("priority", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -195,7 +201,9 @@ export default function GoalsPage() {
       monthly_contribution: parsedMonthly,
       target_date: targetDate || null,
       priority: parsedPriority,
-      status
+      status,
+      linked_category: linkedCategory.trim() || null,
+      linked_account: linkedAccount.trim() || null
     };
 
     const query = editingId
@@ -226,6 +234,8 @@ export default function GoalsPage() {
     setTargetDate(goal.target_date ?? "");
     setPriority(String(goal.priority));
     setStatus(goal.status);
+    setLinkedCategory(goal.linked_category ?? "");
+    setLinkedAccount(goal.linked_account ?? "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -338,6 +348,10 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Prioridad</span><select className={inputClass()} value={priority} onChange={(event) => setPriority(event.target.value)}>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Estado</span><select className={inputClass()} value={status} onChange={(event) => setStatus(event.target.value as GoalStatus)}>{GOAL_STATUSES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200"><span>Categoria conectada</span><input className={inputClass()} value={linkedCategory} onChange={(event) => setLinkedCategory(event.target.value)} placeholder="Ej: Vivienda, Inversiones, Viajes" /></label>
+              <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
+            </div>
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">{saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear objetivo"}</button>
           </form>
         </section>
@@ -418,6 +432,8 @@ export default function GoalsPage() {
                       <p>Prioridad: <span className="font-medium text-white">{goal.priority}</span></p>
                       <p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p>
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
+                      <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
+                      <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       <button type="button" onClick={() => handleEdit(goal)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button>

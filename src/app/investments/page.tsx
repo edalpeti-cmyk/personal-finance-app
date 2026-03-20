@@ -64,6 +64,10 @@ type SavedInvestmentView = {
   sortField: SortField;
   sortDirection: SortDirection;
 };
+type SavedViewRow = {
+  view_name: string;
+  config: SavedInvestmentView;
+};
 type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
 type TypeChartMode = "value" | "profitability";
 type TransactionMode = "buy" | "sell";
@@ -159,6 +163,7 @@ const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
   { value: "current_year", label: "Ano actual" }
 ];
 const INVESTMENT_VIEWS_KEY = "investment-saved-views";
+const INVESTMENT_VIEW_SCOPE = "investments";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -586,14 +591,46 @@ export default function InvestmentsPage() {
   }, []);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(INVESTMENT_VIEWS_KEY);
-    if (!raw) return;
-    try {
-      setSavedViews(JSON.parse(raw) as SavedInvestmentView[]);
-    } catch {
-      window.localStorage.removeItem(INVESTMENT_VIEWS_KEY);
-    }
-  }, []);
+    const loadSavedViews = async () => {
+      if (!userId) return;
+
+      const raw = window.localStorage.getItem(INVESTMENT_VIEWS_KEY);
+      let localViews: SavedInvestmentView[] = [];
+      if (raw) {
+        try {
+          localViews = JSON.parse(raw) as SavedInvestmentView[];
+        } catch {
+          window.localStorage.removeItem(INVESTMENT_VIEWS_KEY);
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("saved_views")
+        .select("view_name, config")
+        .eq("user_id", userId)
+        .eq("view_scope", INVESTMENT_VIEW_SCOPE)
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        if (localViews.length > 0) setSavedViews(localViews);
+        return;
+      }
+
+      const remoteViews = ((data as SavedViewRow[] | null) ?? []).map((row) => ({
+        name: row.view_name,
+        searchTerm: row.config.searchTerm ?? "",
+        typeFilter: row.config.typeFilter ?? "all",
+        marketFilter: row.config.marketFilter ?? "all",
+        profitFilter: row.config.profitFilter ?? "all",
+        sortField: row.config.sortField ?? "currentValueEur",
+        sortDirection: row.config.sortDirection ?? "desc"
+      }));
+
+      setSavedViews(remoteViews.length > 0 ? remoteViews : localViews);
+    };
+
+    void loadSavedViews();
+  }, [supabase, userId]);
 
   useEffect(() => {
     window.localStorage.setItem(INVESTMENT_VIEWS_KEY, JSON.stringify(savedViews));
@@ -1276,28 +1313,49 @@ export default function InvestmentsPage() {
 
   const sortLabel = sortDirection === "asc" ? "↑" : "↓";
 
-  const saveCurrentView = () => {
+  const saveCurrentView = async () => {
     const trimmedName = viewName.trim();
     if (trimmedName.length < 2) {
       showToast({ type: "error", text: "Pon un nombre mas claro para guardar la vista." });
       return;
     }
 
-    setSavedViews((current) => {
-      const next = current.filter((view) => view.name !== trimmedName);
-      return [
-        ...next,
+    const nextView: SavedInvestmentView = {
+      name: trimmedName,
+      searchTerm,
+      typeFilter,
+      marketFilter,
+      profitFilter,
+      sortField,
+      sortDirection
+    };
+    const nextViews = (() => {
+      let computed: SavedInvestmentView[] = [];
+      setSavedViews((current) => {
+        computed = [...current.filter((view) => view.name !== trimmedName), nextView];
+        return computed;
+      });
+      return computed;
+    })();
+
+    if (userId) {
+      const { error } = await supabase.from("saved_views").upsert(
         {
-          name: trimmedName,
-          searchTerm,
-          typeFilter,
-          marketFilter,
-          profitFilter,
-          sortField,
-          sortDirection
-        }
-      ];
-    });
+          user_id: userId,
+          view_scope: INVESTMENT_VIEW_SCOPE,
+          view_name: trimmedName,
+          config: nextView
+        },
+        { onConflict: "user_id,view_scope,view_name" }
+      );
+
+      if (error) {
+        setSavedViews(nextViews.filter((view) => view.name !== trimmedName));
+        showToast({ type: "error", text: "La vista se guardo en local, pero fallo la sincronizacion." });
+        return;
+      }
+    }
+
     setViewName("");
     showToast({ type: "success", text: "Vista de cartera guardada." });
   };
@@ -1312,8 +1370,25 @@ export default function InvestmentsPage() {
     showToast({ type: "success", text: `Vista aplicada: ${view.name}.` });
   };
 
-  const deleteSavedView = (name: string) => {
+  const deleteSavedView = async (name: string) => {
+    const previousViews = savedViews;
     setSavedViews((current) => current.filter((view) => view.name !== name));
+
+    if (userId) {
+      const { error } = await supabase
+        .from("saved_views")
+        .delete()
+        .eq("user_id", userId)
+        .eq("view_scope", INVESTMENT_VIEW_SCOPE)
+        .eq("view_name", name);
+
+      if (error) {
+        setSavedViews(previousViews);
+        showToast({ type: "error", text: "No se pudo borrar la vista guardada." });
+        return;
+      }
+    }
+
     showToast({ type: "success", text: "Vista guardada eliminada." });
   };
 
@@ -2638,7 +2713,7 @@ export default function InvestmentsPage() {
               />
               <button
                 type="button"
-                onClick={saveCurrentView}
+                onClick={() => void saveCurrentView()}
                 className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition hover:bg-white/10"
               >
                 Guardar vista
@@ -2649,7 +2724,7 @@ export default function InvestmentsPage() {
                 <button type="button" onClick={() => applySavedView(view)} className="text-xs text-slate-200 transition hover:text-white">
                   {view.name}
                 </button>
-                <button type="button" onClick={() => deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
+                <button type="button" onClick={() => void deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
                   x
                 </button>
               </div>

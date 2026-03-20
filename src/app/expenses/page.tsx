@@ -50,6 +50,10 @@ type SavedExpenseView = {
   categoryFilter: string;
   importedFilter: ExpenseImportedFilter;
 };
+type SavedViewRow = {
+  view_name: string;
+  config: SavedExpenseView;
+};
 
 const PRESET_CATEGORIES = [
   "Vivienda",
@@ -65,6 +69,7 @@ const PRESET_CATEGORIES = [
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const BUDGET_IMPORT_DESCRIPTION = "Base importada desde presupuesto mensual";
 const EXPENSE_VIEWS_KEY = "expense-saved-views";
+const EXPENSE_VIEW_SCOPE = "expenses";
 
 function monthToDate(month: string) {
   return `${month}-01`;
@@ -162,14 +167,43 @@ export default function ExpensesPage() {
   }, [authLoading, loadExpenses, userId]);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(EXPENSE_VIEWS_KEY);
-    if (!raw) return;
-    try {
-      setSavedViews(JSON.parse(raw) as SavedExpenseView[]);
-    } catch {
-      window.localStorage.removeItem(EXPENSE_VIEWS_KEY);
-    }
-  }, []);
+    const loadSavedViews = async () => {
+      if (!userId) return;
+
+      const raw = window.localStorage.getItem(EXPENSE_VIEWS_KEY);
+      let localViews: SavedExpenseView[] = [];
+      if (raw) {
+        try {
+          localViews = JSON.parse(raw) as SavedExpenseView[];
+        } catch {
+          window.localStorage.removeItem(EXPENSE_VIEWS_KEY);
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("saved_views")
+        .select("view_name, config")
+        .eq("user_id", userId)
+        .eq("view_scope", EXPENSE_VIEW_SCOPE)
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        if (localViews.length > 0) setSavedViews(localViews);
+        return;
+      }
+
+      const remoteViews = ((data as SavedViewRow[] | null) ?? []).map((row) => ({
+        name: row.view_name,
+        searchTerm: row.config.searchTerm ?? "",
+        categoryFilter: row.config.categoryFilter ?? "all",
+        importedFilter: row.config.importedFilter ?? "all"
+      }));
+
+      setSavedViews(remoteViews.length > 0 ? remoteViews : localViews);
+    };
+
+    void loadSavedViews();
+  }, [supabase, userId]);
 
   useEffect(() => {
     window.localStorage.setItem(EXPENSE_VIEWS_KEY, JSON.stringify(savedViews));
@@ -260,24 +294,53 @@ export default function ExpensesPage() {
     [filteredGroupedExpenses, selectedExpenseCategory]
   );
 
-  const saveCurrentView = () => {
+  const saveCurrentView = async () => {
     const trimmedName = viewName.trim();
     if (trimmedName.length < 2) {
       showToast({ type: "error", text: "Pon un nombre mas claro para guardar la vista." });
       return;
     }
-    setSavedViews((current) => {
-      const next = current.filter((view) => view.name !== trimmedName);
-      return [
-        ...next,
+    const nextViews = (() => {
+      let computed: SavedExpenseView[] = [];
+      setSavedViews((current) => {
+        const next = current.filter((view) => view.name !== trimmedName);
+        computed = [
+          ...next,
+          {
+            name: trimmedName,
+            searchTerm,
+            categoryFilter,
+            importedFilter
+          }
+        ];
+        return computed;
+      });
+      return computed;
+    })();
+
+    if (userId) {
+      const { error } = await supabase.from("saved_views").upsert(
         {
-          name: trimmedName,
-          searchTerm,
-          categoryFilter,
-          importedFilter
-        }
-      ];
-    });
+          user_id: userId,
+          view_scope: EXPENSE_VIEW_SCOPE,
+          view_name: trimmedName,
+          config: {
+            name: trimmedName,
+            searchTerm,
+            categoryFilter,
+            importedFilter
+          }
+        },
+        { onConflict: "user_id,view_scope,view_name" }
+      );
+
+      if (error) {
+        setSavedViews(nextViews.filter((view) => view.name !== trimmedName));
+        showToast({ type: "error", text: "La vista se guardo en local, pero fallo la sincronizacion." });
+        return;
+      }
+    }
+
     setViewName("");
     showToast({ type: "success", text: "Vista de gastos guardada." });
   };
@@ -289,8 +352,25 @@ export default function ExpensesPage() {
     showToast({ type: "success", text: `Vista aplicada: ${view.name}.` });
   };
 
-  const deleteSavedView = (name: string) => {
+  const deleteSavedView = async (name: string) => {
+    const previousViews = savedViews;
     setSavedViews((current) => current.filter((view) => view.name !== name));
+
+    if (userId) {
+      const { error } = await supabase
+        .from("saved_views")
+        .delete()
+        .eq("user_id", userId)
+        .eq("view_scope", EXPENSE_VIEW_SCOPE)
+        .eq("view_name", name);
+
+      if (error) {
+        setSavedViews(previousViews);
+        showToast({ type: "error", text: "No se pudo borrar la vista guardada." });
+        return;
+      }
+    }
+
     showToast({ type: "success", text: "Vista guardada eliminada." });
   };
 
@@ -782,7 +862,7 @@ export default function ExpensesPage() {
               Guardar vista
               <div className="flex gap-2">
                 <input className={inputClass(false)} value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="Ej: Solo gastos reales" />
-                <button type="button" onClick={saveCurrentView} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition hover:bg-white/10">
+                <button type="button" onClick={() => void saveCurrentView()} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition hover:bg-white/10">
                   Guardar
                 </button>
               </div>
@@ -811,7 +891,7 @@ export default function ExpensesPage() {
                 <button type="button" onClick={() => applySavedView(view)} className="text-xs text-slate-200 transition hover:text-white">
                   {view.name}
                 </button>
-                <button type="button" onClick={() => deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
+                <button type="button" onClick={() => void deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
                   x
                 </button>
               </div>

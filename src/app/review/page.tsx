@@ -36,6 +36,8 @@ type GoalRow = {
   monthly_contribution: number | null;
   status: string;
   priority: number;
+  linked_category: string | null;
+  linked_account: string | null;
 };
 
 type ReviewAction = {
@@ -47,6 +49,11 @@ type ReviewAction = {
   tone: "warning" | "info" | "success";
 };
 
+type ReviewTaskRow = {
+  task_key: string;
+  completed: boolean;
+};
+
 function isSameMonth(dateString: string, month: string) {
   return dateString.slice(0, 7) === month;
 }
@@ -56,6 +63,10 @@ function previousMonth(month: string) {
   const date = new Date(year, rawMonth - 1, 1);
   date.setMonth(date.getMonth() - 1);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthToDate(month: string) {
+  return `${month}-01`;
 }
 
 export default function ReviewPage() {
@@ -73,22 +84,25 @@ export default function ReviewPage() {
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
   const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
   const [goalRows, setGoalRows] = useState<GoalRow[]>([]);
+  const [completedTaskKeys, setCompletedTaskKeys] = useState<string[]>([]);
+  const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
 
   const loadReviewData = useCallback(async (uid: string) => {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult, tasksResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
-      supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true })
+      supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
+      supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth))
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error, tasksResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -102,8 +116,11 @@ export default function ReviewPage() {
     setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
     setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
     setGoalRows((goalsResult.data as GoalRow[]) ?? []);
+    setCompletedTaskKeys(
+      (((tasksResult.data as ReviewTaskRow[] | null) ?? []).filter((row) => row.completed).map((row) => row.task_key))
+    );
     setLoading(false);
-  }, [supabase]);
+  }, [selectedMonth, supabase]);
 
   useEffect(() => {
     if (authLoading || !userId) return;
@@ -177,7 +194,7 @@ export default function ReviewPage() {
     };
   }, [budgetRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
 
-  const reviewActions = useMemo<ReviewAction[]>(() => {
+  const reviewActions = useMemo<Array<ReviewAction & { completed: boolean }>>(() => {
     const actions: ReviewAction[] = [];
 
     if (reviewMetrics.currentIncome <= 0) {
@@ -199,8 +216,39 @@ export default function ReviewPage() {
       actions.push({ id: "stable-month", title: "Revision bien encaminada", body: "Este mes ya tiene ingresos, ahorro objetivo, cartera actualizada y objetivos activos.", href: "/dashboard", cta: "Volver al dashboard", tone: "success" });
     }
 
-    return actions.slice(0, 4);
-  }, [reviewMetrics]);
+    return actions.slice(0, 4).map((action) => ({
+      ...action,
+      completed: completedTaskKeys.includes(action.id)
+    }));
+  }, [completedTaskKeys, reviewMetrics]);
+
+  const toggleReviewTask = useCallback(async (taskId: string, completed: boolean) => {
+    if (!userId) return;
+
+    setTogglingTaskId(taskId);
+    const payload = {
+      user_id: userId,
+      review_month: monthToDate(selectedMonth),
+      task_key: taskId,
+      completed,
+      completed_at: completed ? new Date().toISOString() : null
+    };
+
+    const { error } = await supabase
+      .from("monthly_review_tasks")
+      .upsert(payload, { onConflict: "user_id,review_month,task_key" });
+
+    if (error) {
+      setMessage(error.message);
+      setTogglingTaskId(null);
+      return;
+    }
+
+    setCompletedTaskKeys((current) =>
+      completed ? Array.from(new Set([...current, taskId])) : current.filter((item) => item !== taskId)
+    );
+    setTogglingTaskId(null);
+  }, [selectedMonth, supabase, userId]);
 
   if (authLoading) {
     return (
@@ -261,8 +309,22 @@ export default function ReviewPage() {
               <SectionHeader eyebrow="Checklist" title="Siguiente accion recomendada" description="Atajos rapidos para cerrar el mes sin perder tiempo." />
               <div className="mt-5 grid gap-3">
                 {reviewActions.map((action) => (
-                  <article key={action.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4">
-                    <p className={`text-xs uppercase tracking-[0.18em] ${action.tone === "warning" ? "text-amber-300" : action.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>{action.title}</p>
+                  <article key={action.id} className={`rounded-[24px] border p-4 ${action.completed ? "border-emerald-400/20 bg-emerald-500/10" : "border-white/8 bg-white/5"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className={`text-xs uppercase tracking-[0.18em] ${action.tone === "warning" ? "text-amber-300" : action.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>{action.title}</p>
+                      <button
+                        type="button"
+                        onClick={() => void toggleReviewTask(action.id, !action.completed)}
+                        disabled={togglingTaskId === action.id}
+                        className={`ui-chip rounded-full border px-3 py-1.5 text-[11px] transition ${
+                          action.completed
+                            ? "border-emerald-300/30 bg-emerald-400/15 text-emerald-200"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                        } disabled:opacity-60`}
+                      >
+                        {togglingTaskId === action.id ? "Guardando..." : action.completed ? "Hecho" : "Marcar hecha"}
+                      </button>
+                    </div>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{action.body}</p>
                     <Link href={action.href} className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10">{action.cta}</Link>
                   </article>
@@ -288,7 +350,7 @@ export default function ReviewPage() {
                   <EmptyStateCard eyebrow="Sin objetivos" title="Todavia no hay metas activas" description="Crea objetivos como fondo de emergencia, viaje o vivienda para enlazar ahorro y progreso real." actionLabel="Crear objetivos" actionHref="/goals" compact />
                 </div>
               ) : (
-                <div className="mt-5 grid gap-3">{reviewMetrics.topGoals.map((goal) => (<article key={goal.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{goal.goal_type}</p><h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{goal.goal_name}</h3></div><p className="text-sm text-slate-300">Prioridad {goal.priority}</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(goal.progressPct, 100)}%` }} /></div><div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2"><p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p><p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p><p>Progreso: <span className="font-medium text-white">{goal.progressPct.toFixed(1)}%</span></p><p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p></div></article>))}</div>
+                <div className="mt-5 grid gap-3">{reviewMetrics.topGoals.map((goal) => (<article key={goal.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{goal.goal_type}</p><h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{goal.goal_name}</h3></div><p className="text-sm text-slate-300">Prioridad {goal.priority}</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(goal.progressPct, 100)}%` }} /></div><div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2"><p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p><p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p><p>Progreso: <span className="font-medium text-white">{goal.progressPct.toFixed(1)}%</span></p><p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p><p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p><p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p></div></article>))}</div>
               )}
             </section>
           </>
