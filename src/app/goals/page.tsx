@@ -24,6 +24,10 @@ type GoalRow = {
   priority: number;
   status: GoalStatus;
 };
+type SavingsTargetRow = {
+  month: string;
+  savings_target: number;
+};
 
 type ToastState = { type: "success" | "error"; text: string } | null;
 
@@ -58,6 +62,7 @@ export default function GoalsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [goals, setGoals] = useState<GoalRow[]>([]);
+  const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [goalName, setGoalName] = useState("");
@@ -88,20 +93,25 @@ export default function GoalsPage() {
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("financial_goals")
-      .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status")
-      .eq("user_id", uid)
-      .order("priority", { ascending: true })
-      .order("created_at", { ascending: false });
+    const [goalsResult, savingsResult] = await Promise.all([
+      supabase
+        .from("financial_goals")
+        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status")
+        .eq("user_id", uid)
+        .order("priority", { ascending: true })
+        .order("created_at", { ascending: false }),
+      supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid)
+    ]);
 
-    if (error) {
-      setMessage(error.message);
+    const firstError = goalsResult.error ?? savingsResult.error;
+    if (firstError) {
+      setMessage(firstError.message);
       setLoading(false);
       return;
     }
 
-    setGoals((data as GoalRow[]) ?? []);
+    setGoals((goalsResult.data as GoalRow[]) ?? []);
+    setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
@@ -115,6 +125,29 @@ export default function GoalsPage() {
   const totalTarget = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0), [activeGoals]);
   const totalCurrent = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.current_amount || 0), 0), [activeGoals]);
   const totalMonthlyContribution = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.monthly_contribution || 0), 0), [activeGoals]);
+  const currentMonthSavingsTarget = useMemo(() => {
+    const month = new Date().toISOString().slice(0, 7);
+    return savingsTargets.reduce((sum, row) => (row.month.slice(0, 7) === month ? sum + Number(row.savings_target || 0) : sum), 0);
+  }, [savingsTargets]);
+  const monthlyCoveragePct = useMemo(
+    () => (currentMonthSavingsTarget > 0 ? Math.min((totalMonthlyContribution / currentMonthSavingsTarget) * 100, 100) : 0),
+    [currentMonthSavingsTarget, totalMonthlyContribution]
+  );
+  const unassignedMonthlySavings = useMemo(
+    () => currentMonthSavingsTarget - totalMonthlyContribution,
+    [currentMonthSavingsTarget, totalMonthlyContribution]
+  );
+  const suggestedAllocations = useMemo(() => {
+    if (currentMonthSavingsTarget <= 0 || activeGoals.length === 0) return [];
+    const weightedGoals = activeGoals.map((goal) => ({ goal, weight: 6 - Number(goal.priority || 3) }));
+    const totalWeight = weightedGoals.reduce((sum, item) => sum + item.weight, 0);
+    if (totalWeight <= 0) return [];
+    return weightedGoals.map(({ goal, weight }) => ({
+      id: goal.id,
+      name: goal.goal_name,
+      amount: Number(((currentMonthSavingsTarget * weight) / totalWeight).toFixed(2))
+    }));
+  }, [activeGoals, currentMonthSavingsTarget]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -208,6 +241,39 @@ export default function GoalsPage() {
     showToast({ type: "success", text: "Objetivo eliminado." });
   };
 
+  const applySavingsTargetDistribution = async () => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para repartir el ahorro objetivo." });
+      return;
+    }
+    if (suggestedAllocations.length === 0) {
+      showToast({ type: "error", text: "No hay ahorro objetivo mensual o no existen metas activas para repartir." });
+      return;
+    }
+
+    setSaving(true);
+    const updates = suggestedAllocations.map((item) =>
+      supabase
+        .from("financial_goals")
+        .update({ monthly_contribution: item.amount })
+        .eq("id", item.id)
+        .eq("user_id", userId)
+    );
+
+    const results = await Promise.all(updates);
+    const firstError = results.find((result) => result.error)?.error;
+    if (firstError) {
+      setMessage(firstError.message);
+      showToast({ type: "error", text: "No se pudo repartir el ahorro objetivo entre las metas." });
+      setSaving(false);
+      return;
+    }
+
+    await loadGoals(userId);
+    showToast({ type: "success", text: "Ahorro objetivo del mes repartido entre objetivos activos." });
+    setSaving(false);
+  };
+
   if (authLoading) {
     return (
       <>
@@ -233,6 +299,16 @@ export default function GoalsPage() {
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Resumen activo</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{activeGoals.length}</p>
           <p className="mt-3 text-sm leading-6 text-slate-200">Objetivos activos ahora mismo, listos para entrar en tu revision mensual.</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Ahorro objetivo mensual</p>
+              <p className="mt-2 text-2xl font-semibold">{formatCurrencyByPreference(currentMonthSavingsTarget, currency)}</p>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Cobertura de metas</p>
+              <p className="mt-2 text-2xl font-semibold">{currentMonthSavingsTarget > 0 ? `${monthlyCoveragePct.toFixed(1)}%` : "Sin base"}</p>
+            </div>
+          </div>
         </section>
 
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}
@@ -270,7 +346,47 @@ export default function GoalsPage() {
           <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital objetivo</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de objetivos activos.</p></article>
           <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital ya asignado</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalCurrent, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe actual acumulado de metas activas.</p></article>
           <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Aporte mensual</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalMonthlyContribution, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Contribucion mensual comprometida.</p></article>
-          <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Completados</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{completedGoals.length}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Objetivos ya cerrados.</p></article>
+          <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Pendiente de asignar</p><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${unassignedMonthlySavings >= 0 ? "text-white" : "text-red-300"}`}>{formatCurrencyByPreference(unassignedMonthlySavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo del mes que aun no esta repartido entre metas.</p></article>
+        </section>
+
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+          <SectionHeader
+            eyebrow="Plan automatico"
+            title="Conectar metas con el ahorro del mes"
+            description="Puedes repartir automaticamente el ahorro objetivo mensual actual entre tus metas activas segun prioridad."
+            aside={
+              <button
+                type="button"
+                onClick={() => void applySavingsTargetDistribution()}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={saving || suggestedAllocations.length === 0}
+              >
+                Repartir ahorro objetivo
+              </button>
+            }
+          />
+          {suggestedAllocations.length === 0 ? (
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Sin reparto"
+                title="Falta base para repartir"
+                description="Necesitas un ahorro objetivo mensual y al menos una meta activa para generar un reparto automatico."
+                actionLabel="Definir ahorro en Presupuestos"
+                actionHref="/budgets"
+                compact
+              />
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {suggestedAllocations.map((item) => (
+                <article key={item.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Sugerencia mensual</p>
+                  <h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{item.name}</h3>
+                  <p className="mt-3 text-2xl font-semibold text-white">{formatCurrencyByPreference(item.amount, currency)}</p>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">

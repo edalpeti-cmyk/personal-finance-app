@@ -43,6 +43,13 @@ type MonthlyBudgetImportRow = {
   category: string;
   budget_amount: number;
 };
+type ExpenseImportedFilter = "all" | "imported" | "manual";
+type SavedExpenseView = {
+  name: string;
+  searchTerm: string;
+  categoryFilter: string;
+  importedFilter: ExpenseImportedFilter;
+};
 
 const PRESET_CATEGORIES = [
   "Vivienda",
@@ -57,6 +64,7 @@ const PRESET_CATEGORIES = [
 
 const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const BUDGET_IMPORT_DESCRIPTION = "Base importada desde presupuesto mensual";
+const EXPENSE_VIEWS_KEY = "expense-saved-views";
 
 function monthToDate(month: string) {
   return `${month}-01`;
@@ -99,6 +107,11 @@ export default function ExpensesPage() {
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [errors, setErrors] = useState<ExpenseFormErrors>({});
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [importedFilter, setImportedFilter] = useState<ExpenseImportedFilter>("all");
+  const [savedViews, setSavedViews] = useState<SavedExpenseView[]>([]);
+  const [viewName, setViewName] = useState("");
   const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -147,6 +160,20 @@ export default function ExpensesPage() {
 
     void init();
   }, [authLoading, loadExpenses, userId]);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(EXPENSE_VIEWS_KEY);
+    if (!raw) return;
+    try {
+      setSavedViews(JSON.parse(raw) as SavedExpenseView[]);
+    } catch {
+      window.localStorage.removeItem(EXPENSE_VIEWS_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(EXPENSE_VIEWS_KEY, JSON.stringify(savedViews));
+  }, [savedViews]);
 
   const monthlyTotals = useMemo(() => {
     const year = new Date().getFullYear();
@@ -213,10 +240,59 @@ export default function ExpensesPage() {
       }))
       .sort((a, b) => b.total - a.total);
   }, [expenses]);
+  const availableExpenseCategories = useMemo(() => groupedExpenses.map((group) => group.category), [groupedExpenses]);
+  const filteredGroupedExpenses = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return groupedExpenses.filter((group) => {
+      const matchesSearch =
+        !search ||
+        group.category.toLowerCase().includes(search) ||
+        group.items.some((item) => (item.description ?? "").toLowerCase().includes(search));
+      const matchesCategory = categoryFilter === "all" || group.category === categoryFilter;
+      const matchesImported =
+        importedFilter === "all" ||
+        (importedFilter === "imported" ? group.importedCount > 0 : group.count - group.importedCount > 0);
+      return matchesSearch && matchesCategory && matchesImported;
+    });
+  }, [categoryFilter, groupedExpenses, importedFilter, searchTerm]);
   const selectedCategoryExpenses = useMemo(
-    () => groupedExpenses.find((group) => group.category === selectedExpenseCategory) ?? null,
-    [groupedExpenses, selectedExpenseCategory]
+    () => filteredGroupedExpenses.find((group) => group.category === selectedExpenseCategory) ?? null,
+    [filteredGroupedExpenses, selectedExpenseCategory]
   );
+
+  const saveCurrentView = () => {
+    const trimmedName = viewName.trim();
+    if (trimmedName.length < 2) {
+      showToast({ type: "error", text: "Pon un nombre mas claro para guardar la vista." });
+      return;
+    }
+    setSavedViews((current) => {
+      const next = current.filter((view) => view.name !== trimmedName);
+      return [
+        ...next,
+        {
+          name: trimmedName,
+          searchTerm,
+          categoryFilter,
+          importedFilter
+        }
+      ];
+    });
+    setViewName("");
+    showToast({ type: "success", text: "Vista de gastos guardada." });
+  };
+
+  const applySavedView = (view: SavedExpenseView) => {
+    setSearchTerm(view.searchTerm);
+    setCategoryFilter(view.categoryFilter);
+    setImportedFilter(view.importedFilter);
+    showToast({ type: "success", text: `Vista aplicada: ${view.name}.` });
+  };
+
+  const deleteSavedView = (name: string) => {
+    setSavedViews((current) => current.filter((view) => view.name !== name));
+    showToast({ type: "success", text: "Vista guardada eliminada." });
+  };
 
   const chartData = {
     labels: MONTH_LABELS,
@@ -680,6 +756,68 @@ export default function ExpensesPage() {
             description="Primero entras en una categoria y despues abres los gastos concretos de ese grupo."
           />
 
+          <div className="mt-6 grid gap-4 xl:grid-cols-6">
+            <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2">
+              Buscar
+              <input className={inputClass(false)} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ej: vivienda, supermercado, seguro" />
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Categoria
+              <select className={inputClass(false)} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value="all">Todas</option>
+                {availableExpenseCategories.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Tipo
+              <select className={inputClass(false)} value={importedFilter} onChange={(e) => setImportedFilter(e.target.value as ExpenseImportedFilter)}>
+                <option value="all">Todos</option>
+                <option value="manual">Solo reales</option>
+                <option value="imported">Solo base importada</option>
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2">
+              Guardar vista
+              <div className="flex gap-2">
+                <input className={inputClass(false)} value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="Ej: Solo gastos reales" />
+                <button type="button" onClick={saveCurrentView} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition hover:bg-white/10">
+                  Guardar
+                </button>
+              </div>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+            <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
+              Mostrando {filteredGroupedExpenses.length} categorias
+            </span>
+            {(searchTerm || categoryFilter !== "all" || importedFilter !== "all") ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setCategoryFilter("all");
+                  setImportedFilter("all");
+                }}
+                className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10"
+              >
+                Limpiar filtros
+              </button>
+            ) : null}
+            {savedViews.map((view) => (
+              <div key={view.name} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                <button type="button" onClick={() => applySavedView(view)} className="text-xs text-slate-200 transition hover:text-white">
+                  {view.name}
+                </button>
+                <button type="button" onClick={() => deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
+                  x
+                </button>
+              </div>
+            ))}
+          </div>
+
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando gastos...</p> : null}
           {!loading && expenses.length === 0 ? (
             <div className="mt-6">
@@ -694,9 +832,9 @@ export default function ExpensesPage() {
             </div>
           ) : null}
 
-          {!loading && expenses.length > 0 ? (
+          {!loading && expenses.length > 0 && filteredGroupedExpenses.length > 0 ? (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {groupedExpenses.map((group) => (
+              {filteredGroupedExpenses.map((group) => (
                 <button
                   key={group.category}
                   type="button"
@@ -716,6 +854,18 @@ export default function ExpensesPage() {
                   </div>
                 </button>
               ))}
+            </div>
+          ) : null}
+          {!loading && expenses.length > 0 && filteredGroupedExpenses.length === 0 ? (
+            <div className="mt-6">
+              <EmptyStateCard
+                eyebrow="Filtros"
+                title="No hay categorias con esos filtros"
+                description="Prueba a limpiar la busqueda o cambiar el tipo de movimientos para volver a ver categorias."
+                actionLabel="Limpiar filtros"
+                actionHref="/expenses"
+                compact
+              />
             </div>
           ) : null}
         </section>

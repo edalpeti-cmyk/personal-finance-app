@@ -55,6 +55,15 @@ type ToastState = { type: "success" | "error"; text: string } | null;
 type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "gainPct" | "weightPct";
 type SortDirection = "asc" | "desc";
+type SavedInvestmentView = {
+  name: string;
+  searchTerm: string;
+  typeFilter: AssetType | "all";
+  marketFilter: AssetMarket | "all";
+  profitFilter: ProfitFilter;
+  sortField: SortField;
+  sortDirection: SortDirection;
+};
 type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
 type TypeChartMode = "value" | "profitability";
 type TransactionMode = "buy" | "sell";
@@ -149,6 +158,7 @@ const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
   { value: "annual", label: "Anual" },
   { value: "current_year", label: "Ano actual" }
 ];
+const INVESTMENT_VIEWS_KEY = "investment-saved-views";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -554,6 +564,8 @@ export default function InvestmentsPage() {
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
   const [sortField, setSortField] = useState<SortField>("currentValueEur");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [savedViews, setSavedViews] = useState<SavedInvestmentView[]>([]);
+  const [viewName, setViewName] = useState("");
   const [selectedType, setSelectedType] = useState<AssetType | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
@@ -572,6 +584,20 @@ export default function InvestmentsPage() {
     setToast(nextToast);
     window.setTimeout(() => setToast(null), 3000);
   }, []);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(INVESTMENT_VIEWS_KEY);
+    if (!raw) return;
+    try {
+      setSavedViews(JSON.parse(raw) as SavedInvestmentView[]);
+    } catch {
+      window.localStorage.removeItem(INVESTMENT_VIEWS_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(INVESTMENT_VIEWS_KEY, JSON.stringify(savedViews));
+  }, [savedViews]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -1249,6 +1275,47 @@ export default function InvestmentsPage() {
   };
 
   const sortLabel = sortDirection === "asc" ? "↑" : "↓";
+
+  const saveCurrentView = () => {
+    const trimmedName = viewName.trim();
+    if (trimmedName.length < 2) {
+      showToast({ type: "error", text: "Pon un nombre mas claro para guardar la vista." });
+      return;
+    }
+
+    setSavedViews((current) => {
+      const next = current.filter((view) => view.name !== trimmedName);
+      return [
+        ...next,
+        {
+          name: trimmedName,
+          searchTerm,
+          typeFilter,
+          marketFilter,
+          profitFilter,
+          sortField,
+          sortDirection
+        }
+      ];
+    });
+    setViewName("");
+    showToast({ type: "success", text: "Vista de cartera guardada." });
+  };
+
+  const applySavedView = (view: SavedInvestmentView) => {
+    setSearchTerm(view.searchTerm);
+    setTypeFilter(view.typeFilter);
+    setMarketFilter(view.marketFilter);
+    setProfitFilter(view.profitFilter);
+    setSortField(view.sortField);
+    setSortDirection(view.sortDirection);
+    showToast({ type: "success", text: `Vista aplicada: ${view.name}.` });
+  };
+
+  const deleteSavedView = (name: string) => {
+    setSavedViews((current) => current.filter((view) => view.name !== name));
+    showToast({ type: "success", text: "Vista guardada eliminada." });
+  };
 
   const handleExportPdfReport = useCallback(() => {
     const reportWindow = window.open("", "_blank", "width=1024,height=780");
@@ -2559,6 +2626,34 @@ export default function InvestmentsPage() {
                 Limpiar filtros
               </button>
             ) : null}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="flex min-w-[280px] flex-1 gap-2">
+              <input
+                className={inputClass(false)}
+                value={viewName}
+                onChange={(e) => setViewName(e.target.value)}
+                placeholder="Guardar vista de cartera"
+              />
+              <button
+                type="button"
+                onClick={saveCurrentView}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition hover:bg-white/10"
+              >
+                Guardar vista
+              </button>
+            </div>
+            {savedViews.map((view) => (
+              <div key={view.name} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                <button type="button" onClick={() => applySavedView(view)} className="text-xs text-slate-200 transition hover:text-white">
+                  {view.name}
+                </button>
+                <button type="button" onClick={() => deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
+                  x
+                </button>
+              </div>
+            ))}
           </div>
 
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => void handleCsvImport(e)} />
