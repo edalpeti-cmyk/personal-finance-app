@@ -955,9 +955,25 @@ export default function InvestmentsPage() {
     }
     return gains.reduce((sum, value) => sum + value, 0) / gains.length;
   }, [enrichedInvestments]);
-
+  const bestPerformer = useMemo(
+    () =>
+      [...enrichedInvestments]
+        .filter((row) => row.gainPct !== null)
+        .sort((a, b) => Number(b.gainPct ?? -Infinity) - Number(a.gainPct ?? -Infinity))[0] ?? null,
+    [enrichedInvestments]
+  );
+  const worstPerformer = useMemo(
+    () =>
+      [...enrichedInvestments]
+        .filter((row) => row.gainPct !== null)
+        .sort((a, b) => Number(a.gainPct ?? Infinity) - Number(b.gainPct ?? Infinity))[0] ?? null,
+    [enrichedInvestments]
+  );
   const biggestPosition = topHoldings[0] ?? null;
   const profitablePositions = enrichedInvestments.filter((row) => row.gainEur >= 0).length;
+  const winRate = enrichedInvestments.length > 0 ? (profitablePositions / enrichedInvestments.length) * 100 : null;
+  const topThreeConcentration = topHoldings.slice(0, 3).reduce((sum, row) => sum + row.weightPct, 0);
+  const stalePricePositions = enrichedInvestments.filter((row) => row.current_price === null).length;
   const diversificationScore = allocationByType.length;
   const concentrationAlerts = enrichedInvestments.filter((row) => row.weightPct >= 25);
   const drawdownAlerts = enrichedInvestments.filter((row) => (row.gainPct ?? 0) <= -10);
@@ -2237,10 +2253,10 @@ export default function InvestmentsPage() {
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analitica avanzada</p>
               <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura extra de cartera</h2>
             </div>
-            <p className="text-sm text-slate-400">Distribucion por divisa y calidad media de las posiciones abiertas.</p>
+            <p className="text-sm text-slate-400">Distribucion por divisa, calidad media y senales rapidas de la cartera abierta.</p>
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia latente</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
@@ -2261,6 +2277,49 @@ export default function InvestmentsPage() {
                 {averagePositionGainPct === null ? "Sin datos" : `${averagePositionGainPct >= 0 ? "+" : ""}${formatNumber(averagePositionGainPct, 2)}%`}
               </p>
               <p className="mt-3 text-sm text-slate-300">Media simple de la rentabilidad porcentual de tus posiciones abiertas.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Mejor posicion</p>
+              <p className="mt-3 text-xl font-semibold leading-tight text-white">{bestPerformer ? bestPerformer.asset_name : "Sin datos"}</p>
+              <p className={`mt-3 text-sm font-medium ${bestPerformer && (bestPerformer.gainPct ?? 0) >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                {bestPerformer?.gainPct === null || !bestPerformer ? "Sin porcentaje" : `${bestPerformer.gainPct >= 0 ? "+" : ""}${formatNumber(bestPerformer.gainPct, 2)}%`}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">La posicion abierta con mejor comportamiento porcentual ahora mismo.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Posicion mas debil</p>
+              <p className="mt-3 text-xl font-semibold leading-tight text-white">{worstPerformer ? worstPerformer.asset_name : "Sin datos"}</p>
+              <p className={`mt-3 text-sm font-medium ${worstPerformer && (worstPerformer.gainPct ?? 0) >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                {worstPerformer?.gainPct === null || !worstPerformer ? "Sin porcentaje" : `${worstPerformer.gainPct >= 0 ? "+" : ""}${formatNumber(worstPerformer.gainPct, 2)}%`}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">La posicion abierta con peor comportamiento porcentual.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Win rate</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${winRate !== null && winRate >= 50 ? "text-emerald-300" : "text-amber-300"}`}>
+                {winRate === null ? "Sin datos" : `${formatNumber(winRate, 1)}%`}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">
+                {profitablePositions} de {enrichedInvestments.length} posiciones abiertas estan en positivo.
+              </p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Top 3 concentracion</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${topThreeConcentration >= 60 ? "text-amber-300" : "text-white"}`}>
+                {formatNumber(topThreeConcentration, 1)}%
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Porcentaje conjunto que ocupan las tres posiciones de mayor peso.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cobertura de precios</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">
+                {enrichedInvestments.length === 0 ? "Sin datos" : `${enrichedInvestments.length - stalePricePositions}/${enrichedInvestments.length}`}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">
+                {stalePricePositions === 0
+                  ? "Todas tus posiciones tienen precio actual guardado."
+                  : `${stalePricePositions} posicion(es) siguen sin precio actual y pueden sesgar el valor total.`}
+              </p>
             </article>
           </div>
 

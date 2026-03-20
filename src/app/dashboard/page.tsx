@@ -60,6 +60,12 @@ type DashboardAlert = {
   title: string;
   body: string;
 };
+type DashboardReminder = {
+  id: string;
+  title: string;
+  body: string;
+  cta: string;
+};
 type MonthlyTrendPoint = {
   label: string;
   income: number;
@@ -355,6 +361,7 @@ export default function DashboardPage() {
   const [snapshotSaving, setSnapshotSaving] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
+  const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -538,6 +545,97 @@ export default function DashboardPage() {
     return alerts.slice(0, 4);
   }, [investmentRows, metrics, ratesToEur]);
 
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("dashboard-dismissed-reminders");
+      if (!stored) {
+        return;
+      }
+
+      const parsed = JSON.parse(stored) as string[];
+      if (Array.isArray(parsed)) {
+        setDismissedReminderIds(parsed);
+      }
+    } catch {
+      setDismissedReminderIds([]);
+    }
+  }, []);
+
+  const dashboardReminders = useMemo<DashboardReminder[]>(() => {
+    if (!metrics) {
+      return [];
+    }
+
+    const now = new Date();
+    const currentMonthIncome = incomeRows.some((row) => isSameMonth(row.income_date, now));
+    const currentMonthSavingsTarget = savingsTargetRows.some((row) => isSameMonth(row.month, now));
+    const todaySnapshotKey = new Date().toISOString().slice(0, 10);
+    const hasSnapshotToday = snapshotRows.some((row) => row.snapshot_date === todaySnapshotKey);
+    const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
+
+    const reminders: DashboardReminder[] = [];
+
+    if (!currentMonthIncome) {
+      reminders.push({
+        id: "missing-income-month",
+        title: "Ingresos del mes pendientes",
+        body: "Este mes no tiene ingresos registrados. Sin eso, tasa de ahorro e insights pierden contexto.",
+        cta: "Anade ingresos en Presupuestos"
+      });
+    }
+
+    if (!currentMonthSavingsTarget) {
+      reminders.push({
+        id: "missing-savings-target-month",
+        title: "Ahorro objetivo sin definir",
+        body: "Todavia no hay ahorro objetivo para el mes actual. Eso afecta al dashboard, FIRE y a la IA.",
+        cta: "Define el ahorro en Presupuestos"
+      });
+    }
+
+    if (snapshotRows.length > 0 && !hasSnapshotToday) {
+      reminders.push({
+        id: "missing-today-snapshot",
+        title: "Snapshot diario pendiente",
+        body: "Hoy aun no has guardado snapshot de patrimonio. Mantenerlo al dia mejora la evolucion historica.",
+        cta: "Pulsa Guardar snapshot ahora"
+      });
+    }
+
+    if (assetsWithoutCurrentPrice.length > 0) {
+      reminders.push({
+        id: "missing-current-prices",
+        title: "Precios pendientes de actualizar",
+        body: `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado. Eso limita la precision del patrimonio y de la cartera.`,
+        cta: "Actualiza precios en Inversiones"
+      });
+    }
+
+    if (metrics.fireTarget <= 0) {
+      reminders.push({
+        id: "missing-fire-config",
+        title: "Configuracion FIRE sin cerrar",
+        body: "El objetivo FIRE sigue sin una base completa. Guardar tu configuracion mejora el seguimiento real.",
+        cta: "Actualiza FIRE"
+      });
+    }
+
+    return reminders.filter((reminder) => !dismissedReminderIds.includes(reminder.id)).slice(0, 4);
+  }, [dismissedReminderIds, incomeRows, investmentRows, metrics, savingsTargetRows, snapshotRows]);
+
+  const dismissReminder = useCallback((reminderId: string) => {
+    setDismissedReminderIds((current) => {
+      const next = Array.from(new Set([...current, reminderId]));
+      window.localStorage.setItem("dashboard-dismissed-reminders", JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const restoreReminders = useCallback(() => {
+    setDismissedReminderIds([]);
+    window.localStorage.removeItem("dashboard-dismissed-reminders");
+  }, []);
+
   const handleExportCsvReport = useCallback(() => {
     if (!metrics) {
       return;
@@ -551,6 +649,9 @@ export default function DashboardPage() {
       ["dashboard", "objetivo_fire", metrics.fireTarget.toFixed(2)],
       ["dashboard", "progreso_fire_pct", metrics.fireProgress.toFixed(2)],
       ["dashboard", "anos_hasta_fire", metrics.yearsToFire === null ? "" : String(metrics.yearsToFire)],
+      ...dashboardAlerts.map((alert, index) => ["alerta", String(index + 1), `${alert.title}: ${alert.body}`]),
+      ...dashboardReminders.map((reminder, index) => ["recordatorio", String(index + 1), `${reminder.title}: ${reminder.body}`]),
+      ...monthlyTrendPoints.map((point) => ["tendencia_mensual", point.label, `${point.income.toFixed(2)}|${point.savingsTarget.toFixed(2)}`]),
       ...investmentRows.map((row) => [
         "inversion",
         row.asset_name,
@@ -566,7 +667,7 @@ export default function DashboardPage() {
     link.download = `reporte_financiero_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [investmentRows, metrics, ratesToEur]);
+  }, [dashboardAlerts, dashboardReminders, investmentRows, metrics, monthlyTrendPoints, ratesToEur]);
 
   const handleExportPdfReport = useCallback(() => {
     if (!metrics) {
@@ -578,31 +679,83 @@ export default function DashboardPage() {
       return;
     }
 
+    const topHoldings = investmentRows
+      .map((row) => {
+        const valueEur = convertToEur((Number(row.quantity) || 0) * (Number(row.current_price ?? row.average_buy_price) || 0), row.asset_currency, ratesToEur);
+        return { name: row.asset_name, type: row.asset_type, valueEur };
+      })
+      .sort((a, b) => b.valueEur - a.valueEur)
+      .slice(0, 8);
+
     const html = `
       <html>
         <head>
           <title>Reporte financiero</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
-            h1, h2 { margin-bottom: 8px; }
-            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
-            .card { border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 28px; color: #0f172a; background: #f8fafc; }
+            h1, h2, h3 { margin: 0 0 8px; }
+            p { margin: 0; }
+            .header { margin-bottom: 24px; }
+            .muted { color: #475569; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 18px 0 26px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; background: white; }
+            .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #0f766e; }
+            .metric-value { font-size: 28px; font-weight: 700; margin-top: 8px; }
+            .section { margin-top: 22px; }
+            .section-intro { margin-bottom: 12px; color: #475569; }
+            .pill { display: inline-block; margin: 4px 8px 0 0; padding: 6px 10px; border-radius: 999px; background: #e2e8f0; color: #0f172a; font-size: 12px; }
+            .list { margin: 10px 0 0; padding-left: 18px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 14px; background: white; border-radius: 14px; overflow: hidden; }
+            th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 8px; text-align: left; font-size: 14px; }
+            th { background: #e2e8f0; color: #0f172a; }
+            .good { color: #047857; }
+            .warn { color: #b45309; }
+            .small-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+            @media print { body { padding: 16px; } .card { break-inside: avoid; } }
           </style>
         </head>
         <body>
-          <h1>Reporte financiero</h1>
-          <p>Generado el ${new Date().toLocaleDateString("es-ES")}</p>
-          <div class="grid">
-            <div class="card"><h2>Patrimonio</h2><p>${formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p></div>
-            <div class="card"><h2>Tasa ahorro</h2><p>${metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}</p></div>
-            <div class="card"><h2>Ahorro anual</h2><p>${formatCurrencyByPreference(metrics.annualSavings, currency)}</p></div>
-            <div class="card"><h2>Objetivo FIRE</h2><p>${formatCurrencyByPreference(metrics.fireTarget, currency)}</p></div>
+          <div class="header">
+            <h1>Reporte financiero</h1>
+            <p class="muted">Generado el ${new Date().toLocaleDateString("es-ES")} · Resumen ejecutivo de dashboard, cartera y FIRE.</p>
           </div>
-          <h2>Alertas</h2>
-          <ul>${dashboardAlerts.map((alert) => `<li><strong>${alert.title}:</strong> ${alert.body}</li>`).join("")}</ul>
-          <h2>Cartera</h2>
+          <div class="grid">
+            <div class="card"><p class="metric-label">Patrimonio</p><p class="metric-value">${formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p></div>
+            <div class="card"><p class="metric-label">Tasa ahorro</p><p class="metric-value">${metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}</p></div>
+            <div class="card"><p class="metric-label">Ahorro anual</p><p class="metric-value">${formatCurrencyByPreference(metrics.annualSavings, currency)}</p></div>
+            <div class="card"><p class="metric-label">Objetivo FIRE</p><p class="metric-value">${formatCurrencyByPreference(metrics.fireTarget, currency)}</p></div>
+          </div>
+
+          <div class="section">
+            <h2>Alertas automaticas</h2>
+            <p class="section-intro">Senales que conviene revisar al tomar decisiones del mes.</p>
+            <ul class="list">${dashboardAlerts.map((alert) => `<li><strong>${alert.title}:</strong> ${alert.body}</li>`).join("")}</ul>
+          </div>
+
+          <div class="section">
+            <h2>Recordatorios</h2>
+            <p class="section-intro">Pendientes operativos para mantener el panel al dia.</p>
+            ${dashboardReminders.length > 0 ? `<ul class="list">${dashboardReminders.map((reminder) => `<li><strong>${reminder.title}:</strong> ${reminder.body} <span class="muted">(${reminder.cta})</span></li>`).join("")}</ul>` : `<p class="muted">No hay recordatorios pendientes.</p>`}
+          </div>
+
+          <div class="section">
+            <h2>Tendencia 6 meses</h2>
+            <div class="small-grid">
+              ${monthlyTrendPoints
+                .map(
+                  (point) => `<div class="card"><p class="metric-label">${point.label}</p><p style="margin-top:8px;"><strong>Ingresos:</strong> ${formatCurrencyByPreference(point.income, currency)}</p><p style="margin-top:6px;"><strong>Ahorro objetivo:</strong> ${formatCurrencyByPreference(point.savingsTarget, currency)}</p></div>`
+                )
+                .join("")}
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Cartera</h2>
+            <p class="section-intro">Top de posiciones por valor consolidado en EUR.</p>
+            <div>${topHoldings.map((holding) => `<span class="pill">${holding.name} · ${formatCurrencyByPreference(holding.valueEur, "EUR")}</span>`).join("")}</div>
+          </div>
+
           <table>
             <thead><tr><th>Activo</th><th>Tipo</th><th>Valor EUR</th></tr></thead>
             <tbody>
@@ -614,6 +767,21 @@ export default function DashboardPage() {
                 .join("")}
             </tbody>
           </table>
+
+          <div class="section">
+            <h2>FIRE e IA</h2>
+            <div class="small-grid">
+              <div class="card">
+                <p class="metric-label">Progreso FIRE</p>
+                <p class="metric-value">${metrics.fireProgress.toFixed(2)}%</p>
+                <p class="muted">${metrics.yearsToFire === null ? "Horizonte no alcanzable todavia" : `${metrics.yearsToFire} anos estimados hasta FIRE`}</p>
+              </div>
+              <div class="card">
+                <p class="metric-label">Ultimos insights</p>
+                ${aiInsights.length > 0 ? `<ul class="list">${aiInsights.slice(0, 4).map((insight) => `<li>${insight}</li>`).join("")}</ul>` : `<p class="muted">Sin insights disponibles en este momento.</p>`}
+              </div>
+            </div>
+          </div>
         </body>
       </html>`;
 
@@ -621,7 +789,7 @@ export default function DashboardPage() {
     reportWindow.document.close();
     reportWindow.focus();
     reportWindow.print();
-  }, [currency, dashboardAlerts, investmentRows, metrics, ratesToEur]);
+  }, [aiInsights, currency, dashboardAlerts, dashboardReminders, investmentRows, metrics, monthlyTrendPoints, ratesToEur]);
 
   const persistSnapshot = useCallback(
     async (snapshotUserId: string, totalNetWorth: number, cashPosition: number, investmentsValue: number) => {
@@ -996,6 +1164,52 @@ export default function DashboardPage() {
                   <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/60 text-sm text-slate-500">
                     Aun no hay suficientes datos para dibujar la evolucion del patrimonio.
                   </div>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Recordatorios automaticos</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Pequenos pendientes para mantener el panel al dia</h2>
+                </div>
+                {dismissedReminderIds.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={restoreReminders}
+                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    Reactivar recordatorios
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {dashboardReminders.length > 0 ? (
+                  dashboardReminders.map((reminder) => (
+                    <article key={reminder.id} className="rounded-[24px] border border-sky-400/12 bg-white/6 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-sky-300">{reminder.title}</p>
+                        <button
+                          type="button"
+                          onClick={() => dismissReminder(reminder.id)}
+                          className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-slate-200 hover:bg-white/10"
+                        >
+                          Ocultar
+                        </button>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-white/80">{reminder.body}</p>
+                      <p className="mt-3 text-xs font-medium text-emerald-300">{reminder.cta}</p>
+                    </article>
+                  ))
+                ) : (
+                  <article className="rounded-[24px] border border-emerald-400/12 bg-white/6 p-4 md:col-span-2 xl:col-span-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Todo en orden</p>
+                    <p className="mt-3 text-sm leading-6 text-white/80">
+                      No hay recordatorios pendientes ahora mismo. El panel tiene los datos clave bastante al dia.
+                    </p>
+                  </article>
                 )}
               </div>
             </section>
