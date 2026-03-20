@@ -360,6 +360,60 @@ function normalizeDate(dateString: string) {
   return new Date(`${dateString}T00:00:00`);
 }
 
+function collapseHistoryToDailyLatest(history: HistoryPoint[]) {
+  const byDay = new Map<string, { timestamp: number; value: number }>();
+
+  for (const row of history) {
+    const dayKey = row.snapshot_date.slice(0, 10);
+    const timestamp = normalizeDate(row.snapshot_date).getTime();
+    const current = byDay.get(dayKey);
+
+    if (!current || timestamp >= current.timestamp) {
+      byDay.set(dayKey, {
+        timestamp,
+        value: Number(row.total_value_eur) || 0
+      });
+    }
+  }
+
+  return Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([snapshot_date, entry]) => ({
+      snapshot_date,
+      total_value_eur: Number(entry.value.toFixed(2))
+    }));
+}
+
+function collapseTypeHistoryToDailyLatest(history: Array<HistoryPoint & { investment_id: string }>) {
+  const byDayAndInvestment = new Map<string, Map<string, { timestamp: number; value: number }>>();
+
+  for (const row of history) {
+    const dayKey = row.snapshot_date.slice(0, 10);
+    const timestamp = normalizeDate(row.snapshot_date).getTime();
+    const investmentMap = byDayAndInvestment.get(dayKey) ?? new Map<string, { timestamp: number; value: number }>();
+    const current = investmentMap.get(row.investment_id);
+
+    if (!current || timestamp >= current.timestamp) {
+      investmentMap.set(row.investment_id, {
+        timestamp,
+        value: Number(row.total_value_eur) || 0
+      });
+    }
+
+    byDayAndInvestment.set(dayKey, investmentMap);
+  }
+
+  return Array.from(byDayAndInvestment.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([snapshot_date, investmentMap]) => {
+      const total = Array.from(investmentMap.values()).reduce((sum, entry) => sum + entry.value, 0);
+      return {
+        snapshot_date,
+        total_value_eur: Number(total.toFixed(2))
+      };
+    });
+}
+
 function addDays(date: Date, days: number) {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
@@ -1137,17 +1191,7 @@ export default function InvestmentsPage() {
         return;
       }
 
-      const grouped = new Map<string, number>();
-      for (const row of (data as Array<HistoryPoint & { investment_id: string }>) ?? []) {
-        const dayKey = row.snapshot_date.slice(0, 10);
-        grouped.set(dayKey, (grouped.get(dayKey) ?? 0) + Number(row.total_value_eur));
-      }
-
-      setSelectedTypeHistory(
-        Array.from(grouped.entries())
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([snapshot_date, total_value_eur]) => ({ snapshot_date, total_value_eur: Number(total_value_eur.toFixed(2)) }))
-      );
+      setSelectedTypeHistory(collapseTypeHistoryToDailyLatest((data as Array<HistoryPoint & { investment_id: string }>) ?? []));
     };
 
     void loadTypeHistory();
@@ -1172,7 +1216,7 @@ export default function InvestmentsPage() {
         return;
       }
 
-      setSelectedAssetHistory((data as HistoryPoint[]) ?? []);
+      setSelectedAssetHistory(collapseHistoryToDailyLatest((data as HistoryPoint[]) ?? []));
     };
 
     void loadAssetHistory();
