@@ -67,6 +67,12 @@ type DashboardReminder = {
   cta: string;
 };
 type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "monthlyTrend" | "fireOverview" | "aiInsights";
+type DashboardWidgetSize = "compact" | "expanded";
+type DashboardPreferencesRow = {
+  widget_order: DashboardWidgetId[] | null;
+  hidden_widgets: DashboardWidgetId[] | null;
+  widget_sizes: Record<DashboardWidgetId, DashboardWidgetSize> | null;
+};
 type MonthlyTrendPoint = {
   label: string;
   income: number;
@@ -105,6 +111,7 @@ const DASHBOARD_WIDGETS: Array<{ id: DashboardWidgetId; label: string; descripti
 ];
 const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
 const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
+const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function isSameMonth(dateString: string, now: Date) {
@@ -375,6 +382,15 @@ export default function DashboardPage() {
   const [dismissedReminderIds, setDismissedReminderIds] = useState<string[]>([]);
   const [widgetOrder, setWidgetOrder] = useState<DashboardWidgetId[]>(DASHBOARD_WIDGETS.map((widget) => widget.id));
   const [hiddenWidgets, setHiddenWidgets] = useState<DashboardWidgetId[]>([]);
+  const [widgetSizes, setWidgetSizes] = useState<Record<DashboardWidgetId, DashboardWidgetSize>>({
+    netWorthChart: "expanded",
+    reminders: "compact",
+    alerts: "compact",
+    monthlyTrend: "expanded",
+    fireOverview: "compact",
+    aiInsights: "expanded"
+  });
+  const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -578,6 +594,7 @@ export default function DashboardPage() {
     try {
       const storedOrder = window.localStorage.getItem(DASHBOARD_WIDGET_ORDER_KEY);
       const storedHidden = window.localStorage.getItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
+      const storedSizes = window.localStorage.getItem(DASHBOARD_WIDGET_SIZES_KEY);
 
       if (storedOrder) {
         const parsedOrder = JSON.parse(storedOrder) as DashboardWidgetId[];
@@ -596,11 +613,73 @@ export default function DashboardPage() {
           setHiddenWidgets(parsedHidden.filter((id): id is DashboardWidgetId => validIds.includes(id)));
         }
       }
+
+      if (storedSizes) {
+        const parsedSizes = JSON.parse(storedSizes) as Record<DashboardWidgetId, DashboardWidgetSize>;
+        const validIds = DASHBOARD_WIDGETS.map((widget) => widget.id);
+        setWidgetSizes((current) => {
+          const next = { ...current };
+          validIds.forEach((id) => {
+            const value = parsedSizes?.[id];
+            if (value === "compact" || value === "expanded") {
+              next[id] = value;
+            }
+          });
+          return next;
+        });
+      }
     } catch {
       setWidgetOrder(DASHBOARD_WIDGETS.map((widget) => widget.id));
       setHiddenWidgets([]);
     }
   }, []);
+
+  useEffect(() => {
+    const loadRemoteDashboardPreferences = async () => {
+      if (!userId) {
+        setWidgetPrefsLoaded(true);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("dashboard_preferences")
+        .select("widget_order, hidden_widgets, widget_sizes")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!error && data) {
+        const remotePrefs = data as DashboardPreferencesRow;
+        const validIds = DASHBOARD_WIDGETS.map((widget) => widget.id);
+
+        if (Array.isArray(remotePrefs.widget_order)) {
+          const sanitized = remotePrefs.widget_order.filter((id): id is DashboardWidgetId => validIds.includes(id));
+          const missing = validIds.filter((id) => !sanitized.includes(id));
+          setWidgetOrder([...sanitized, ...missing]);
+        }
+
+        if (Array.isArray(remotePrefs.hidden_widgets)) {
+          setHiddenWidgets(remotePrefs.hidden_widgets.filter((id): id is DashboardWidgetId => validIds.includes(id)));
+        }
+
+        if (remotePrefs.widget_sizes) {
+          setWidgetSizes((current) => {
+            const next = { ...current };
+            validIds.forEach((id) => {
+              const size = remotePrefs.widget_sizes?.[id];
+              if (size === "compact" || size === "expanded") {
+                next[id] = size;
+              }
+            });
+            return next;
+          });
+        }
+      }
+
+      setWidgetPrefsLoaded(true);
+    };
+
+    void loadRemoteDashboardPreferences();
+  }, [supabase, userId]);
 
   const visibleWidgetOrder = useMemo(
     () => widgetOrder.filter((widgetId) => !hiddenWidgets.includes(widgetId)),
@@ -638,9 +717,49 @@ export default function DashboardPage() {
     const defaultOrder = DASHBOARD_WIDGETS.map((widget) => widget.id);
     setWidgetOrder(defaultOrder);
     setHiddenWidgets([]);
+    setWidgetSizes({
+      netWorthChart: "expanded",
+      reminders: "compact",
+      alerts: "compact",
+      monthlyTrend: "expanded",
+      fireOverview: "compact",
+      aiInsights: "expanded"
+    });
     window.localStorage.setItem(DASHBOARD_WIDGET_ORDER_KEY, JSON.stringify(defaultOrder));
     window.localStorage.removeItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
+    window.localStorage.removeItem(DASHBOARD_WIDGET_SIZES_KEY);
   }, []);
+
+  const toggleWidgetSize = useCallback((widgetId: DashboardWidgetId) => {
+    setWidgetSizes((current) => {
+      const next = {
+        ...current,
+        [widgetId]: current[widgetId] === "compact" ? "expanded" : "compact"
+      };
+      window.localStorage.setItem(DASHBOARD_WIDGET_SIZES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const syncDashboardPreferences = async () => {
+      if (!userId || !widgetPrefsLoaded) {
+        return;
+      }
+
+      await supabase.from("dashboard_preferences").upsert(
+        {
+          user_id: userId,
+          widget_order: widgetOrder,
+          hidden_widgets: hiddenWidgets,
+          widget_sizes: widgetSizes
+        },
+        { onConflict: "user_id" }
+      );
+    };
+
+    void syncDashboardPreferences();
+  }, [hiddenWidgets, supabase, userId, widgetOrder, widgetPrefsLoaded, widgetSizes]);
 
   const dashboardReminders = useMemo<DashboardReminder[]>(() => {
     if (!metrics) {
@@ -959,10 +1078,13 @@ export default function DashboardPage() {
         return null;
       }
 
+      const widgetSize = widgetSizes[widgetId] ?? "expanded";
+      const isCompact = widgetSize === "compact";
+
       switch (widgetId) {
         case "netWorthChart":
           return (
-            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion del patrimonio</p>
@@ -1028,7 +1150,7 @@ export default function DashboardPage() {
 
               {snapshotMessage ? <p className="mt-4 text-sm text-emerald-300">{snapshotMessage}</p> : null}
 
-              <div className="mt-6 h-[320px]">
+              <div className={`mt-6 ${isCompact ? "h-[240px]" : "h-[320px]"}`}>
                 {timelinePoints.length > 0 ? (
                   <Line data={timelineChartData} options={timelineChartOptions} />
                 ) : (
@@ -1041,7 +1163,7 @@ export default function DashboardPage() {
           );
         case "reminders":
           return (
-            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Recordatorios automaticos</p>
@@ -1089,7 +1211,7 @@ export default function DashboardPage() {
           );
         case "alerts":
           return (
-            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Alertas automaticas</p>
@@ -1110,14 +1232,14 @@ export default function DashboardPage() {
           );
         case "monthlyTrend":
           return (
-            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Historico mensual</p>
                   <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Ingresos frente a ahorro objetivo</h2>
                 </div>
               </div>
-              <div className="mt-6 h-[280px]">
+              <div className={`mt-6 ${isCompact ? "h-[220px]" : "h-[280px]"}`}>
                 <Line data={monthlyTrendChartData} options={monthlyTrendChartOptions} />
               </div>
             </section>
@@ -1125,7 +1247,7 @@ export default function DashboardPage() {
         case "fireOverview":
           return (
             <>
-              <section key={`${widgetId}-progress`} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-7">
+              <section key={`${widgetId}-progress`} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-7`}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Progreso FIRE</p>
@@ -1147,7 +1269,7 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              <section key={`${widgetId}-horizon`} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-5">
+              <section key={`${widgetId}-horizon`} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-5`}>
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Horizonte</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Anos estimados para independencia</h2>
                 <p className="mt-5 font-[var(--font-heading)] text-4xl font-semibold text-white">
@@ -1165,7 +1287,7 @@ export default function DashboardPage() {
           );
         case "aiInsights":
           return (
-            <section key={widgetId} className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12`}>
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">IA financiera</p>
@@ -1191,7 +1313,7 @@ export default function DashboardPage() {
 
               {aiInsights.length > 0 ? (
                 <>
-                  <div className="mt-6 grid gap-3 md:grid-cols-3">
+                  <div className={`mt-6 grid gap-3 ${isCompact ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
                     {aiInsights.map((insight: string) => (
                       <article key={insight} className="rounded-[24px] border border-white/8 bg-white/6 p-4 shadow-[0_16px_34px_rgba(2,8,23,0.26)]">
                         <p className="text-sm leading-6 text-white/84">{insight}</p>
@@ -1258,7 +1380,8 @@ export default function DashboardPage() {
       timelineChartData,
       timelineChartOptions,
       timelinePoints.length,
-      timelineRangeVariations
+      timelineRangeVariations,
+      widgetSizes
     ]
   );
 
@@ -1527,6 +1650,13 @@ export default function DashboardPage() {
                       <div className="mt-4 flex items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => toggleWidgetSize(widget.id)}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                        >
+                          {widgetSizes[widget.id] === "compact" ? "Expandir" : "Compactar"}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => moveWidget(widget.id, "up")}
                           disabled={index === 0}
                           className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
@@ -1541,7 +1671,7 @@ export default function DashboardPage() {
                         >
                           Bajar
                         </button>
-                        <span className="text-xs text-slate-400">Posicion {index + 1}</span>
+                        <span className="text-xs text-slate-400">Posicion {index + 1} · {widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"}</span>
                       </div>
                     </article>
                   );
