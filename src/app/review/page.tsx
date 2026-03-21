@@ -74,6 +74,14 @@ type ReviewConclusion = {
   cta: string;
 };
 
+type ReviewClosureRow = {
+  review_month: string;
+  status: "open" | "closed";
+  conclusion_title: string | null;
+  conclusion_summary: string | null;
+  closed_at: string | null;
+};
+
 function isSameMonth(dateString: string, month: string) {
   return dateString.slice(0, 7) === month;
 }
@@ -107,12 +115,14 @@ export default function ReviewPage() {
   const [completedTaskKeys, setCompletedTaskKeys] = useState<string[]>([]);
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
   const [selectedStepId, setSelectedStepId] = useState("income");
+  const [reviewClosures, setReviewClosures] = useState<ReviewClosureRow[]>([]);
+  const [closingMonth, setClosingMonth] = useState(false);
 
   const loadReviewData = useCallback(async (uid: string) => {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult, tasksResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult, tasksResult, closuresResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
@@ -120,10 +130,11 @@ export default function ReviewPage() {
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
-      supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth))
+      supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
+      supabase.from("monthly_review_closures").select("review_month, status, conclusion_title, conclusion_summary, closed_at").eq("user_id", uid).order("review_month", { ascending: false }).limit(6)
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error, tasksResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -140,6 +151,7 @@ export default function ReviewPage() {
     setCompletedTaskKeys(
       (((tasksResult.data as ReviewTaskRow[] | null) ?? []).filter((row) => row.completed).map((row) => row.task_key))
     );
+    setReviewClosures((closuresResult.data as ReviewClosureRow[]) ?? []);
     setLoading(false);
   }, [selectedMonth, supabase]);
 
@@ -420,6 +432,51 @@ export default function ReviewPage() {
       cta: "Volver al dashboard"
     };
   }, [reviewMetrics]);
+  const currentMonthClosure = useMemo(
+    () => reviewClosures.find((item) => item.review_month.slice(0, 7) === selectedMonth) ?? null,
+    [reviewClosures, selectedMonth]
+  );
+
+  const toggleMonthlyClosure = useCallback(async () => {
+    if (!userId) return;
+
+    setClosingMonth(true);
+    const nextClosed = currentMonthClosure?.status !== "closed";
+    const nextStatus: ReviewClosureRow["status"] = nextClosed ? "closed" : "open";
+    const payload = {
+      user_id: userId,
+      review_month: monthToDate(selectedMonth),
+      status: nextStatus,
+      conclusion_title: reviewConclusion.title,
+      conclusion_summary: reviewConclusion.summary,
+      closed_at: nextClosed ? new Date().toISOString() : null
+    };
+
+    const { error } = await supabase
+      .from("monthly_review_closures")
+      .upsert(payload, { onConflict: "user_id,review_month" });
+
+    if (error) {
+      setMessage(error.message);
+      setClosingMonth(false);
+      return;
+    }
+
+    setReviewClosures((current) => {
+      const next = current.filter((item) => item.review_month.slice(0, 7) !== selectedMonth);
+      return [
+        {
+          review_month: monthToDate(selectedMonth),
+          status: nextStatus,
+          conclusion_title: reviewConclusion.title,
+          conclusion_summary: reviewConclusion.summary,
+          closed_at: nextClosed ? new Date().toISOString() : null
+        },
+        ...next
+      ].sort((a, b) => b.review_month.localeCompare(a.review_month)).slice(0, 6);
+    });
+    setClosingMonth(false);
+  }, [currentMonthClosure?.status, reviewConclusion.summary, reviewConclusion.title, selectedMonth, supabase, userId]);
 
   if (authLoading) {
     return (
@@ -573,7 +630,25 @@ export default function ReviewPage() {
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-              <SectionHeader eyebrow="Conclusion del mes" title="Diagnostico final y siguiente decision" description="Una lectura final para saber si el mes se puede dar por cerrado o si conviene actuar antes." />
+              <SectionHeader
+                eyebrow="Conclusion del mes"
+                title="Diagnostico final y siguiente decision"
+                description="Una lectura final para saber si el mes se puede dar por cerrado o si conviene actuar antes."
+                aside={
+                  <button
+                    type="button"
+                    onClick={() => void toggleMonthlyClosure()}
+                    disabled={closingMonth}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition disabled:opacity-60 ${
+                      currentMonthClosure?.status === "closed"
+                        ? "border border-white/10 bg-white/5 text-white hover:bg-white/10"
+                        : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                    }`}
+                  >
+                    {closingMonth ? "Guardando..." : currentMonthClosure?.status === "closed" ? "Reabrir mes" : "Cerrar mes"}
+                  </button>
+                }
+              />
               <div className="mt-5 grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
                 <article className={`rounded-[26px] border p-5 ${
                   reviewConclusion.tone === "positive"
@@ -602,8 +677,54 @@ export default function ReviewPage() {
                       Ir al paso clave
                     </button>
                   </div>
+                  {currentMonthClosure?.status === "closed" ? (
+                    <p className="mt-4 text-sm text-emerald-200">
+                      Este mes ya esta marcado como cerrado.
+                    </p>
+                  ) : null}
                 </article>
               </div>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+              <SectionHeader eyebrow="Historico" title="Ultimos cierres mensuales" description="Un registro rapido para ver que meses ya has dado por cerrados y con que diagnostico." />
+              {reviewClosures.length === 0 ? (
+                <div className="mt-6">
+                  <EmptyStateCard
+                    eyebrow="Sin cierres"
+                    title="Todavia no has cerrado ningun mes"
+                    description="Cuando cierres un mes desde esta pantalla, aparecera aqui con su estado y resumen."
+                    compact
+                  />
+                </div>
+              ) : (
+                <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {reviewClosures.map((closure) => (
+                    <article key={closure.review_month} className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">
+                            {formatMonthByPreference(closure.review_month.slice(0, 7), dateFormat)}
+                          </p>
+                          <h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">
+                            {closure.conclusion_title ?? "Cierre mensual"}
+                          </h3>
+                        </div>
+                        <span className={`ui-chip rounded-full border px-3 py-1.5 text-[11px] ${
+                          closure.status === "closed"
+                            ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-200"
+                            : "border-white/10 bg-white/5 text-slate-300"
+                        }`}>
+                          {closure.status === "closed" ? "Cerrado" : "Abierto"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-300">
+                        {closure.conclusion_summary ?? "Sin resumen guardado."}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
