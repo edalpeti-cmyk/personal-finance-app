@@ -30,6 +30,13 @@ type SavingsTargetRow = {
   month: string;
   savings_target: number;
 };
+type GoalProgressHistoryRow = {
+  goal_id: string;
+  snapshot_month: string;
+  current_amount: number;
+  target_amount: number;
+  progress_pct: number;
+};
 
 type ToastState = { type: "success" | "error"; text: string } | null;
 
@@ -65,6 +72,7 @@ export default function GoalsPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
+  const [progressHistory, setProgressHistory] = useState<GoalProgressHistoryRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [goalName, setGoalName] = useState("");
@@ -77,6 +85,7 @@ export default function GoalsPage() {
   const [status, setStatus] = useState<GoalStatus>("active");
   const [linkedCategory, setLinkedCategory] = useState("");
   const [linkedAccount, setLinkedAccount] = useState("");
+  const [snapshottingProgress, setSnapshottingProgress] = useState(false);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -99,17 +108,18 @@ export default function GoalsPage() {
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const [goalsResult, savingsResult] = await Promise.all([
+    const [goalsResult, savingsResult, historyResult] = await Promise.all([
       supabase
         .from("financial_goals")
         .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account")
         .eq("user_id", uid)
         .order("priority", { ascending: true })
         .order("created_at", { ascending: false }),
-      supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid)
+      supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
+      supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false })
     ]);
 
-    const firstError = goalsResult.error ?? savingsResult.error;
+    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error;
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -118,6 +128,7 @@ export default function GoalsPage() {
 
     setGoals((goalsResult.data as GoalRow[]) ?? []);
     setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
+    setProgressHistory((historyResult.data as GoalProgressHistoryRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
@@ -154,6 +165,16 @@ export default function GoalsPage() {
       amount: Number(((currentMonthSavingsTarget * weight) / totalWeight).toFixed(2))
     }));
   }, [activeGoals, currentMonthSavingsTarget]);
+  const currentSnapshotMonth = useMemo(() => `${new Date().toISOString().slice(0, 7)}-01`, []);
+  const latestHistoryByGoal = useMemo(() => {
+    const map = new Map<string, GoalProgressHistoryRow[]>();
+    for (const row of progressHistory) {
+      const current = map.get(row.goal_id) ?? [];
+      current.push(row);
+      map.set(row.goal_id, current);
+    }
+    return map;
+  }, [progressHistory]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -284,6 +305,47 @@ export default function GoalsPage() {
     setSaving(false);
   };
 
+  const snapshotMonthlyGoalProgress = async () => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para guardar el progreso del mes." });
+      return;
+    }
+    if (goals.length === 0) {
+      showToast({ type: "error", text: "No hay objetivos para guardar en el historico." });
+      return;
+    }
+
+    setSnapshottingProgress(true);
+    const rows = goals.map((goal) => {
+      const target = Number(goal.target_amount || 0);
+      const current = Number(goal.current_amount || 0);
+      const progress = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+      return {
+        goal_id: goal.id,
+        user_id: userId,
+        snapshot_month: currentSnapshotMonth,
+        current_amount: current,
+        target_amount: target,
+        progress_pct: Number(progress.toFixed(2))
+      };
+    });
+
+    const { error } = await supabase
+      .from("goal_progress_history")
+      .upsert(rows, { onConflict: "goal_id,snapshot_month" });
+
+    if (error) {
+      setMessage(error.message);
+      showToast({ type: "error", text: "No se pudo guardar la foto mensual de objetivos." });
+      setSnapshottingProgress(false);
+      return;
+    }
+
+    await loadGoals(userId);
+    showToast({ type: "success", text: "Progreso mensual de objetivos guardado." });
+    setSnapshottingProgress(false);
+  };
+
   if (authLoading) {
     return (
       <>
@@ -369,14 +431,24 @@ export default function GoalsPage() {
             title="Conectar metas con el ahorro del mes"
             description="Puedes repartir automaticamente el ahorro objetivo mensual actual entre tus metas activas segun prioridad."
             aside={
-              <button
-                type="button"
-                onClick={() => void applySavingsTargetDistribution()}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={saving || suggestedAllocations.length === 0}
-              >
-                Repartir ahorro objetivo
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void snapshotMonthlyGoalProgress()}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={snapshottingProgress || goals.length === 0}
+                >
+                  {snapshottingProgress ? "Guardando..." : "Guardar foto del mes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applySavingsTargetDistribution()}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={saving || suggestedAllocations.length === 0}
+                >
+                  Repartir ahorro objetivo
+                </button>
+              </div>
             }
           />
           {suggestedAllocations.length === 0 ? (
@@ -434,6 +506,29 @@ export default function GoalsPage() {
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
+                    </div>
+                    <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/35 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Evolucion mensual</p>
+                      {((latestHistoryByGoal.get(goal.id) ?? []).length === 0) ? (
+                        <p className="mt-3 text-sm leading-6 text-slate-300">Todavia no hay fotos mensuales guardadas para esta meta.</p>
+                      ) : (
+                        <div className="mt-3 grid gap-3">
+                          {(latestHistoryByGoal.get(goal.id) ?? []).slice(0, 4).reverse().map((item) => (
+                            <div key={`${goal.id}-${item.snapshot_month}`} className="grid gap-2">
+                              <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
+                                <span>{formatDateByPreference(item.snapshot_month, dateFormat)}</span>
+                                <span>{Number(item.progress_pct).toFixed(1)}%</span>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(Number(item.progress_pct), 100)}%` }} />
+                              </div>
+                              <p className="text-xs text-slate-400">
+                                {formatCurrencyByPreference(Number(item.current_amount), currency)} de {formatCurrencyByPreference(Number(item.target_amount), currency)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       <button type="button" onClick={() => handleEdit(goal)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button>
