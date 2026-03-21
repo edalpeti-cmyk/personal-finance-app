@@ -3,8 +3,10 @@ create table if not exists public.goal_investment_links (
   goal_id uuid not null references public.financial_goals(id) on delete cascade,
   investment_id uuid not null references public.investments(id) on delete cascade,
   user_id uuid not null references public.users(id) on delete cascade,
+  allocation_pct numeric(5,2) not null default 100,
   created_at timestamptz not null default now(),
-  constraint goal_investment_links_unique unique (goal_id, investment_id)
+  constraint goal_investment_links_unique unique (goal_id, investment_id),
+  constraint goal_investment_links_allocation_pct_valid check (allocation_pct >= 0 and allocation_pct <= 100)
 );
 
 create index if not exists idx_goal_investment_links_goal
@@ -24,3 +26,6 @@ with check (auth.uid() = user_id);
 
 alter table public.financial_goals
 add column if not exists linked_asset_type text;
+
+alter table public.goal_investment_links
+add column if not exists allocation_pct numeric(5,2) not null default 100;
