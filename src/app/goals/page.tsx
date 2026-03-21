@@ -13,6 +13,7 @@ import { formatCurrencyByPreference, formatDateByPreference, formatMonthByPrefer
 
 type GoalType = "emergency_fund" | "retirement" | "house" | "car" | "travel" | "debt_payoff" | "other";
 type GoalStatus = "active" | "paused" | "completed" | "cancelled";
+type AssetType = "stock" | "etf" | "crypto" | "fund" | "commodity" | "cash" | "real_estate" | "loan";
 
 type GoalRow = {
   id: string;
@@ -27,6 +28,7 @@ type GoalRow = {
   linked_category: string | null;
   linked_account: string | null;
   linked_investment_id: string | null;
+  linked_asset_type: AssetType | null;
 };
 type SavingsTargetRow = {
   month: string;
@@ -51,10 +53,15 @@ type InvestmentLinkRow = {
   id: string;
   asset_name: string;
   asset_symbol: string | null;
+  asset_type: AssetType;
   quantity: number;
   current_price: number | null;
   average_buy_price: number;
   asset_currency: AssetCurrency;
+};
+type GoalInvestmentLinkRow = {
+  goal_id: string;
+  investment_id: string;
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
@@ -74,6 +81,16 @@ const GOAL_STATUSES: Array<{ value: GoalStatus; label: string }> = [
   { value: "paused", label: "Pausado" },
   { value: "completed", label: "Completado" },
   { value: "cancelled", label: "Cancelado" }
+];
+const ASSET_TYPE_OPTIONS: Array<{ value: AssetType; label: string }> = [
+  { value: "stock", label: "Accion" },
+  { value: "etf", label: "ETF" },
+  { value: "crypto", label: "Criptomoneda" },
+  { value: "fund", label: "Fondo de inversion" },
+  { value: "commodity", label: "Materia prima" },
+  { value: "cash", label: "Efectivo" },
+  { value: "real_estate", label: "Inmobiliario" },
+  { value: "loan", label: "Prestamo" }
 ];
 
 function inputClass() {
@@ -95,6 +112,7 @@ export default function GoalsPage() {
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [investmentLinks, setInvestmentLinks] = useState<InvestmentLinkRow[]>([]);
+  const [goalInvestmentLinks, setGoalInvestmentLinks] = useState<GoalInvestmentLinkRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [goalName, setGoalName] = useState("");
@@ -108,6 +126,8 @@ export default function GoalsPage() {
   const [linkedCategory, setLinkedCategory] = useState("");
   const [linkedAccount, setLinkedAccount] = useState("");
   const [linkedInvestmentId, setLinkedInvestmentId] = useState("");
+  const [linkedAssetType, setLinkedAssetType] = useState<AssetType | "">("");
+  const [selectedLinkedInvestmentIds, setSelectedLinkedInvestmentIds] = useState<string[]>([]);
   const [snapshottingProgress, setSnapshottingProgress] = useState(false);
   const [selectedTimelineGoalId, setSelectedTimelineGoalId] = useState("");
   const [selectedTimelineYear, setSelectedTimelineYear] = useState(String(new Date().getFullYear()));
@@ -132,14 +152,16 @@ export default function GoalsPage() {
     setLinkedCategory("");
     setLinkedAccount("");
     setLinkedInvestmentId("");
+    setLinkedAssetType("");
+    setSelectedLinkedInvestmentIds([]);
   }, []);
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, investmentsResult] = await Promise.all([
+    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, investmentsResult, linksResult] = await Promise.all([
       supabase
         .from("financial_goals")
-        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id")
+        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id, linked_asset_type")
         .eq("user_id", uid)
         .order("priority", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -147,10 +169,11 @@ export default function GoalsPage() {
       supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false }),
       supabase.from("income").select("amount, income_date").eq("user_id", uid),
       supabase.from("expenses").select("amount, expense_date").eq("user_id", uid),
-      supabase.from("investments").select("id, asset_name, asset_symbol, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true })
+      supabase.from("investments").select("id, asset_name, asset_symbol, asset_type, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true }),
+      supabase.from("goal_investment_links").select("goal_id, investment_id").eq("user_id", uid)
     ]);
 
-    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error;
+    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error ?? linksResult.error;
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -163,6 +186,7 @@ export default function GoalsPage() {
     setIncomeRows((incomeResult.data as IncomeRow[]) ?? []);
     setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
     setInvestmentLinks((investmentsResult.data as InvestmentLinkRow[]) ?? []);
+    setGoalInvestmentLinks((linksResult.data as GoalInvestmentLinkRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
@@ -171,23 +195,10 @@ export default function GoalsPage() {
     void loadGoals(userId);
   }, [authLoading, loadGoals, userId]);
 
-  const activeGoals = useMemo(() => goals.filter((goal) => goal.status === "active"), [goals]);
-  const completedGoals = useMemo(() => goals.filter((goal) => goal.status === "completed"), [goals]);
-  const totalTarget = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0), [activeGoals]);
-  const totalCurrent = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.current_amount || 0), 0), [activeGoals]);
-  const totalMonthlyContribution = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.monthly_contribution || 0), 0), [activeGoals]);
   const currentMonthSavingsTarget = useMemo(() => {
     const month = new Date().toISOString().slice(0, 7);
     return savingsTargets.reduce((sum, row) => (row.month.slice(0, 7) === month ? sum + Number(row.savings_target || 0) : sum), 0);
   }, [savingsTargets]);
-  const monthlyCoveragePct = useMemo(
-    () => (currentMonthSavingsTarget > 0 ? Math.min((totalMonthlyContribution / currentMonthSavingsTarget) * 100, 100) : 0),
-    [currentMonthSavingsTarget, totalMonthlyContribution]
-  );
-  const unassignedMonthlySavings = useMemo(
-    () => currentMonthSavingsTarget - totalMonthlyContribution,
-    [currentMonthSavingsTarget, totalMonthlyContribution]
-  );
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
   const currentMonthActualSavings = useMemo(() => {
     const income = incomeRows.reduce((sum, row) => (row.income_date.slice(0, 7) === currentMonth ? sum + Number(row.amount || 0) : sum), 0);
@@ -197,6 +208,83 @@ export default function GoalsPage() {
   const savingsAvailableForAutomation = useMemo(
     () => Math.max(currentMonthActualSavings, 0),
     [currentMonthActualSavings]
+  );
+  const currentSnapshotMonth = useMemo(() => `${new Date().toISOString().slice(0, 7)}-01`, []);
+  const latestHistoryByGoal = useMemo(() => {
+    const map = new Map<string, GoalProgressHistoryRow[]>();
+    for (const row of progressHistory) {
+      const current = map.get(row.goal_id) ?? [];
+      current.push(row);
+      map.set(row.goal_id, current);
+    }
+    return map;
+  }, [progressHistory]);
+  const investmentValueById = useMemo(
+    () =>
+      Object.fromEntries(
+        investmentLinks.map((row) => [
+          row.id,
+          convertToEur((Number(row.current_price ?? row.average_buy_price ?? 0) || 0) * (Number(row.quantity) || 0), row.asset_currency, FALLBACK_RATES_TO_EUR)
+        ])
+      ),
+    [investmentLinks]
+  );
+  const linkedInvestmentIdsByGoal = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const row of goalInvestmentLinks) {
+      const current = map.get(row.goal_id) ?? [];
+      current.push(row.investment_id);
+      map.set(row.goal_id, current);
+    }
+    for (const goal of goals) {
+      if (goal.linked_investment_id) {
+        const current = map.get(goal.id) ?? [];
+        if (!current.includes(goal.linked_investment_id)) {
+          current.push(goal.linked_investment_id);
+          map.set(goal.id, current);
+        }
+      }
+    }
+    return map;
+  }, [goalInvestmentLinks, goals]);
+  const combinedCurrentByGoal = useMemo(() => {
+    const map = new Map<string, { manual: number; linked: number; total: number }>();
+    for (const goal of goals) {
+      const selectedIds = new Set(linkedInvestmentIdsByGoal.get(goal.id) ?? []);
+      const linkedByIds = Array.from(selectedIds).reduce((sum, id) => sum + Number(investmentValueById[id] ?? 0), 0);
+      const linkedByType =
+        goal.linked_asset_type
+          ? investmentLinks
+              .filter((investment) => investment.asset_type === goal.linked_asset_type && !selectedIds.has(investment.id))
+              .reduce((sum, investment) => sum + Number(investmentValueById[investment.id] ?? 0), 0)
+          : 0;
+      const manual = Number(goal.current_amount || 0);
+      const linked = linkedByIds + linkedByType;
+      map.set(goal.id, { manual, linked, total: manual + linked });
+    }
+    return map;
+  }, [goals, investmentLinks, investmentValueById, linkedInvestmentIdsByGoal]);
+  const goalsWithComputedProgress = useMemo(
+    () =>
+      goals.map((goal) => {
+        const current = combinedCurrentByGoal.get(goal.id) ?? { manual: Number(goal.current_amount || 0), linked: 0, total: Number(goal.current_amount || 0) };
+        const progressPct = Number(goal.target_amount) > 0 ? Math.min((current.total / Number(goal.target_amount)) * 100, 100) : 0;
+        return { ...goal, computedManualCurrent: current.manual, computedLinkedCurrent: current.linked, computedCurrentTotal: current.total, computedProgressPct: progressPct };
+      }),
+    [combinedCurrentByGoal, goals]
+  );
+  const activeGoals = useMemo(() => goalsWithComputedProgress.filter((goal) => goal.status === "active"), [goalsWithComputedProgress]);
+  const completedGoals = useMemo(() => goalsWithComputedProgress.filter((goal) => goal.status === "completed"), [goalsWithComputedProgress]);
+  const totalTarget = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0), [activeGoals]);
+  const totalCurrent = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.computedCurrentTotal || 0), 0), [activeGoals]);
+  const totalMonthlyContribution = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.monthly_contribution || 0), 0), [activeGoals]);
+  const monthlyCoveragePct = useMemo(
+    () => (currentMonthSavingsTarget > 0 ? Math.min((totalMonthlyContribution / currentMonthSavingsTarget) * 100, 100) : 0),
+    [currentMonthSavingsTarget, totalMonthlyContribution]
+  );
+  const unassignedMonthlySavings = useMemo(
+    () => currentMonthSavingsTarget - totalMonthlyContribution,
+    [currentMonthSavingsTarget, totalMonthlyContribution]
   );
   const suggestedAllocations = useMemo(() => {
     if (currentMonthSavingsTarget <= 0 || activeGoals.length === 0) return [];
@@ -220,26 +308,6 @@ export default function GoalsPage() {
       amount: Number(((savingsAvailableForAutomation * weight) / totalWeight).toFixed(2))
     }));
   }, [activeGoals, savingsAvailableForAutomation]);
-  const currentSnapshotMonth = useMemo(() => `${new Date().toISOString().slice(0, 7)}-01`, []);
-  const latestHistoryByGoal = useMemo(() => {
-    const map = new Map<string, GoalProgressHistoryRow[]>();
-    for (const row of progressHistory) {
-      const current = map.get(row.goal_id) ?? [];
-      current.push(row);
-      map.set(row.goal_id, current);
-    }
-    return map;
-  }, [progressHistory]);
-  const investmentValueById = useMemo(
-    () =>
-      Object.fromEntries(
-        investmentLinks.map((row) => [
-          row.id,
-          convertToEur((Number(row.current_price ?? row.average_buy_price ?? 0) || 0) * (Number(row.quantity) || 0), row.asset_currency, FALLBACK_RATES_TO_EUR)
-        ])
-      ),
-    [investmentLinks]
-  );
   const availableTimelineYears = useMemo(() => {
     const years = new Set<number>([new Date().getFullYear()]);
     for (const row of progressHistory) years.add(new Date(`${row.snapshot_month}T00:00:00`).getFullYear());
@@ -333,19 +401,40 @@ export default function GoalsPage() {
       status,
       linked_category: linkedCategory.trim() || null,
       linked_account: linkedAccount.trim() || null,
-      linked_investment_id: linkedInvestmentId || null
+      linked_investment_id: selectedLinkedInvestmentIds[0] ?? linkedInvestmentId ?? null,
+      linked_asset_type: linkedAssetType || null
     };
 
     const query = editingId
-      ? supabase.from("financial_goals").update(payload).eq("id", editingId).eq("user_id", userId)
-      : supabase.from("financial_goals").insert(payload);
+      ? supabase.from("financial_goals").update(payload).eq("id", editingId).eq("user_id", userId).select("id").single()
+      : supabase.from("financial_goals").insert(payload).select("id").single();
 
-    const { error } = await query;
+    const { data, error } = await query;
     if (error) {
       setMessage(error.message);
       showToast({ type: "error", text: "No se pudo guardar el objetivo." });
       setSaving(false);
       return;
+    }
+
+    const goalId = editingId ?? data?.id;
+    if (goalId) {
+      await supabase.from("goal_investment_links").delete().eq("goal_id", goalId).eq("user_id", userId);
+      if (selectedLinkedInvestmentIds.length > 0) {
+        const { error: linksError } = await supabase.from("goal_investment_links").insert(
+          selectedLinkedInvestmentIds.map((investmentId) => ({
+            goal_id: goalId,
+            investment_id: investmentId,
+            user_id: userId
+          }))
+        );
+        if (linksError) {
+          setMessage(linksError.message);
+          showToast({ type: "error", text: "El objetivo se guardo, pero fallo la vinculacion de posiciones." });
+          setSaving(false);
+          return;
+        }
+      }
     }
 
     resetForm();
@@ -367,6 +456,8 @@ export default function GoalsPage() {
     setLinkedCategory(goal.linked_category ?? "");
     setLinkedAccount(goal.linked_account ?? "");
     setLinkedInvestmentId(goal.linked_investment_id ?? "");
+    setLinkedAssetType(goal.linked_asset_type ?? "");
+    setSelectedLinkedInvestmentIds(linkedInvestmentIdsByGoal.get(goal.id) ?? (goal.linked_investment_id ? [goal.linked_investment_id] : []));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -477,13 +568,15 @@ export default function GoalsPage() {
     }
 
     const target = Number(goal.target_amount || 0);
-    const progress = target > 0 ? Math.min((nextCurrent / target) * 100, 100) : 0;
+    const linkedCurrent = combinedCurrentByGoal.get(goal.id)?.linked ?? 0;
+    const totalCurrent = nextCurrent + linkedCurrent;
+    const progress = target > 0 ? Math.min((totalCurrent / target) * 100, 100) : 0;
     await supabase.from("goal_progress_history").upsert(
       {
         goal_id: goal.id,
         user_id: userId,
         snapshot_month: currentSnapshotMonth,
-        current_amount: nextCurrent,
+        current_amount: totalCurrent,
         target_amount: target,
         progress_pct: Number(progress.toFixed(2))
       },
@@ -501,15 +594,15 @@ export default function GoalsPage() {
       showToast({ type: "error", text: "Debes iniciar sesion para guardar el progreso del mes." });
       return;
     }
-    if (goals.length === 0) {
+    if (goalsWithComputedProgress.length === 0) {
       showToast({ type: "error", text: "No hay objetivos para guardar en el historico." });
       return;
     }
 
     setSnapshottingProgress(true);
-    const rows = goals.map((goal) => {
+    const rows = goalsWithComputedProgress.map((goal) => {
       const target = Number(goal.target_amount || 0);
-      const current = Number(goal.current_amount || 0);
+      const current = Number(goal.computedCurrentTotal || 0);
       const progress = target > 0 ? Math.min((current / target) * 100, 100) : 0;
       return {
         goal_id: goal.id,
@@ -605,17 +698,47 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Categoria conectada</span><input className={inputClass()} value={linkedCategory} onChange={(event) => setLinkedCategory(event.target.value)} placeholder="Ej: Vivienda, Inversiones, Viajes" /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
             </div>
-            <label className="grid gap-2 text-sm text-slate-200">
-              <span>Posicion conectada</span>
-              <select className={inputClass()} value={linkedInvestmentId} onChange={(event) => setLinkedInvestmentId(event.target.value)}>
-                <option value="">Sin posicion vinculada</option>
-                {investmentLinks.map((investment) => (
-                  <option key={investment.id} value={investment.id}>
-                    {investment.asset_name}{investment.asset_symbol ? ` (${investment.asset_symbol})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200">
+                <span>Tipo de activo conectado</span>
+                <select className={inputClass()} value={linkedAssetType} onChange={(event) => setLinkedAssetType(event.target.value as AssetType | "")}>
+                  <option value="">Sin tipo vinculado</option>
+                  {ASSET_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid gap-2 text-sm text-slate-200">
+                <span>Posiciones conectadas</span>
+                <div className="max-h-40 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/50 p-3">
+                  <div className="flex flex-wrap gap-2">
+                    {investmentLinks.map((investment) => {
+                      const selected = selectedLinkedInvestmentIds.includes(investment.id);
+                      return (
+                        <button
+                          key={investment.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedLinkedInvestmentIds((current) =>
+                              current.includes(investment.id)
+                                ? current.filter((item) => item !== investment.id)
+                                : [...current, investment.id]
+                            )
+                          }
+                          className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                            selected
+                              ? "border-emerald-300/30 bg-emerald-400/15 text-emerald-200"
+                              : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                          }`}
+                        >
+                          {investment.asset_name}{investment.asset_symbol ? ` (${investment.asset_symbol})` : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">{saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear objetivo"}</button>
           </form>
         </section>
@@ -758,8 +881,9 @@ export default function GoalsPage() {
           ) : null}
           {!loading && goals.length > 0 ? (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {goals.map((goal) => {
-                const progressPct = goal.target_amount > 0 ? Math.min((Number(goal.current_amount || 0) / Number(goal.target_amount)) * 100, 100) : 0;
+              {goalsWithComputedProgress.map((goal) => {
+                const progressPct = goal.computedProgressPct;
+                const linkedIds = linkedInvestmentIdsByGoal.get(goal.id) ?? [];
                 return (
                   <article key={goal.id} className="rounded-[28px] border border-white/8 bg-white/5 p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -771,7 +895,9 @@ export default function GoalsPage() {
                     </div>
                     <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${progressPct}%` }} /></div>
                     <div className="mt-4 grid gap-2 text-sm text-slate-300">
-                      <p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p>
+                      <p>Actual total: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedCurrentTotal, currency)}</span></p>
+                      <p>Actual manual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedManualCurrent, currency)}</span></p>
+                      <p>Valor vinculado: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedLinkedCurrent, currency)}</span></p>
                       <p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p>
                       <p>Progreso: <span className="font-medium text-white">{progressPct.toFixed(1)}%</span></p>
                       <p>Prioridad: <span className="font-medium text-white">{goal.priority}</span></p>
@@ -779,10 +905,8 @@ export default function GoalsPage() {
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
-                      <p>Posicion: <span className="font-medium text-white">{investmentLinks.find((item) => item.id === goal.linked_investment_id)?.asset_name ?? "Sin conectar"}</span></p>
-                      {goal.linked_investment_id ? (
-                        <p>Valor vinculado: <span className="font-medium text-white">{formatCurrencyByPreference(investmentValueById[goal.linked_investment_id] ?? 0, currency)}</span></p>
-                      ) : null}
+                      <p>Tipo vinculado: <span className="font-medium text-white">{ASSET_TYPE_OPTIONS.find((item) => item.value === goal.linked_asset_type)?.label ?? "Sin tipo"}</span></p>
+                      <p>Posiciones vinculadas: <span className="font-medium text-white">{linkedIds.length > 0 ? linkedIds.map((id) => investmentLinks.find((item) => item.id === id)?.asset_name ?? "Posicion").join(", ") : "Sin posiciones"}</span></p>
                     </div>
                     <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/35 p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Evolucion mensual</p>
