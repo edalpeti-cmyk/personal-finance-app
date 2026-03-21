@@ -8,7 +8,8 @@ import EmptyStateCard from "@/components/empty-state-card";
 import SectionHeader from "@/components/section-header";
 import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
-import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
+import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
+import { formatCurrencyByPreference, formatDateByPreference, formatMonthByPreference } from "@/lib/preferences-format";
 
 type GoalType = "emergency_fund" | "retirement" | "house" | "car" | "travel" | "debt_payoff" | "other";
 type GoalStatus = "active" | "paused" | "completed" | "cancelled";
@@ -25,10 +26,19 @@ type GoalRow = {
   status: GoalStatus;
   linked_category: string | null;
   linked_account: string | null;
+  linked_investment_id: string | null;
 };
 type SavingsTargetRow = {
   month: string;
   savings_target: number;
+};
+type IncomeRow = {
+  amount: number;
+  income_date: string;
+};
+type ExpenseRow = {
+  amount: number;
+  expense_date: string;
 };
 type GoalProgressHistoryRow = {
   goal_id: string;
@@ -36,6 +46,15 @@ type GoalProgressHistoryRow = {
   current_amount: number;
   target_amount: number;
   progress_pct: number;
+};
+type InvestmentLinkRow = {
+  id: string;
+  asset_name: string;
+  asset_symbol: string | null;
+  quantity: number;
+  current_price: number | null;
+  average_buy_price: number;
+  asset_currency: AssetCurrency;
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
@@ -73,6 +92,9 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
   const [progressHistory, setProgressHistory] = useState<GoalProgressHistoryRow[]>([]);
+  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
+  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [investmentLinks, setInvestmentLinks] = useState<InvestmentLinkRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [goalName, setGoalName] = useState("");
@@ -85,7 +107,12 @@ export default function GoalsPage() {
   const [status, setStatus] = useState<GoalStatus>("active");
   const [linkedCategory, setLinkedCategory] = useState("");
   const [linkedAccount, setLinkedAccount] = useState("");
+  const [linkedInvestmentId, setLinkedInvestmentId] = useState("");
   const [snapshottingProgress, setSnapshottingProgress] = useState(false);
+  const [selectedTimelineGoalId, setSelectedTimelineGoalId] = useState("");
+  const [selectedTimelineYear, setSelectedTimelineYear] = useState(String(new Date().getFullYear()));
+  const [contributionDrafts, setContributionDrafts] = useState<Record<string, string>>({});
+  const [contributingGoalId, setContributingGoalId] = useState<string | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -104,22 +131,26 @@ export default function GoalsPage() {
     setStatus("active");
     setLinkedCategory("");
     setLinkedAccount("");
+    setLinkedInvestmentId("");
   }, []);
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const [goalsResult, savingsResult, historyResult] = await Promise.all([
+    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, investmentsResult] = await Promise.all([
       supabase
         .from("financial_goals")
-        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account")
+        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id")
         .eq("user_id", uid)
         .order("priority", { ascending: true })
         .order("created_at", { ascending: false }),
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
-      supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false })
+      supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false }),
+      supabase.from("income").select("amount, income_date").eq("user_id", uid),
+      supabase.from("expenses").select("amount, expense_date").eq("user_id", uid),
+      supabase.from("investments").select("id, asset_name, asset_symbol, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true })
     ]);
 
-    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error;
+    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error;
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -129,6 +160,9 @@ export default function GoalsPage() {
     setGoals((goalsResult.data as GoalRow[]) ?? []);
     setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
     setProgressHistory((historyResult.data as GoalProgressHistoryRow[]) ?? []);
+    setIncomeRows((incomeResult.data as IncomeRow[]) ?? []);
+    setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
+    setInvestmentLinks((investmentsResult.data as InvestmentLinkRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
@@ -154,6 +188,16 @@ export default function GoalsPage() {
     () => currentMonthSavingsTarget - totalMonthlyContribution,
     [currentMonthSavingsTarget, totalMonthlyContribution]
   );
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const currentMonthActualSavings = useMemo(() => {
+    const income = incomeRows.reduce((sum, row) => (row.income_date.slice(0, 7) === currentMonth ? sum + Number(row.amount || 0) : sum), 0);
+    const expenses = expenseRows.reduce((sum, row) => (row.expense_date.slice(0, 7) === currentMonth ? sum + Number(row.amount || 0) : sum), 0);
+    return income - expenses;
+  }, [currentMonth, expenseRows, incomeRows]);
+  const savingsAvailableForAutomation = useMemo(
+    () => Math.max(currentMonthActualSavings, 0),
+    [currentMonthActualSavings]
+  );
   const suggestedAllocations = useMemo(() => {
     if (currentMonthSavingsTarget <= 0 || activeGoals.length === 0) return [];
     const weightedGoals = activeGoals.map((goal) => ({ goal, weight: 6 - Number(goal.priority || 3) }));
@@ -165,6 +209,17 @@ export default function GoalsPage() {
       amount: Number(((currentMonthSavingsTarget * weight) / totalWeight).toFixed(2))
     }));
   }, [activeGoals, currentMonthSavingsTarget]);
+  const suggestedActualAllocations = useMemo(() => {
+    if (savingsAvailableForAutomation <= 0 || activeGoals.length === 0) return [];
+    const weightedGoals = activeGoals.map((goal) => ({ goal, weight: 6 - Number(goal.priority || 3) }));
+    const totalWeight = weightedGoals.reduce((sum, item) => sum + item.weight, 0);
+    if (totalWeight <= 0) return [];
+    return weightedGoals.map(({ goal, weight }) => ({
+      id: goal.id,
+      name: goal.goal_name,
+      amount: Number(((savingsAvailableForAutomation * weight) / totalWeight).toFixed(2))
+    }));
+  }, [activeGoals, savingsAvailableForAutomation]);
   const currentSnapshotMonth = useMemo(() => `${new Date().toISOString().slice(0, 7)}-01`, []);
   const latestHistoryByGoal = useMemo(() => {
     const map = new Map<string, GoalProgressHistoryRow[]>();
@@ -175,6 +230,59 @@ export default function GoalsPage() {
     }
     return map;
   }, [progressHistory]);
+  const investmentValueById = useMemo(
+    () =>
+      Object.fromEntries(
+        investmentLinks.map((row) => [
+          row.id,
+          convertToEur((Number(row.current_price ?? row.average_buy_price ?? 0) || 0) * (Number(row.quantity) || 0), row.asset_currency, FALLBACK_RATES_TO_EUR)
+        ])
+      ),
+    [investmentLinks]
+  );
+  const availableTimelineYears = useMemo(() => {
+    const years = new Set<number>([new Date().getFullYear()]);
+    for (const row of progressHistory) years.add(new Date(`${row.snapshot_month}T00:00:00`).getFullYear());
+    return Array.from(years).sort((a, b) => b - a);
+  }, [progressHistory]);
+  const timelineGoalOptions = useMemo(() => activeGoals, [activeGoals]);
+
+  useEffect(() => {
+    if (!selectedTimelineGoalId && activeGoals[0]) {
+      setSelectedTimelineGoalId(activeGoals[0].id);
+    } else if (selectedTimelineGoalId && !activeGoals.some((goal) => goal.id === selectedTimelineGoalId)) {
+      setSelectedTimelineGoalId(activeGoals[0]?.id ?? "");
+    }
+  }, [activeGoals, selectedTimelineGoalId]);
+
+  const selectedTimelineGoal = useMemo(
+    () => activeGoals.find((goal) => goal.id === selectedTimelineGoalId) ?? null,
+    [activeGoals, selectedTimelineGoalId]
+  );
+  const annualGoalTimeline = useMemo(() => {
+    if (!selectedTimelineGoal) return [];
+    const year = Number(selectedTimelineYear);
+    const history = (latestHistoryByGoal.get(selectedTimelineGoal.id) ?? []).filter(
+      (row) => new Date(`${row.snapshot_month}T00:00:00`).getFullYear() === year
+    );
+    const byMonth = new Map<number, GoalProgressHistoryRow>();
+    for (const row of history) {
+      const month = new Date(`${row.snapshot_month}T00:00:00`).getMonth();
+      byMonth.set(month, row);
+    }
+
+    return Array.from({ length: 12 }, (_, monthIndex) => {
+      const row = byMonth.get(monthIndex);
+      const label = new Date(year, monthIndex, 1).toLocaleString("es-ES", { month: "short" });
+      return {
+        label,
+        current: Number(row?.current_amount ?? 0),
+        target: Number(row?.target_amount ?? selectedTimelineGoal.target_amount ?? 0),
+        progressPct: Number(row?.progress_pct ?? 0),
+        hasData: Boolean(row)
+      };
+    });
+  }, [latestHistoryByGoal, selectedTimelineGoal, selectedTimelineYear]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -224,7 +332,8 @@ export default function GoalsPage() {
       priority: parsedPriority,
       status,
       linked_category: linkedCategory.trim() || null,
-      linked_account: linkedAccount.trim() || null
+      linked_account: linkedAccount.trim() || null,
+      linked_investment_id: linkedInvestmentId || null
     };
 
     const query = editingId
@@ -257,6 +366,7 @@ export default function GoalsPage() {
     setStatus(goal.status);
     setLinkedCategory(goal.linked_category ?? "");
     setLinkedAccount(goal.linked_account ?? "");
+    setLinkedInvestmentId(goal.linked_investment_id ?? "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -303,6 +413,87 @@ export default function GoalsPage() {
     await loadGoals(userId);
     showToast({ type: "success", text: "Ahorro objetivo del mes repartido entre objetivos activos." });
     setSaving(false);
+  };
+
+  const applyActualSavingsDistribution = async () => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para repartir el ahorro real." });
+      return;
+    }
+    if (suggestedActualAllocations.length === 0) {
+      showToast({ type: "error", text: "No hay ahorro real positivo este mes o no existen metas activas." });
+      return;
+    }
+
+    setSaving(true);
+    const updates = suggestedActualAllocations.map((item) =>
+      supabase
+        .from("financial_goals")
+        .update({ monthly_contribution: item.amount })
+        .eq("id", item.id)
+        .eq("user_id", userId)
+    );
+
+    const results = await Promise.all(updates);
+    const firstError = results.find((result) => result.error)?.error;
+    if (firstError) {
+      setMessage(firstError.message);
+      showToast({ type: "error", text: "No se pudo repartir el ahorro real del mes." });
+      setSaving(false);
+      return;
+    }
+
+    await loadGoals(userId);
+    showToast({ type: "success", text: "Ahorro real del mes repartido entre objetivos activos." });
+    setSaving(false);
+  };
+
+  const contributeToGoal = async (goal: GoalRow) => {
+    if (!userId) {
+      showToast({ type: "error", text: "Debes iniciar sesion para aportar a un objetivo." });
+      return;
+    }
+
+    const raw = contributionDrafts[goal.id] ?? "";
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast({ type: "error", text: "La aportacion debe ser mayor que 0." });
+      return;
+    }
+
+    setContributingGoalId(goal.id);
+    const nextCurrent = Number(goal.current_amount || 0) + amount;
+    const { error } = await supabase
+      .from("financial_goals")
+      .update({ current_amount: nextCurrent })
+      .eq("id", goal.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setMessage(error.message);
+      showToast({ type: "error", text: "No se pudo registrar la aportacion." });
+      setContributingGoalId(null);
+      return;
+    }
+
+    const target = Number(goal.target_amount || 0);
+    const progress = target > 0 ? Math.min((nextCurrent / target) * 100, 100) : 0;
+    await supabase.from("goal_progress_history").upsert(
+      {
+        goal_id: goal.id,
+        user_id: userId,
+        snapshot_month: currentSnapshotMonth,
+        current_amount: nextCurrent,
+        target_amount: target,
+        progress_pct: Number(progress.toFixed(2))
+      },
+      { onConflict: "goal_id,snapshot_month" }
+    );
+
+    setContributionDrafts((current) => ({ ...current, [goal.id]: "" }));
+    await loadGoals(userId);
+    showToast({ type: "success", text: "Aportacion registrada en el objetivo." });
+    setContributingGoalId(null);
   };
 
   const snapshotMonthlyGoalProgress = async () => {
@@ -414,6 +605,17 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Categoria conectada</span><input className={inputClass()} value={linkedCategory} onChange={(event) => setLinkedCategory(event.target.value)} placeholder="Ej: Vivienda, Inversiones, Viajes" /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
             </div>
+            <label className="grid gap-2 text-sm text-slate-200">
+              <span>Posicion conectada</span>
+              <select className={inputClass()} value={linkedInvestmentId} onChange={(event) => setLinkedInvestmentId(event.target.value)}>
+                <option value="">Sin posicion vinculada</option>
+                {investmentLinks.map((investment) => (
+                  <option key={investment.id} value={investment.id}>
+                    {investment.asset_name}{investment.asset_symbol ? ` (${investment.asset_symbol})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">{saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear objetivo"}</button>
           </form>
         </section>
@@ -429,7 +631,7 @@ export default function GoalsPage() {
           <SectionHeader
             eyebrow="Plan automatico"
             title="Conectar metas con el ahorro del mes"
-            description="Puedes repartir automaticamente el ahorro objetivo mensual actual entre tus metas activas segun prioridad."
+            description="Puedes repartir automaticamente el ahorro objetivo o el ahorro real del mes entre tus metas activas segun prioridad."
             aside={
               <div className="flex flex-wrap gap-2">
                 <button
@@ -448,9 +650,35 @@ export default function GoalsPage() {
                 >
                   Repartir ahorro objetivo
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void applyActualSavingsDistribution()}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={saving || suggestedActualAllocations.length === 0}
+                >
+                  Repartir ahorro real
+                </button>
               </div>
             }
           />
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <article className="rounded-[22px] border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ahorro real del mes</p>
+              <p className={`mt-2 text-2xl font-semibold ${currentMonthActualSavings >= 0 ? "text-white" : "text-red-300"}`}>{formatCurrencyByPreference(currentMonthActualSavings, currency)}</p>
+            </article>
+            <article className="rounded-[22px] border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Disponible para repartir</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{formatCurrencyByPreference(savingsAvailableForAutomation, currency)}</p>
+            </article>
+            <article className="rounded-[22px] border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Objetivos activos</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{activeGoals.length}</p>
+            </article>
+            <article className="rounded-[22px] border border-white/8 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Metas completadas</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{completedGoals.length}</p>
+            </article>
+          </div>
           {suggestedAllocations.length === 0 ? (
             <div className="mt-6">
               <EmptyStateCard
@@ -472,6 +700,51 @@ export default function GoalsPage() {
                 </article>
               ))}
             </div>
+          )}
+        </section>
+
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+          <SectionHeader eyebrow="Vista anual" title="Evolucion mes a mes de una meta" description="Revisa como ha avanzado una meta concreta durante el año con las fotos mensuales guardadas." />
+          {timelineGoalOptions.length === 0 ? (
+            <div className="mt-6">
+              <EmptyStateCard eyebrow="Sin metas" title="No hay metas activas para dibujar una vista anual" description="Crea una meta activa y guarda fotos mensuales para ver su evolucion." compact />
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2 text-sm text-slate-200">
+                  Meta
+                  <select className={inputClass()} value={selectedTimelineGoalId} onChange={(event) => setSelectedTimelineGoalId(event.target.value)}>
+                    {timelineGoalOptions.map((goal) => (
+                      <option key={goal.id} value={goal.id}>{goal.goal_name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-2 text-sm text-slate-200">
+                  Ano
+                  <select className={inputClass()} value={selectedTimelineYear} onChange={(event) => setSelectedTimelineYear(event.target.value)}>
+                    {availableTimelineYears.map((year) => (
+                      <option key={year} value={String(year)}>{year}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {annualGoalTimeline.map((item) => (
+                  <article key={`${selectedTimelineGoalId}-${selectedTimelineYear}-${item.label}`} className="rounded-[22px] border border-white/8 bg-white/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{item.label}</p>
+                      <span className="text-xs text-slate-400">{item.hasData ? `${item.progressPct.toFixed(1)}%` : "Sin foto"}</span>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(item.progressPct, 100)}%` }} />
+                    </div>
+                    <p className="mt-3 text-sm text-slate-200">{formatCurrencyByPreference(item.current, currency)}</p>
+                    <p className="mt-1 text-xs text-slate-400">Objetivo: {formatCurrencyByPreference(item.target, currency)}</p>
+                  </article>
+                ))}
+              </div>
+            </>
           )}
         </section>
 
@@ -506,6 +779,10 @@ export default function GoalsPage() {
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
+                      <p>Posicion: <span className="font-medium text-white">{investmentLinks.find((item) => item.id === goal.linked_investment_id)?.asset_name ?? "Sin conectar"}</span></p>
+                      {goal.linked_investment_id ? (
+                        <p>Valor vinculado: <span className="font-medium text-white">{formatCurrencyByPreference(investmentValueById[goal.linked_investment_id] ?? 0, currency)}</span></p>
+                      ) : null}
                     </div>
                     <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/35 p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Evolucion mensual</p>
@@ -529,6 +806,28 @@ export default function GoalsPage() {
                           ))}
                         </div>
                       )}
+                    </div>
+                    <div className="mt-5 rounded-[22px] border border-white/8 bg-white/5 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Aportacion directa</p>
+                      <div className="mt-3 flex gap-2">
+                        <input
+                          className={inputClass()}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={contributionDrafts[goal.id] ?? ""}
+                          onChange={(event) => setContributionDrafts((current) => ({ ...current, [goal.id]: event.target.value }))}
+                          placeholder="Ej: 100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void contributeToGoal(goal)}
+                          disabled={contributingGoalId === goal.id}
+                          className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60"
+                        >
+                          {contributingGoalId === goal.id ? "Guardando..." : "Aportar"}
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       <button type="button" onClick={() => handleEdit(goal)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 hover:bg-white/10">Editar</button>
