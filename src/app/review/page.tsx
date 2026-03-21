@@ -65,6 +65,15 @@ type ReviewStep = {
   cta: string;
 };
 
+type ReviewConclusion = {
+  tone: "positive" | "warning" | "attention";
+  title: string;
+  summary: string;
+  decision: string;
+  href: string;
+  cta: string;
+};
+
 function isSameMonth(dateString: string, month: string) {
   return dateString.slice(0, 7) === month;
 }
@@ -346,6 +355,71 @@ export default function ReviewPage() {
   );
   const selectedStepIndex = selectedStep ? reviewSteps.findIndex((step) => step.id === selectedStep.id) : -1;
   const completedStepCount = reviewSteps.filter((step) => step.status === "ready").length;
+  const reviewConclusion = useMemo<ReviewConclusion>(() => {
+    if (reviewMetrics.currentIncome <= 0) {
+      return {
+        tone: "attention",
+        title: "Mes sin base suficiente",
+        summary: "Sin ingresos del mes registrados no merece la pena sacar conclusiones fuertes porque el cierre queda incompleto.",
+        decision: "Primero registra ingresos y luego vuelve a revisar ahorro, presupuesto y FIRE con contexto real.",
+        href: "/budgets",
+        cta: "Completar ingresos"
+      };
+    }
+
+    if (reviewMetrics.currentSavingsTarget <= 0) {
+      return {
+        tone: "attention",
+        title: "Falta un objetivo de ahorro",
+        summary: "Ya hay movimiento real del mes, pero sigues sin una cifra objetivo contra la que comparar el resultado.",
+        decision: "Define el ahorro objetivo del mes antes de valorar si el cierre ha sido bueno o flojo.",
+        href: "/budgets",
+        cta: "Definir ahorro objetivo"
+      };
+    }
+
+    if (reviewMetrics.overspent.length > 0) {
+      return {
+        tone: "warning",
+        title: "Mes con desviaciones claras",
+        summary: `${reviewMetrics.overspent.length} categoria(s) han superado el presupuesto y estan empujando el cierre fuera del plan.`,
+        decision: "Revisa esas categorias primero y decide si corriges gasto, aumentas presupuesto o reasignas ahorro.",
+        href: "/budgets",
+        cta: "Corregir presupuesto"
+      };
+    }
+
+    if (reviewMetrics.investmentCount > reviewMetrics.pricesConnected) {
+      return {
+        tone: "warning",
+        title: "La foto de cartera aun no esta cerrada",
+        summary: "Tu patrimonio del mes todavia puede estar infravalorado o incompleto porque faltan precios en parte de la cartera.",
+        decision: "Actualiza precios antes de dar por bueno el cierre mensual y el progreso FIRE.",
+        href: "/investments",
+        cta: "Actualizar cartera"
+      };
+    }
+
+    if (reviewMetrics.actualSavings < reviewMetrics.currentSavingsTarget) {
+      return {
+        tone: "warning",
+        title: "Mes estable, pero por debajo del ahorro objetivo",
+        summary: "No hay grandes desviaciones de presupuesto, pero el ahorro real no ha llegado a la cifra que te habias marcado.",
+        decision: "Mantén el cierre, pero ajusta aportaciones, objetivos o gasto del proximo mes para recuperar tracción.",
+        href: "/goals",
+        cta: "Revisar metas"
+      };
+    }
+
+    return {
+      tone: "positive",
+      title: "Mes bien cerrado",
+      summary: "Ingresos, ahorro objetivo, presupuesto y cartera tienen una foto coherente para este mes.",
+      decision: "Puedes dar el cierre por bueno y usarlo como base para el siguiente mes y para tu seguimiento FIRE.",
+      href: "/dashboard",
+      cta: "Volver al dashboard"
+    };
+  }, [reviewMetrics]);
 
   if (authLoading) {
     return (
@@ -495,6 +569,40 @@ export default function ReviewPage() {
                     <Link href={action.href} className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10">{action.cta}</Link>
                   </article>
                 ))}
+              </div>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+              <SectionHeader eyebrow="Conclusion del mes" title="Diagnostico final y siguiente decision" description="Una lectura final para saber si el mes se puede dar por cerrado o si conviene actuar antes." />
+              <div className="mt-5 grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+                <article className={`rounded-[26px] border p-5 ${
+                  reviewConclusion.tone === "positive"
+                    ? "border-emerald-300/20 bg-emerald-500/10"
+                    : reviewConclusion.tone === "warning"
+                      ? "border-amber-300/20 bg-amber-500/10"
+                      : "border-red-300/20 bg-red-500/10"
+                }`}>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-200">Estado del cierre</p>
+                  <h3 className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{reviewConclusion.title}</h3>
+                  <p className="mt-4 text-sm leading-7 text-slate-200">{reviewConclusion.summary}</p>
+                </article>
+
+                <article className="rounded-[26px] border border-white/8 bg-white/5 p-5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Decision recomendada</p>
+                  <p className="mt-3 text-base leading-7 text-slate-200">{reviewConclusion.decision}</p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link href={reviewConclusion.href} className="rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400">
+                      {reviewConclusion.cta}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStepId(reviewSteps.find((step) => step.status === "attention")?.id ?? reviewSteps[0]?.id ?? "income")}
+                      className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10"
+                    >
+                      Ir al paso clave
+                    </button>
+                  </div>
+                </article>
               </div>
             </section>
 
