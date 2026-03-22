@@ -135,6 +135,8 @@ export default function GoalsPage() {
   const [selectedLinkedAssetTypes, setSelectedLinkedAssetTypes] = useState<AssetType[]>([]);
   const [selectedLinkedInvestmentIds, setSelectedLinkedInvestmentIds] = useState<string[]>([]);
   const [selectedLinkedInvestmentAllocations, setSelectedLinkedInvestmentAllocations] = useState<Record<string, string>>({});
+  const [assetTypesDropdownOpen, setAssetTypesDropdownOpen] = useState(false);
+  const [investmentsDropdownOpen, setInvestmentsDropdownOpen] = useState(false);
   const [snapshottingProgress, setSnapshottingProgress] = useState(false);
   const [selectedTimelineGoalId, setSelectedTimelineGoalId] = useState("");
   const [selectedTimelineYear, setSelectedTimelineYear] = useState(String(new Date().getFullYear()));
@@ -162,6 +164,8 @@ export default function GoalsPage() {
     setSelectedLinkedAssetTypes([]);
     setSelectedLinkedInvestmentIds([]);
     setSelectedLinkedInvestmentAllocations({});
+    setAssetTypesDropdownOpen(false);
+    setInvestmentsDropdownOpen(false);
   }, []);
 
   const loadGoals = useCallback(async (uid: string) => {
@@ -388,6 +392,20 @@ export default function GoalsPage() {
       };
     });
   }, [latestHistoryByGoal, selectedTimelineGoal, selectedTimelineYear]);
+  const selectedAssetTypesLabel = useMemo(() => {
+    if (selectedLinkedAssetTypes.length === 0) return "Sin tipos vinculados";
+    return selectedLinkedAssetTypes
+      .map((assetType) => ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType)
+      .join(", ");
+  }, [selectedLinkedAssetTypes]);
+  const selectedInvestmentsLabel = useMemo(() => {
+    if (selectedLinkedInvestmentIds.length === 0) return "Sin posiciones vinculadas";
+    if (selectedLinkedInvestmentIds.length === 1) {
+      const investment = investmentLinks.find((item) => item.id === selectedLinkedInvestmentIds[0]);
+      return investment ? `${investment.asset_name}${investment.asset_symbol ? ` (${investment.asset_symbol})` : ""}` : "1 posicion seleccionada";
+    }
+    return `${selectedLinkedInvestmentIds.length} posiciones seleccionadas`;
+  }, [investmentLinks, selectedLinkedInvestmentIds]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -757,49 +775,95 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm text-slate-200">
+              <div className="relative grid gap-2 text-sm text-slate-200">
                 <span>Tipo de activo conectado</span>
-                <select
-                  multiple
-                  className={`${inputClass()} min-h-[170px]`}
-                  value={selectedLinkedAssetTypes}
-                  onChange={(event) =>
-                    setSelectedLinkedAssetTypes(
-                      Array.from(event.target.selectedOptions).map((option) => option.value as AssetType)
-                    )
-                  }
+                <button
+                  type="button"
+                  onClick={() => setAssetTypesDropdownOpen((current) => !current)}
+                  className={`${inputClass()} flex items-center justify-between text-left`}
                 >
-                  {ASSET_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <span className="text-xs text-slate-400">Puedes seleccionar varios tipos manteniendo `Ctrl` al hacer clic.</span>
-              </label>
-              <label className="grid gap-2 text-sm text-slate-200">
+                  <span className="truncate">{selectedAssetTypesLabel}</span>
+                  <span className="text-slate-400">{assetTypesDropdownOpen ? "▲" : "▼"}</span>
+                </button>
+                {assetTypesDropdownOpen ? (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                    <div className="grid gap-1">
+                      {ASSET_TYPE_OPTIONS.map((option) => {
+                        const selected = selectedLinkedAssetTypes.includes(option.value);
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              setSelectedLinkedAssetTypes((current) =>
+                                current.includes(option.value)
+                                  ? current.filter((item) => item !== option.value)
+                                  : [...current, option.value]
+                              )
+                            }
+                            className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/5"
+                          >
+                            <span className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? "border-emerald-300 bg-emerald-400/15 text-emerald-200" : "border-white/20 text-transparent"}`}>
+                              ✓
+                            </span>
+                            <span>{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                <span className="text-xs text-slate-400">Abre el desplegable y marca los tipos que quieras vincular.</span>
+              </div>
+              <div className="relative grid gap-2 text-sm text-slate-200">
                 <span>Posiciones conectadas</span>
-                <select
-                  multiple
-                  className={`${inputClass()} min-h-[170px]`}
-                  value={selectedLinkedInvestmentIds}
-                  onChange={(event) => {
-                    const nextIds = Array.from(event.target.selectedOptions).map((option) => option.value);
-                    setSelectedLinkedInvestmentIds(nextIds);
-                    setSelectedLinkedInvestmentAllocations((current) => {
-                      const next: Record<string, string> = {};
-                      for (const id of nextIds) {
-                        next[id] = current[id] ?? "100";
-                      }
-                      return next;
-                    });
-                  }}
+                <button
+                  type="button"
+                  onClick={() => setInvestmentsDropdownOpen((current) => !current)}
+                  className={`${inputClass()} flex items-center justify-between text-left`}
                 >
-                  {investmentLinks.map((investment) => (
-                    <option key={investment.id} value={investment.id}>
-                      {investment.asset_name}{investment.asset_symbol ? ` (${investment.asset_symbol})` : ""}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-xs text-slate-400">Puedes seleccionar varias posiciones manteniendo `Ctrl` al hacer clic.</span>
+                  <span className="truncate">{selectedInvestmentsLabel}</span>
+                  <span className="text-slate-400">{investmentsDropdownOpen ? "▲" : "▼"}</span>
+                </button>
+                {investmentsDropdownOpen ? (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                    <div className="grid gap-1">
+                      {investmentLinks.map((investment) => {
+                        const selected = selectedLinkedInvestmentIds.includes(investment.id);
+                        return (
+                          <button
+                            key={investment.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedLinkedInvestmentIds((current) =>
+                                current.includes(investment.id)
+                                  ? current.filter((item) => item !== investment.id)
+                                  : [...current, investment.id]
+                              );
+                              setSelectedLinkedInvestmentAllocations((current) => {
+                                if (selected) {
+                                  const next = { ...current };
+                                  delete next[investment.id];
+                                  return next;
+                                }
+                                return { ...current, [investment.id]: current[investment.id] ?? "100" };
+                              });
+                            }}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/5"
+                          >
+                            <span className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? "border-emerald-300 bg-emerald-400/15 text-emerald-200" : "border-white/20 text-transparent"}`}>
+                              ✓
+                            </span>
+                            <span className="min-w-0 truncate">
+                              {investment.asset_name}{investment.asset_symbol ? ` (${investment.asset_symbol})` : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                <span className="text-xs text-slate-400">Abre el desplegable y marca las posiciones que quieras vincular.</span>
                 {selectedLinkedInvestmentIds.length > 0 ? (
                   <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
                     {selectedLinkedInvestmentIds.map((investmentId) => {
@@ -837,7 +901,7 @@ export default function GoalsPage() {
                     })}
                   </div>
                 ) : null}
-              </label>
+              </div>
             </div>
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">{saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear objetivo"}</button>
           </form>
