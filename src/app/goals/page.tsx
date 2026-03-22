@@ -881,6 +881,18 @@ export default function GoalsPage() {
                   </div>
                 ) : null}
                 <span className="text-xs text-slate-400">Abre el desplegable y marca los tipos que quieras vincular.</span>
+                {selectedLinkedAssetTypes.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedLinkedAssetTypes.map((assetType) => (
+                      <span
+                        key={`asset-type-chip-${assetType}`}
+                        className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100"
+                      >
+                        {ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div ref={investmentsDropdownRef} className="relative grid gap-2 text-sm text-slate-200">
                 <span>Posiciones conectadas</span>
@@ -975,6 +987,21 @@ export default function GoalsPage() {
                   </div>
                 ) : null}
                 <span className="text-xs text-slate-400">Abre el desplegable y marca las posiciones que quieras vincular.</span>
+                {selectedLinkedInvestmentIds.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedLinkedInvestmentIds.map((investmentId) => {
+                      const investment = investmentLinks.find((item) => item.id === investmentId);
+                      return (
+                        <span
+                          key={`investment-chip-${investmentId}`}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200"
+                        >
+                          {investment?.asset_name ?? "Posicion"}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 {selectedLinkedInvestmentIds.length > 0 ? (
                   <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
                     {selectedLinkedInvestmentIds.map((investmentId) => {

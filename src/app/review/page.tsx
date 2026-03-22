@@ -79,7 +79,15 @@ type ReviewClosureRow = {
   status: "open" | "closed";
   conclusion_title: string | null;
   conclusion_summary: string | null;
+  manual_note: string | null;
   closed_at: string | null;
+};
+type GoalProgressHistoryRow = {
+  goal_id: string;
+  snapshot_month: string;
+  current_amount: number;
+  target_amount: number;
+  progress_pct: number;
 };
 
 function isSameMonth(dateString: string, month: string) {
@@ -117,12 +125,15 @@ export default function ReviewPage() {
   const [selectedStepId, setSelectedStepId] = useState("income");
   const [reviewClosures, setReviewClosures] = useState<ReviewClosureRow[]>([]);
   const [closingMonth, setClosingMonth] = useState(false);
+  const [goalProgressHistory, setGoalProgressHistory] = useState<GoalProgressHistoryRow[]>([]);
+  const [monthlyNote, setMonthlyNote] = useState("");
+  const [savingMonthlyNote, setSavingMonthlyNote] = useState(false);
 
   const loadReviewData = useCallback(async (uid: string) => {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult, tasksResult, closuresResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
@@ -131,10 +142,11 @@ export default function ReviewPage() {
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
       supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
-      supabase.from("monthly_review_closures").select("review_month, status, conclusion_title, conclusion_summary, closed_at").eq("user_id", uid).order("review_month", { ascending: false }).limit(6)
+      supabase.from("monthly_review_closures").select("review_month, status, conclusion_title, conclusion_summary, manual_note, closed_at").eq("user_id", uid).order("review_month", { ascending: false }).limit(6),
+      supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false })
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -152,6 +164,9 @@ export default function ReviewPage() {
       (((tasksResult.data as ReviewTaskRow[] | null) ?? []).filter((row) => row.completed).map((row) => row.task_key))
     );
     setReviewClosures((closuresResult.data as ReviewClosureRow[]) ?? []);
+    const matchingClosure = ((closuresResult.data as ReviewClosureRow[] | null) ?? []).find((row) => row.review_month.slice(0, 7) === selectedMonth);
+    setMonthlyNote(matchingClosure?.manual_note ?? "");
+    setGoalProgressHistory((goalHistoryResult.data as GoalProgressHistoryRow[]) ?? []);
     setLoading(false);
   }, [selectedMonth, supabase]);
 
@@ -436,6 +451,39 @@ export default function ReviewPage() {
     () => reviewClosures.find((item) => item.review_month.slice(0, 7) === selectedMonth) ?? null,
     [reviewClosures, selectedMonth]
   );
+  const goalProgressByGoal = useMemo(() => {
+    const map = new Map<string, GoalProgressHistoryRow[]>();
+    for (const row of goalProgressHistory) {
+      const current = map.get(row.goal_id) ?? [];
+      current.push(row);
+      map.set(row.goal_id, current);
+    }
+    return map;
+  }, [goalProgressHistory]);
+  const goalMonthlyAdvance = useMemo(() => {
+    return reviewMetrics.topGoals.map((goal) => {
+      const history = (goalProgressByGoal.get(goal.id) ?? [])
+        .slice()
+        .sort((a, b) => a.snapshot_month.localeCompare(b.snapshot_month));
+      const latestBeforeCurrent = [...history]
+        .reverse()
+        .find((item) => item.snapshot_month.slice(0, 7) < selectedMonth);
+      const currentAmount = Number(goal.current_amount || 0);
+      const targetAmount = Number(goal.target_amount || 0);
+      const currentPct = targetAmount > 0 ? Math.min((currentAmount / targetAmount) * 100, 100) : 0;
+      const deltaAmount = latestBeforeCurrent ? currentAmount - Number(latestBeforeCurrent.current_amount || 0) : null;
+      const deltaPct = latestBeforeCurrent ? currentPct - Number(latestBeforeCurrent.progress_pct || 0) : null;
+
+      return {
+        ...goal,
+        currentPct,
+        deltaAmount,
+        deltaPct,
+        hasHistory: Boolean(latestBeforeCurrent),
+        baselineMonth: latestBeforeCurrent?.snapshot_month ?? null
+      };
+    });
+  }, [goalProgressByGoal, reviewMetrics.topGoals, selectedMonth]);
 
   const toggleMonthlyClosure = useCallback(async () => {
     if (!userId) return;
@@ -449,6 +497,7 @@ export default function ReviewPage() {
       status: nextStatus,
       conclusion_title: reviewConclusion.title,
       conclusion_summary: reviewConclusion.summary,
+      manual_note: monthlyNote.trim() || null,
       closed_at: nextClosed ? new Date().toISOString() : null
     };
 
@@ -470,13 +519,55 @@ export default function ReviewPage() {
           status: nextStatus,
           conclusion_title: reviewConclusion.title,
           conclusion_summary: reviewConclusion.summary,
+          manual_note: monthlyNote.trim() || null,
           closed_at: nextClosed ? new Date().toISOString() : null
         },
         ...next
       ].sort((a, b) => b.review_month.localeCompare(a.review_month)).slice(0, 6);
     });
     setClosingMonth(false);
-  }, [currentMonthClosure?.status, reviewConclusion.summary, reviewConclusion.title, selectedMonth, supabase, userId]);
+  }, [currentMonthClosure?.status, monthlyNote, reviewConclusion.summary, reviewConclusion.title, selectedMonth, supabase, userId]);
+
+  const saveMonthlyNote = useCallback(async () => {
+    if (!userId) return;
+
+    setSavingMonthlyNote(true);
+    const payload = {
+      user_id: userId,
+      review_month: monthToDate(selectedMonth),
+      status: currentMonthClosure?.status ?? "open",
+      conclusion_title: currentMonthClosure?.conclusion_title ?? reviewConclusion.title,
+      conclusion_summary: currentMonthClosure?.conclusion_summary ?? reviewConclusion.summary,
+      manual_note: monthlyNote.trim() || null,
+      closed_at: currentMonthClosure?.closed_at ?? null
+    };
+
+    const { error } = await supabase
+      .from("monthly_review_closures")
+      .upsert(payload, { onConflict: "user_id,review_month" });
+
+    if (error) {
+      setMessage(error.message);
+      setSavingMonthlyNote(false);
+      return;
+    }
+
+    setReviewClosures((current) => {
+      const next = current.filter((item) => item.review_month.slice(0, 7) !== selectedMonth);
+      return [
+        {
+          review_month: monthToDate(selectedMonth),
+          status: payload.status,
+          conclusion_title: payload.conclusion_title,
+          conclusion_summary: payload.conclusion_summary,
+          manual_note: payload.manual_note,
+          closed_at: payload.closed_at
+        },
+        ...next
+      ].sort((a, b) => b.review_month.localeCompare(a.review_month)).slice(0, 6);
+    });
+    setSavingMonthlyNote(false);
+  }, [currentMonthClosure?.closed_at, currentMonthClosure?.conclusion_summary, currentMonthClosure?.conclusion_title, currentMonthClosure?.status, monthlyNote, reviewConclusion.summary, reviewConclusion.title, selectedMonth, supabase, userId]);
 
   if (authLoading) {
     return (
@@ -684,6 +775,28 @@ export default function ReviewPage() {
                   ) : null}
                 </article>
               </div>
+              <div className="mt-4 rounded-[26px] border border-white/8 bg-white/5 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Nota manual del mes</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">Guarda un comentario corto con el contexto del cierre, decisiones o aprendizajes del mes.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void saveMonthlyNote()}
+                    disabled={savingMonthlyNote}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:opacity-60"
+                  >
+                    {savingMonthlyNote ? "Guardando..." : "Guardar nota"}
+                  </button>
+                </div>
+                <textarea
+                  className="mt-4 min-h-[120px] w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20"
+                  value={monthlyNote}
+                  onChange={(event) => setMonthlyNote(event.target.value)}
+                  placeholder="Ej: Este mes el mayor desvio vino de vivienda, pero el ahorro real sigue dentro de un rango razonable. El mes que viene toca revisar cartera y reforzar fondo de emergencia."
+                />
+              </div>
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
@@ -721,6 +834,11 @@ export default function ReviewPage() {
                       <p className="mt-3 text-sm leading-6 text-slate-300">
                         {closure.conclusion_summary ?? "Sin resumen guardado."}
                       </p>
+                      {closure.manual_note ? (
+                        <p className="mt-3 text-sm leading-6 text-slate-400">
+                          Nota: {closure.manual_note}
+                        </p>
+                      ) : null}
                     </article>
                   ))}
                 </div>
@@ -746,6 +864,58 @@ export default function ReviewPage() {
                 </div>
               ) : (
                 <div className="mt-5 grid gap-3">{reviewMetrics.topGoals.map((goal) => (<article key={goal.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{goal.goal_type}</p><h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{goal.goal_name}</h3></div><p className="text-sm text-slate-300">Prioridad {goal.priority}</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(goal.progressPct, 100)}%` }} /></div><div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2"><p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p><p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p><p>Progreso: <span className="font-medium text-white">{goal.progressPct.toFixed(1)}%</span></p><p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p><p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p><p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p></div></article>))}</div>
+              )}
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+              <SectionHeader eyebrow="Avance de metas" title="Que ha cambiado este mes en tus objetivos" description="Compara la foto actual con la ultima snapshot guardada para saber si las metas han avanzado de verdad." />
+              {goalMonthlyAdvance.length === 0 ? (
+                <div className="mt-6">
+                  <EmptyStateCard
+                    eyebrow="Sin avance"
+                    title="No hay metas con seguimiento mensual"
+                    description="Guarda una foto del mes en Objetivos para empezar a medir avance real entre meses."
+                    actionLabel="Abrir objetivos"
+                    actionHref="/goals"
+                    compact
+                  />
+                </div>
+              ) : (
+                <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {goalMonthlyAdvance.map((goal) => (
+                    <article key={`advance-${goal.id}`} className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{goal.goal_type}</p>
+                          <h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{goal.goal_name}</h3>
+                        </div>
+                        <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-slate-300">
+                          {goal.currentPct.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(goal.currentPct, 100)}%` }} />
+                      </div>
+                      <div className="mt-4 grid gap-2 text-sm text-slate-300">
+                        <p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p>
+                        <p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p>
+                        <p>
+                          Avance mensual:{" "}
+                          <span className={`font-medium ${goal.deltaAmount === null ? "text-white" : goal.deltaAmount >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                            {goal.deltaAmount === null ? "Sin base" : formatCurrencyByPreference(goal.deltaAmount, currency)}
+                          </span>
+                        </p>
+                        <p>
+                          Delta progreso:{" "}
+                          <span className={`font-medium ${goal.deltaPct === null ? "text-white" : goal.deltaPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                            {goal.deltaPct === null ? "Sin base" : `${goal.deltaPct >= 0 ? "+" : ""}${goal.deltaPct.toFixed(1)}%`}
+                          </span>
+                        </p>
+                        <p>Base comparativa: <span className="font-medium text-white">{goal.baselineMonth ? formatMonthByPreference(goal.baselineMonth.slice(0, 7), dateFormat) : "Sin snapshot previa"}</span></p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
               )}
             </section>
           </>
