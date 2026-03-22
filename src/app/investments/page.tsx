@@ -22,7 +22,7 @@ import EmptyStateCard from "@/components/empty-state-card";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
-import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
+import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, fetchRatesToEurAtDate, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
 import { AssetMarket } from "@/lib/market-prices";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BarElement, Tooltip, Legend);
@@ -87,10 +87,14 @@ type InvestmentTransactionRow = {
   total_local: number;
   total_eur: number;
   asset_currency: AssetCurrency;
+  fx_rate_to_eur: number | null;
+  fx_rate_date: string | null;
+  fx_provider: string | null;
   commission_local: number | null;
   commission_eur: number | null;
   realized_gain_eur: number | null;
   executed_at: string;
+  created_at?: string;
 };
 type PeriodPerformance = {
   amount: number | null;
@@ -114,6 +118,9 @@ type EnrichedInvestment = InvestmentRow & {
   gainEur: number;
   gainPct: number | null;
   weightPct: number;
+  fxImpactEur: number;
+  assetPerformanceEur: number;
+  historicalFxRate: number | null;
 };
 
 const ASSET_TYPES: Array<{ value: AssetType; label: string }> = [
@@ -536,6 +543,83 @@ function buildTypeHistoryTimeline(history: HistoryPoint[], range: TypeChartRange
   return points;
 }
 
+function sortTransactionsForCostBasis(transactions: InvestmentTransactionRow[]) {
+  return [...transactions].sort((a, b) => {
+    const byDate = (a.executed_at ?? "").localeCompare(b.executed_at ?? "");
+    if (byDate !== 0) return byDate;
+    return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+  });
+}
+
+function buildTransactionCostBasisMap(transactions: InvestmentTransactionRow[]) {
+  const grouped = new Map<string, InvestmentTransactionRow[]>();
+  for (const row of transactions) {
+    if (!row.investment_id) continue;
+    const current = grouped.get(row.investment_id) ?? [];
+    current.push(row);
+    grouped.set(row.investment_id, current);
+  }
+
+  const map = new Map<
+    string,
+    {
+      openQuantity: number;
+      openCostEur: number;
+      openCostLocal: number;
+      avgFxRate: number | null;
+      realizedGainEur: number;
+    }
+  >();
+
+  for (const [investmentId, rows] of grouped.entries()) {
+    let openQuantity = 0;
+    let openCostEur = 0;
+    let openCostLocal = 0;
+    let realizedGainEur = 0;
+
+    for (const row of sortTransactionsForCostBasis(rows)) {
+      const quantity = Number(row.quantity) || 0;
+      const totalLocal = Number(row.total_local) || 0;
+      const totalEur = Number(row.total_eur) || 0;
+      const commissionLocal = Number(row.commission_local ?? 0) || 0;
+      const commissionEur = Number(row.commission_eur ?? 0) || 0;
+
+      if (quantity <= 0) {
+        continue;
+      }
+
+      if (row.transaction_type === "buy") {
+        openQuantity += quantity;
+        openCostLocal += totalLocal + commissionLocal;
+        openCostEur += totalEur + commissionEur;
+        continue;
+      }
+
+      const avgCostPerUnitEur = openQuantity > 0 ? openCostEur / openQuantity : 0;
+      const avgCostPerUnitLocal = openQuantity > 0 ? openCostLocal / openQuantity : 0;
+      const soldCostEur = avgCostPerUnitEur * quantity;
+      const soldCostLocal = avgCostPerUnitLocal * quantity;
+      const netSaleEur = totalEur - commissionEur;
+      const fallbackRealizedGainEur = netSaleEur - soldCostEur;
+
+      realizedGainEur += Number(row.realized_gain_eur ?? fallbackRealizedGainEur) || 0;
+      openQuantity = Math.max(0, openQuantity - quantity);
+      openCostEur = Math.max(0, openCostEur - soldCostEur);
+      openCostLocal = Math.max(0, openCostLocal - soldCostLocal);
+    }
+
+    map.set(investmentId, {
+      openQuantity,
+      openCostEur,
+      openCostLocal,
+      avgFxRate: openCostLocal > 0 ? openCostEur / openCostLocal : null,
+      realizedGainEur: Number(realizedGainEur.toFixed(4))
+    });
+  }
+
+  return map;
+}
+
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -548,6 +632,7 @@ export default function InvestmentsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
+  const [transactions, setTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [realizedGainTotalEur, setRealizedGainTotalEur] = useState(0);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
 
@@ -811,7 +896,6 @@ export default function InvestmentsPage() {
       return null;
     }
 
-    const heldAverage = Number(matchedSellPosition.average_buy_price) || 0;
     const salePrice = currentPrice ? Number(currentPrice) : Number(matchedSellPosition.current_price ?? matchedSellPosition.average_buy_price) || 0;
     if (!Number.isFinite(salePrice) || salePrice < 0) {
       return null;
@@ -820,19 +904,26 @@ export default function InvestmentsPage() {
     const currency = matchedSellPosition.asset_currency ?? assetCurrency;
     const totalLocal = sellQty * salePrice;
     const fee = commission.trim() ? Number(commission) : 0;
-    const realizedLocal = sellQty * (salePrice - heldAverage) - fee;
     const netLocal = totalLocal - fee;
+    const matchedCostBasis = buildTransactionCostBasisMap(transactions).get(matchedSellPosition.id);
+    const avgCostPerUnitEur =
+      matchedCostBasis && matchedCostBasis.openQuantity > 0
+        ? matchedCostBasis.openCostEur / matchedCostBasis.openQuantity
+        : convertToEur(Number(matchedSellPosition.average_buy_price) || 0, currency, ratesToEur);
+    const totalEur = convertToEur(totalLocal, currency, ratesToEur);
+    const feeEur = convertToEur(fee, currency, ratesToEur);
+    const netEur = totalEur - feeEur;
 
     return {
       totalLocal,
-      totalEur: convertToEur(totalLocal, currency, ratesToEur),
+      totalEur,
       feeLocal: fee,
-      feeEur: convertToEur(fee, currency, ratesToEur),
+      feeEur,
       netLocal,
-      netEur: convertToEur(netLocal, currency, ratesToEur),
-      realizedGainEur: convertToEur(realizedLocal, currency, ratesToEur)
+      netEur,
+      realizedGainEur: netEur - avgCostPerUnitEur * sellQty
     };
-  }, [assetCurrency, commission, currentPrice, editingId, matchedSellPosition, quantity, ratesToEur, transactionMode]);
+  }, [assetCurrency, commission, currentPrice, editingId, matchedSellPosition, quantity, ratesToEur, transactionMode, transactions]);
 
   useEffect(() => {
     if (!matchedSellPosition || editingId || transactionMode !== "sell") {
@@ -901,6 +992,24 @@ export default function InvestmentsPage() {
     [supabase]
   );
 
+  const loadTransactions = useCallback(
+    async (uid: string) => {
+      const { data, error } = await supabase
+        .from("investment_transactions")
+        .select("id, investment_id, transaction_type, quantity, price_local, total_local, total_eur, asset_currency, fx_rate_to_eur, fx_rate_date, fx_provider, commission_local, commission_eur, realized_gain_eur, executed_at, created_at")
+        .eq("user_id", uid)
+        .order("executed_at", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        return;
+      }
+
+      setTransactions((data as InvestmentTransactionRow[]) ?? []);
+    },
+    [supabase]
+  );
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -908,12 +1017,14 @@ export default function InvestmentsPage() {
         return;
       }
 
-      await Promise.all([loadInvestments(userId), loadRealizedGainTotal(userId)]);
+      await Promise.all([loadInvestments(userId), loadRealizedGainTotal(userId), loadTransactions(userId)]);
       setLoading(false);
     };
 
     void init();
-  }, [authLoading, loadInvestments, loadRealizedGainTotal, userId]);
+  }, [authLoading, loadInvestments, loadRealizedGainTotal, loadTransactions, userId]);
+
+  const costBasisMap = useMemo(() => buildTransactionCostBasisMap(transactions), [transactions]);
 
   const metrics = useMemo(() => {
     return investments.reduce(
@@ -921,7 +1032,8 @@ export default function InvestmentsPage() {
         const qty = Number(row.quantity) || 0;
         const avg = Number(row.average_buy_price) || 0;
         const current = Number(row.current_price ?? row.average_buy_price) || 0;
-        const invested = convertToEur(qty * avg, row.asset_currency, ratesToEur);
+        const costBasis = costBasisMap.get(row.id);
+        const invested = costBasis ? Number(costBasis.openCostEur.toFixed(4)) : convertToEur(qty * avg, row.asset_currency, ratesToEur);
         const currentValue = convertToEur(qty * current, row.asset_currency, ratesToEur);
 
         acc.totalValueEur += currentValue;
@@ -931,7 +1043,7 @@ export default function InvestmentsPage() {
       },
       { totalValueEur: 0, investedCapitalEur: 0, trackedPositions: 0 }
     );
-  }, [investments, ratesToEur]);
+  }, [costBasisMap, investments, ratesToEur]);
 
   const profitEur = metrics.totalValueEur - metrics.investedCapitalEur;
   const profitability = metrics.investedCapitalEur > 0 ? (profitEur / metrics.investedCapitalEur) * 100 : null;
@@ -944,11 +1056,16 @@ export default function InvestmentsPage() {
       const current = Number(row.current_price ?? row.average_buy_price) || 0;
       const investedLocal = qty * avg;
       const currentLocal = qty * current;
-      const investedEur = convertToEur(investedLocal, row.asset_currency, ratesToEur);
+      const costBasis = costBasisMap.get(row.id);
+      const investedEur = costBasis ? Number(costBasis.openCostEur.toFixed(4)) : convertToEur(investedLocal, row.asset_currency, ratesToEur);
       const currentValueEur = convertToEur(currentLocal, row.asset_currency, ratesToEur);
       const gainEur = currentValueEur - investedEur;
       const gainPct = investedEur > 0 ? (gainEur / investedEur) * 100 : null;
       const weightPct = metrics.totalValueEur > 0 ? (currentValueEur / metrics.totalValueEur) * 100 : 0;
+      const historicalFxRate = costBasis?.avgFxRate ?? null;
+      const currentFxRate = ratesToEur[row.asset_currency ?? "EUR"] ?? 1;
+      const assetPerformanceEur = historicalFxRate ? (currentLocal - investedLocal) * historicalFxRate : gainEur;
+      const fxImpactEur = historicalFxRate ? currentLocal * (currentFxRate - historicalFxRate) : 0;
 
       return {
         ...row,
@@ -959,10 +1076,13 @@ export default function InvestmentsPage() {
         currentValueEur,
         gainEur,
         gainPct,
-        weightPct
+        weightPct,
+        fxImpactEur: Number(fxImpactEur.toFixed(4)),
+        assetPerformanceEur: Number(assetPerformanceEur.toFixed(4)),
+        historicalFxRate
       };
     });
-  }, [investments, metrics.totalValueEur, ratesToEur]);
+  }, [costBasisMap, investments, metrics.totalValueEur, ratesToEur]);
 
   const filteredInvestments = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -1752,7 +1872,7 @@ export default function InvestmentsPage() {
 
       const { data } = await supabase
         .from("investment_transactions")
-        .select("id, investment_id, transaction_type, quantity, price_local, total_local, total_eur, asset_currency, commission_local, commission_eur, realized_gain_eur, executed_at")
+        .select("id, investment_id, transaction_type, quantity, price_local, total_local, total_eur, asset_currency, fx_rate_to_eur, fx_rate_date, fx_provider, commission_local, commission_eur, realized_gain_eur, executed_at, created_at")
         .eq("user_id", userId)
         .eq("investment_id", selectedAssetId)
         .order("executed_at", { ascending: false })
@@ -1957,15 +2077,19 @@ export default function InvestmentsPage() {
       }
 
       const salePrice = validation.curr;
+      const tradeCurrency = existingPosition.asset_currency ?? assetCurrency;
+      const tradeRatesToEur = await fetchRatesToEurAtDate(purchaseDate);
+      const tradeFxRate = tradeCurrency === "EUR" ? 1 : tradeRatesToEur[tradeCurrency] ?? ratesToEur[tradeCurrency] ?? 1;
       const commissionLocal = Number(validation.fee || 0);
-      const realizedGainEur = convertToEur(
-        ((salePrice - (Number(existingPosition.average_buy_price) || 0)) * validation.qty) - commissionLocal,
-        existingPosition.asset_currency ?? assetCurrency,
-        ratesToEur
-      );
       const totalLocal = Number((validation.qty * salePrice).toFixed(4));
-      const totalEur = Number(convertToEur(validation.qty * salePrice, existingPosition.asset_currency ?? assetCurrency, ratesToEur).toFixed(4));
-      const commissionEur = Number(convertToEur(commissionLocal, existingPosition.asset_currency ?? assetCurrency, ratesToEur).toFixed(4));
+      const totalEur = Number((totalLocal * tradeFxRate).toFixed(4));
+      const commissionEur = Number((commissionLocal * tradeFxRate).toFixed(4));
+      const existingCostBasis = costBasisMap.get(existingPosition.id);
+      const avgCostPerUnitEur =
+        existingCostBasis && existingCostBasis.openQuantity > 0
+          ? existingCostBasis.openCostEur / existingCostBasis.openQuantity
+          : convertToEur(Number(existingPosition.average_buy_price) || 0, tradeCurrency, ratesToEur);
+      const realizedGainEur = Number((totalEur - commissionEur - avgCostPerUnitEur * validation.qty).toFixed(4));
 
       await supabase.from("investment_transactions").insert({
         investment_id: existingPosition.id,
@@ -1975,16 +2099,20 @@ export default function InvestmentsPage() {
         price_local: salePrice,
         total_local: totalLocal,
         total_eur: totalEur,
-        asset_currency: existingPosition.asset_currency ?? assetCurrency,
+        asset_currency: tradeCurrency,
+        fx_rate_to_eur: Number(tradeFxRate.toFixed(8)),
+        fx_rate_date: purchaseDate,
+        fx_provider: "frankfurter",
         commission_local: Number(commissionLocal.toFixed(4)),
         commission_eur: commissionEur,
-        realized_gain_eur: Number(realizedGainEur.toFixed(4)),
+        realized_gain_eur: realizedGainEur,
         executed_at: purchaseDate
       });
 
       resetForm();
       await loadInvestments(userId);
       await loadRealizedGainTotal(userId);
+      await loadTransactions(userId);
       showToast({
         type: "success",
         text: remainingQty <= 0 ? "Venta registrada y posicion cerrada." : "Venta registrada y cantidad restada de la posicion existente."
@@ -2038,17 +2166,26 @@ export default function InvestmentsPage() {
     }
 
     if (!editingId && transactionInvestmentId) {
+      const tradeRatesToEur = await fetchRatesToEurAtDate(purchaseDate);
+      const tradeFxRate = assetCurrency === "EUR" ? 1 : tradeRatesToEur[assetCurrency] ?? ratesToEur[assetCurrency] ?? 1;
+      const totalLocal = Number((validation.qty * validation.avg).toFixed(4));
+      const commissionLocal = Number((validation.fee || 0).toFixed(4));
+      const totalEur = Number((totalLocal * tradeFxRate).toFixed(4));
+      const commissionEur = Number((commissionLocal * tradeFxRate).toFixed(4));
       await supabase.from("investment_transactions").insert({
         investment_id: transactionInvestmentId,
         user_id: userId,
         transaction_type: "buy",
         quantity: validation.qty,
         price_local: validation.avg,
-        total_local: Number((validation.qty * validation.avg).toFixed(4)),
-        total_eur: Number(convertToEur(validation.qty * validation.avg, assetCurrency, ratesToEur).toFixed(4)),
+        total_local: totalLocal,
+        total_eur: totalEur,
         asset_currency: assetCurrency,
-        commission_local: Number((validation.fee || 0).toFixed(4)),
-        commission_eur: Number(convertToEur(validation.fee || 0, assetCurrency, ratesToEur).toFixed(4)),
+        fx_rate_to_eur: Number(tradeFxRate.toFixed(8)),
+        fx_rate_date: purchaseDate,
+        fx_provider: "frankfurter",
+        commission_local: commissionLocal,
+        commission_eur: commissionEur,
         realized_gain_eur: null,
         executed_at: purchaseDate
       });
@@ -2056,6 +2193,7 @@ export default function InvestmentsPage() {
 
     resetForm();
     await loadInvestments(userId);
+    await loadTransactions(userId);
     showToast({
       type: "success",
       text: editingId
@@ -3352,6 +3490,27 @@ export default function InvestmentsPage() {
                   <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{selectedAsset.weightPct.toFixed(1)}%</p>
                   <p className="mt-2 text-sm leading-5 text-slate-300">Peso dentro de la cartera.</p>
                 </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Impacto divisa</p>
+                  <p className={`mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight ${selectedAsset.fxImpactEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                    {formatCurrencyByPreference(selectedAsset.fxImpactEur, "EUR")}
+                  </p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Impacto acumulado del cambio de divisa sobre esta posicion.</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Resultado activo</p>
+                  <p className={`mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight ${selectedAsset.assetPerformanceEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                    {formatCurrencyByPreference(selectedAsset.assetPerformanceEur, "EUR")}
+                  </p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Rentabilidad del propio activo sin mezclar el efecto FX.</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">FX historico</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
+                    {selectedAsset.historicalFxRate ? formatNumber(selectedAsset.historicalFxRate, 4) : "n/d"}
+                  </p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Cambio medio historico usado para el coste en EUR.</p>
+                </article>
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -3460,6 +3619,8 @@ export default function InvestmentsPage() {
                         </div>
                         <div className="mt-2 text-xs text-slate-400">
                           Impacto neto: {formatCurrencyByPreference((Number(transaction.total_eur) || 0) - (Number(transaction.commission_eur) || 0), "EUR")}
+                          {" · "}
+                          FX: {transaction.fx_rate_to_eur ? `${formatNumber(Number(transaction.fx_rate_to_eur), 4)} EUR/${transaction.asset_currency}` : "n/d"}
                         </div>
                       </article>
                     ))}

@@ -14,8 +14,13 @@ type FrankfurterResponse = {
 };
 
 export async function fetchRatesToEur(): Promise<Record<AssetCurrency, number>> {
+  return fetchRatesToEurAtDate("latest");
+}
+
+export async function fetchRatesToEurAtDate(date: string): Promise<Record<AssetCurrency, number>> {
   try {
-    const response = await fetch("https://api.frankfurter.app/latest?from=EUR&to=USD,GBP,DKK", {
+    const safeDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "latest";
+    const response = await fetch(`https://api.frankfurter.app/${safeDate}?from=EUR&to=USD,GBP,DKK`, {
       cache: "no-store"
     });
 
