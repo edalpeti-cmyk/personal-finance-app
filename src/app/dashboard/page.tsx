@@ -64,6 +64,11 @@ type DashboardAlert = {
   title: string;
   body: string;
 };
+type DashboardAlertGroup = {
+  active: DashboardAlert[];
+  resolved: Array<{ id: DashboardAlertRuleKey; title: string; body: string }>;
+  silenced: Array<{ id: DashboardAlertRuleKey; title: string; body: string }>;
+};
 type DashboardAlertRuleKey =
   | "low_savings_rate"
   | "missing_annual_savings"
@@ -87,7 +92,7 @@ type DashboardReminder = {
   cta: string;
   href?: string;
 };
-type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "monthlyTrend" | "fireOverview" | "aiInsights";
+type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "connectivity" | "monthlyTrend" | "fireOverview" | "aiInsights";
 type DashboardWidgetSize = "compact" | "expanded";
 type DashboardWidgetWidth = "normal" | "full";
 type DashboardPreferencesRow = {
@@ -115,6 +120,14 @@ type AiInsightDebug = {
   fireTarget: number;
   fireProgress: number;
 };
+type ConnectivityItem = {
+  id: string;
+  tone: "warning" | "info" | "success";
+  title: string;
+  body: string;
+  cta: string;
+  href?: string;
+};
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
@@ -128,6 +141,7 @@ const DASHBOARD_WIDGETS: Array<{ id: DashboardWidgetId; label: string; descripti
   { id: "netWorthChart", label: "Patrimonio", description: "Grafico de evolucion, snapshots y exportes." },
   { id: "reminders", label: "Recordatorios", description: "Pendientes operativos del mes y de la cartera." },
   { id: "alerts", label: "Alertas", description: "Riesgos y senales automaticas del panel." },
+  { id: "connectivity", label: "Conectividad", description: "Estado de precios, snapshots e importacion." },
   { id: "monthlyTrend", label: "Historico mensual", description: "Ingresos frente a ahorro objetivo." },
   { id: "fireOverview", label: "FIRE", description: "Progreso y horizonte hacia independencia financiera." },
   { id: "aiInsights", label: "IA financiera", description: "Lectura automatica de habitos y contexto." }
@@ -143,6 +157,36 @@ const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   { key: "high_concentration", enabled: true, threshold: 35 },
   { key: "missing_prices", enabled: true, threshold: 1 }
 ];
+const DASHBOARD_ALERT_RULE_META: Record<
+  DashboardAlertRuleKey,
+  { title: string; resolvedBody: string; silencedBody: string }
+> = {
+  low_savings_rate: {
+    title: "Tasa de ahorro baja",
+    resolvedBody: "La tasa de ahorro actual esta dentro del margen que definiste.",
+    silencedBody: "Esta alerta esta pausada desde Configuracion."
+  },
+  missing_annual_savings: {
+    title: "Ahorro anual sin objetivo",
+    resolvedBody: "Ya hay ahorro objetivo acumulado en el ano actual.",
+    silencedBody: "Esta alerta esta pausada desde Configuracion."
+  },
+  early_fire_progress: {
+    title: "FIRE en fase inicial",
+    resolvedBody: "El progreso FIRE ya supera el umbral que fijaste.",
+    silencedBody: "Esta alerta esta pausada desde Configuracion."
+  },
+  high_concentration: {
+    title: "Concentracion elevada",
+    resolvedBody: "Ninguna posicion supera ahora el peso maximo configurado.",
+    silencedBody: "Esta alerta esta pausada desde Configuracion."
+  },
+  missing_prices: {
+    title: "Activos sin precio",
+    resolvedBody: "No hay posiciones sin precio actual pendiente.",
+    silencedBody: "Esta alerta esta pausada desde Configuracion."
+  }
+};
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function mergeAlertRules(rows: DashboardAlertRulesRow[] | null | undefined) {
@@ -430,6 +474,7 @@ export default function DashboardPage() {
     netWorthChart: "expanded",
     reminders: "compact",
     alerts: "compact",
+    connectivity: "compact",
     monthlyTrend: "expanded",
     fireOverview: "compact",
     aiInsights: "expanded"
@@ -438,6 +483,7 @@ export default function DashboardPage() {
     netWorthChart: "full",
     reminders: "full",
     alerts: "full",
+    connectivity: "full",
     monthlyTrend: "full",
     fireOverview: "normal",
     aiInsights: "full"
@@ -569,12 +615,14 @@ export default function DashboardPage() {
     [currency]
   );
 
-  const dashboardAlerts = useMemo<DashboardAlert[]>(() => {
+  const dashboardAlertGroups = useMemo<DashboardAlertGroup>(() => {
     if (!metrics) {
-      return [];
+      return { active: [], resolved: [], silenced: [] };
     }
 
-    const alerts: DashboardAlert[] = [];
+    const active: DashboardAlert[] = [];
+    const resolved: DashboardAlertGroup["resolved"] = [];
+    const silenced: DashboardAlertGroup["silenced"] = [];
     const alertRuleMap = Object.fromEntries(alertRules.map((rule) => [rule.key, rule])) as Record<DashboardAlertRuleKey, DashboardAlertRule>;
     const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
     const topHolding = investmentRows
@@ -587,76 +635,75 @@ export default function DashboardPage() {
       })
       .sort((a, b) => b.valueEur - a.valueEur)[0];
 
-    if (
-      alertRuleMap.low_savings_rate.enabled &&
-      metrics.savingsRate !== null &&
-      metrics.savingsRate < Number(alertRuleMap.low_savings_rate.threshold ?? 10)
-    ) {
-      alerts.push({
-        id: "low_savings_rate",
-        tone: "warning",
-        title: "Tasa de ahorro baja",
-        body: `Tu tasa de ahorro del mes esta en ${metrics.savingsRate.toFixed(1)}%. Revisar gasto variable puede darte margen rapido.`
-      });
-    }
+    const registerRule = (ruleKey: DashboardAlertRuleKey, isTriggered: boolean, tone: DashboardAlert["tone"], body: string) => {
+      const meta = DASHBOARD_ALERT_RULE_META[ruleKey];
+      if (!alertRuleMap[ruleKey].enabled) {
+        silenced.push({ id: ruleKey, title: meta.title, body: meta.silencedBody });
+        return;
+      }
 
-    if (alertRuleMap.missing_annual_savings.enabled && metrics.annualSavings === 0) {
-      alerts.push({
-        id: "missing_annual_savings",
-        tone: "info",
-        title: "Ahorro anual sin objetivo",
-        body: "Aun no has acumulado ahorro objetivo en el ano actual. Definir una cifra mensual hara mas util el seguimiento."
-      });
-    }
+      if (isTriggered) {
+        active.push({
+          id: ruleKey,
+          tone,
+          title: meta.title,
+          body
+        });
+      } else {
+        resolved.push({ id: ruleKey, title: meta.title, body: meta.resolvedBody });
+      }
+    };
 
-    if (
-      alertRuleMap.early_fire_progress.enabled &&
-      metrics.fireProgress < Number(alertRuleMap.early_fire_progress.threshold ?? 25)
-    ) {
-      alerts.push({
-        id: "early_fire_progress",
-        tone: "info",
-        title: "FIRE aun en fase inicial",
-        body: "Tu progreso FIRE sigue en una fase temprana. La consistencia mensual importa mas que buscar rentabilidades puntuales."
-      });
-    }
+    registerRule(
+      "low_savings_rate",
+      metrics.savingsRate !== null && metrics.savingsRate < Number(alertRuleMap.low_savings_rate.threshold ?? 10),
+      "warning",
+      `Tu tasa de ahorro del mes esta en ${metrics.savingsRate?.toFixed(1) ?? "0.0"}%. Revisar gasto variable puede darte margen rapido.`
+    );
 
-    if (
-      alertRuleMap.high_concentration.enabled &&
-      topHolding &&
-      topHolding.weight >= Number(alertRuleMap.high_concentration.threshold ?? 35)
-    ) {
-      alerts.push({
-        id: "high_concentration",
-        tone: "warning",
-        title: "Concentracion elevada",
-        body: `${topHolding.name} pesa ${topHolding.weight.toFixed(1)}% de tu cartera. Puede valer la pena diversificar gradualmente.`
-      });
-    }
+    registerRule(
+      "missing_annual_savings",
+      metrics.annualSavings === 0,
+      "info",
+      "Aun no has acumulado ahorro objetivo en el ano actual. Definir una cifra mensual hara mas util el seguimiento."
+    );
 
-    if (
-      alertRuleMap.missing_prices.enabled &&
-      assetsWithoutCurrentPrice.length >= Number(alertRuleMap.missing_prices.threshold ?? 1)
-    ) {
-      alerts.push({
-        id: "missing_prices",
-        tone: "warning",
-        title: "Precios pendientes de actualizar",
-        body: `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado. La valoracion de la cartera pierde precision mientras sigan pendientes.`
-      });
-    }
+    registerRule(
+      "early_fire_progress",
+      metrics.fireProgress < Number(alertRuleMap.early_fire_progress.threshold ?? 25),
+      "info",
+      "Tu progreso FIRE sigue en una fase temprana. La consistencia mensual importa mas que buscar rentabilidades puntuales."
+    );
 
-    if (alerts.length === 0) {
-      alerts.push({
+    registerRule(
+      "high_concentration",
+      Boolean(topHolding && topHolding.weight >= Number(alertRuleMap.high_concentration.threshold ?? 35)),
+      "warning",
+      `${topHolding?.name ?? "La posicion principal"} pesa ${topHolding?.weight.toFixed(1) ?? "0.0"}% de tu cartera. Puede valer la pena diversificar gradualmente.`
+    );
+
+    registerRule(
+      "missing_prices",
+      assetsWithoutCurrentPrice.length >= Number(alertRuleMap.missing_prices.threshold ?? 1),
+      "warning",
+      `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado. La valoracion de la cartera pierde precision mientras sigan pendientes.`
+    );
+
+    return { active, resolved, silenced };
+  }, [alertRules, investmentRows, metrics, ratesToEur]);
+
+  const dashboardAlerts = useMemo<DashboardAlert[]>(() => {
+    if (dashboardAlertGroups.active.length === 0) {
+      return [{
         id: "stable_panel",
         tone: "success",
         title: "Panel estable",
         body: "No hay alertas criticas ahora mismo. Tus metricas principales no muestran desequilibrios relevantes."
-      });
+      }];
     }
 
-    return alerts.slice(0, 4);
-  }, [alertRules, investmentRows, metrics, ratesToEur]);
+    return dashboardAlertGroups.active.slice(0, 4);
+  }, [dashboardAlertGroups]);
 
   useEffect(() => {
     try {
@@ -853,6 +900,7 @@ export default function DashboardPage() {
       netWorthChart: "expanded",
       reminders: "compact",
       alerts: "compact",
+      connectivity: "compact",
       monthlyTrend: "expanded",
       fireOverview: "compact",
       aiInsights: "expanded"
@@ -861,6 +909,7 @@ export default function DashboardPage() {
       netWorthChart: "full",
       reminders: "full",
       alerts: "full",
+      connectivity: "full",
       monthlyTrend: "full",
       fireOverview: "normal",
       aiInsights: "full"
@@ -1009,6 +1058,61 @@ export default function DashboardPage() {
     const now = new Date();
     return incomeRows.reduce((sum, row) => (isSameMonth(row.income_date, now) ? sum + Number(row.amount) : sum), 0);
   }, [incomeRows]);
+
+  const connectivityItems = useMemo<ConnectivityItem[]>(() => {
+    const now = new Date();
+    const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
+    const hasSnapshotToday = snapshotRows.some((row) => row.snapshot_date === new Date().toISOString().slice(0, 10));
+    const hasCurrentMonthIncome = incomeRows.some((row) => isSameMonth(row.income_date, now));
+    const hasCurrentMonthSavingsTarget = savingsTargetRows.some((row) => isSameMonth(row.month, now));
+
+    return [
+      {
+        id: "prices",
+        tone: assetsWithoutCurrentPrice.length > 0 ? "warning" : "success",
+        title: "Precios de mercado",
+        body:
+          assetsWithoutCurrentPrice.length > 0
+            ? `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado.`
+            : "Toda la cartera abierta tiene precio actual disponible.",
+        cta: "Abrir Inversiones",
+        href: "/investments"
+      },
+      {
+        id: "snapshot",
+        tone: hasSnapshotToday ? "success" : snapshotRows.length > 0 ? "warning" : "info",
+        title: "Snapshot diario",
+        body: hasSnapshotToday
+          ? "Ya hay snapshot guardado hoy para el historico de patrimonio."
+          : snapshotRows.length > 0
+            ? "Hoy aun no se ha guardado snapshot diario."
+            : "Todavia no hay snapshots guardados para construir historico real.",
+        cta: "Volver al panel",
+      },
+      {
+        id: "monthly-data",
+        tone: hasCurrentMonthIncome && hasCurrentMonthSavingsTarget ? "success" : "warning",
+        title: "Datos del mes",
+        body:
+          hasCurrentMonthIncome && hasCurrentMonthSavingsTarget
+            ? "El mes actual ya tiene ingresos y ahorro objetivo definidos."
+            : "Falta completar ingresos o ahorro objetivo del mes actual.",
+        cta: "Revisar Presupuestos",
+        href: "/budgets"
+      },
+      {
+        id: "imports",
+        tone: investmentRows.length > 0 ? "info" : "warning",
+        title: "Importacion y cartera",
+        body:
+          investmentRows.length > 0
+            ? `Tienes ${investmentRows.length} posiciones registradas. Puedes importar o refrescar la cartera cuando lo necesites.`
+            : "La cartera aun esta vacia. Puedes crear posiciones a mano o importar desde CSV.",
+        cta: "Gestionar cartera",
+        href: "/investments"
+      }
+    ];
+  }, [incomeRows, investmentRows, savingsTargetRows, snapshotRows]);
 
   const dismissReminder = useCallback((reminderId: string) => {
     setDismissedReminderIds((current) => {
@@ -1412,13 +1516,79 @@ export default function DashboardPage() {
                 title="Senales que conviene vigilar"
                 description="Las reglas se configuran desde Configuracion para mantener el dashboard centrado en la lectura."
               />
+              <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Activas</p>
+                  <div className="mt-4 space-y-3">
+                    {dashboardAlerts.map((alert) => (
+                      <article key={alert.id} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                        <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
+                          {alert.title}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Resueltas</p>
+                  <div className="mt-4 space-y-3">
+                    {dashboardAlertGroups.resolved.length > 0 ? (
+                      dashboardAlertGroups.resolved.map((alert) => (
+                        <article key={alert.id} className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{alert.title}</p>
+                          <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                        <p className="text-sm leading-6 text-white/72">No hay reglas resueltas aparte de las que ya estan activas o silenciadas.</p>
+                      </article>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Silenciadas</p>
+                  <div className="mt-4 space-y-3">
+                    {dashboardAlertGroups.silenced.length > 0 ? (
+                      dashboardAlertGroups.silenced.map((alert) => (
+                        <article key={alert.id} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-slate-300">{alert.title}</p>
+                          <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
+                        </article>
+                      ))
+                    ) : (
+                      <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                        <p className="text-sm leading-6 text-white/72">No hay alertas silenciadas. Puedes pausar reglas desde Configuracion si quieres menos ruido.</p>
+                      </article>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          );
+        case "connectivity":
+          return (
+            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
+              <SectionHeader
+                eyebrow="Conectividad e importacion"
+                title="Estado de las fuentes y del flujo operativo"
+                description="Aqui se concentran los puntos que afectan a la calidad del dato: precios, snapshots, datos del mes e importacion de cartera."
+              />
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {dashboardAlerts.map((alert) => (
-                  <article key={alert.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                    <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
-                      {alert.title}
+                {connectivityItems.map((item) => (
+                  <article key={item.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <p className={`text-xs uppercase tracking-[0.18em] ${item.tone === "warning" ? "text-amber-300" : item.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
+                      {item.title}
                     </p>
-                    <p className="mt-3 text-sm leading-6 text-white/80">{alert.body}</p>
+                    <p className="mt-3 text-sm leading-6 text-white/80">{item.body}</p>
+                    {item.href ? (
+                      <Link href={item.href} className="mt-3 inline-flex text-xs font-medium text-emerald-300 transition hover:text-emerald-200">
+                        {item.cta}
+                      </Link>
+                    ) : (
+                      <p className="mt-3 text-xs font-medium text-emerald-300">{item.cta}</p>
+                    )}
                   </article>
                 ))}
               </div>

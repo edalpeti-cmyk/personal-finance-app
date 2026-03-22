@@ -1013,6 +1013,23 @@ export default function InvestmentsPage() {
       .sort((a, b) => b.value - a.value);
   }, [enrichedInvestments, metrics.totalValueEur]);
 
+  const allocationByMarket = useMemo(() => {
+    const totals = new Map<AssetMarket, number>();
+    for (const row of enrichedInvestments) {
+      const market = row.asset_market ?? "AUTO";
+      totals.set(market, (totals.get(market) ?? 0) + row.currentValueEur);
+    }
+
+    return Array.from(totals.entries())
+      .map(([market, value]) => ({
+        market,
+        label: MARKET_LABELS[market],
+        value,
+        weightPct: metrics.totalValueEur > 0 ? (value / metrics.totalValueEur) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [enrichedInvestments, metrics.totalValueEur]);
+
   const averagePositionGainPct = useMemo(() => {
     const gains = enrichedInvestments.map((row) => row.gainPct).filter((value): value is number => value !== null);
     if (gains.length === 0) {
@@ -1042,6 +1059,38 @@ export default function InvestmentsPage() {
   const diversificationScore = allocationByType.length;
   const concentrationAlerts = enrichedInvestments.filter((row) => row.weightPct >= 25);
   const drawdownAlerts = enrichedInvestments.filter((row) => (row.gainPct ?? 0) <= -10);
+  const largestAssetType = allocationByType[0] ?? null;
+  const effectivePositionCount = useMemo(() => {
+    if (enrichedInvestments.length === 0 || metrics.totalValueEur <= 0) {
+      return null;
+    }
+
+    const concentration = enrichedInvestments.reduce((sum, row) => {
+      const weight = row.currentValueEur / metrics.totalValueEur;
+      return sum + weight * weight;
+    }, 0);
+
+    return concentration > 0 ? 1 / concentration : null;
+  }, [enrichedInvestments, metrics.totalValueEur]);
+  const nonEurExposurePct = useMemo(() => {
+    if (metrics.totalValueEur <= 0) {
+      return 0;
+    }
+
+    const nonEurValue = allocationByCurrency
+      .filter((item) => item.currency !== "EUR")
+      .reduce((sum, item) => sum + item.value, 0);
+
+    return (nonEurValue / metrics.totalValueEur) * 100;
+  }, [allocationByCurrency, metrics.totalValueEur]);
+  const realizedSharePct = useMemo(() => {
+    const denominator = Math.abs(profitEur) + Math.abs(realizedGainTotalEur);
+    if (denominator === 0) {
+      return null;
+    }
+
+    return (Math.abs(realizedGainTotalEur) / denominator) * 100;
+  }, [profitEur, realizedGainTotalEur]);
   const groupedAssetTypes = useMemo(() => {
     const groups = new Map<
       AssetType,
@@ -2594,25 +2643,80 @@ export default function InvestmentsPage() {
                   : `${stalePricePositions} posicion(es) siguen sin precio actual y pueden sesgar el valor total.`}
               </p>
             </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Diversificacion efectiva</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">
+                {effectivePositionCount === null ? "Sin datos" : formatNumber(effectivePositionCount, 1)}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Numero efectivo de posiciones tras descontar el peso real de las mas concentradas.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Exposicion no EUR</p>
+              <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${nonEurExposurePct >= 50 ? "text-amber-300" : "text-white"}`}>
+                {formatNumber(nonEurExposurePct, 1)}%
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Parte de la cartera abierta que depende de divisas distintas del euro.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Tipo dominante</p>
+              <p className="mt-3 text-xl font-semibold leading-tight text-white">{largestAssetType ? largestAssetType.label : "Sin datos"}</p>
+              <p className="mt-3 text-sm font-medium text-slate-200">
+                {largestAssetType ? `${formatNumber(largestAssetType.weightPct, 1)}% del valor total` : "Sin peso suficiente para medir"}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Te ayuda a ver de un vistazo si la cartera depende demasiado de un solo bloque.</p>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Ganancia ya cristalizada</p>
+              <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">
+                {realizedSharePct === null ? "Sin datos" : `${formatNumber(realizedSharePct, 1)}%`}
+              </p>
+              <p className="mt-3 text-sm text-slate-300">Peso que tienen las ventas realizadas dentro del resultado total combinado de la cartera.</p>
+            </article>
           </div>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-2">
-            {allocationByCurrency.length > 0 ? (
-              allocationByCurrency.map((item) => (
-                <article key={item.currency} className="rounded-3xl border border-white/8 bg-white/5 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-white">{item.currency}</p>
-                    <p className="text-sm text-slate-200">{formatCurrencyByPreference(item.value, "EUR")}</p>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#1d4ed8_0%,#38bdf8_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
-                  </div>
-                  <p className="mt-2 text-xs text-slate-400">{item.weightPct.toFixed(1)}% del valor total de cartera</p>
-                </article>
-              ))
-            ) : (
-              <div className="rounded-[24px] border border-white/8 bg-white/5 p-4 text-sm text-slate-300">Aun no hay divisas suficientes para analizar la distribucion monetaria.</div>
-            )}
+          <div className="mt-6 grid gap-5 xl:grid-cols-2">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Distribucion por divisa</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {allocationByCurrency.length > 0 ? (
+                  allocationByCurrency.map((item) => (
+                    <article key={item.currency} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium text-white">{item.currency}</p>
+                        <p className="text-sm text-slate-200">{formatCurrencyByPreference(item.value, "EUR")}</p>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-[linear-gradient(90deg,#1d4ed8_0%,#38bdf8_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs text-slate-400">{item.weightPct.toFixed(1)}% del valor total de cartera</p>
+                    </article>
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-white/8 bg-white/5 p-4 text-sm text-slate-300">Aun no hay divisas suficientes para analizar la distribucion monetaria.</div>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Distribucion por mercado</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {allocationByMarket.length > 0 ? (
+                  allocationByMarket.map((item) => (
+                    <article key={item.market} className="rounded-3xl border border-white/8 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-medium text-white">{item.label}</p>
+                        <p className="text-sm text-slate-200">{formatCurrencyByPreference(item.value, "EUR")}</p>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#34d399_100%)]" style={{ width: `${Math.min(item.weightPct, 100)}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs text-slate-400">{item.weightPct.toFixed(1)}% del valor total de cartera</p>
+                    </article>
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-white/8 bg-white/5 p-4 text-sm text-slate-300">Aun no hay mercados suficientes para analizar la diversificacion geografica.</div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
