@@ -758,7 +758,7 @@ export default function GoalsPage() {
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
             <label className="grid gap-2 text-sm text-slate-200"><span>Nombre</span><input className={inputClass()} value={goalName} onChange={(event) => setGoalName(event.target.value)} placeholder="Ej: Fondo de emergencia" /></label>
             <label className="grid gap-2 text-sm text-slate-200"><span>Tipo</span><select className={inputClass()} value={goalType} onChange={(event) => setGoalType(event.target.value as GoalType)}>{GOAL_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 xl:grid-cols-2">
               <label className="grid gap-2 text-sm text-slate-200"><span>Objetivo total</span><input className={inputClass()} type="number" min="0" step="0.01" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Importe actual</span><input className={inputClass()} type="number" min="0" step="0.01" value={currentAmount} onChange={(event) => setCurrentAmount(event.target.value)} /></label>
             </div>
@@ -779,7 +779,10 @@ export default function GoalsPage() {
                 <span>Tipo de activo conectado</span>
                 <button
                   type="button"
-                  onClick={() => setAssetTypesDropdownOpen((current) => !current)}
+                  onClick={() => {
+                    setAssetTypesDropdownOpen((current) => !current);
+                    setInvestmentsDropdownOpen(false);
+                  }}
                   className={`${inputClass()} flex items-center justify-between text-left`}
                 >
                   <span className="truncate">{selectedAssetTypesLabel}</span>
@@ -819,7 +822,10 @@ export default function GoalsPage() {
                 <span>Posiciones conectadas</span>
                 <button
                   type="button"
-                  onClick={() => setInvestmentsDropdownOpen((current) => !current)}
+                  onClick={() => {
+                    setInvestmentsDropdownOpen((current) => !current);
+                    setAssetTypesDropdownOpen(false);
+                  }}
                   className={`${inputClass()} flex items-center justify-between text-left`}
                 >
                   <span className="truncate">{selectedInvestmentsLabel}</span>
