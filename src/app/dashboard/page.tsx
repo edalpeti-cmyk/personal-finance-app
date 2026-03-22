@@ -72,14 +72,8 @@ type DashboardAlertRuleKey =
   | "missing_prices";
 type DashboardAlertRule = {
   key: DashboardAlertRuleKey;
-  label: string;
-  description: string;
   enabled: boolean;
   threshold: number | null;
-  min?: number;
-  max?: number;
-  step?: number;
-  suffix?: string;
 };
 type DashboardAlertRulesRow = {
   alert_key: DashboardAlertRuleKey;
@@ -143,57 +137,11 @@ const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
-  {
-    key: "low_savings_rate",
-    label: "Tasa de ahorro baja",
-    description: "Avisar si el ahorro mensual cae por debajo del umbral.",
-    enabled: true,
-    threshold: 10,
-    min: 0,
-    max: 100,
-    step: 1,
-    suffix: "%"
-  },
-  {
-    key: "missing_annual_savings",
-    label: "Ahorro anual sin objetivo",
-    description: "Avisar si el ano actual no acumula ahorro objetivo.",
-    enabled: true,
-    threshold: null
-  },
-  {
-    key: "early_fire_progress",
-    label: "FIRE en fase inicial",
-    description: "Avisar si el progreso FIRE sigue por debajo del umbral.",
-    enabled: true,
-    threshold: 25,
-    min: 0,
-    max: 100,
-    step: 1,
-    suffix: "%"
-  },
-  {
-    key: "high_concentration",
-    label: "Concentracion elevada",
-    description: "Avisar si una posicion supera este peso en cartera.",
-    enabled: true,
-    threshold: 35,
-    min: 0,
-    max: 100,
-    step: 1,
-    suffix: "%"
-  },
-  {
-    key: "missing_prices",
-    label: "Activos sin precio",
-    description: "Avisar si faltan precios actualizados en cartera.",
-    enabled: true,
-    threshold: 1,
-    min: 1,
-    max: 999,
-    step: 1,
-    suffix: " act."
-  }
+  { key: "low_savings_rate", enabled: true, threshold: 10 },
+  { key: "missing_annual_savings", enabled: true, threshold: null },
+  { key: "early_fire_progress", enabled: true, threshold: 25 },
+  { key: "high_concentration", enabled: true, threshold: 35 },
+  { key: "missing_prices", enabled: true, threshold: 1 }
 ];
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
@@ -497,8 +445,6 @@ export default function DashboardPage() {
   const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
   const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
-  const [alertRulesLoaded, setAlertRulesLoaded] = useState(false);
-  const [savingAlertRuleKey, setSavingAlertRuleKey] = useState<DashboardAlertRuleKey | null>(null);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -851,7 +797,6 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadAlertRules = async () => {
       if (!userId) {
-        setAlertRulesLoaded(true);
         return;
       }
 
@@ -863,8 +808,6 @@ export default function DashboardPage() {
       if (!error && data) {
         setAlertRules(mergeAlertRules(data as DashboardAlertRulesRow[]));
       }
-
-      setAlertRulesLoaded(true);
     };
 
     void loadAlertRules();
@@ -990,41 +933,6 @@ export default function DashboardPage() {
 
     void syncDashboardPreferences();
   }, [hiddenWidgets, supabase, userId, widgetOrder, widgetPrefsLoaded, widgetSizes, widgetWidths]);
-
-  const updateAlertRule = useCallback(
-    async (ruleKey: DashboardAlertRuleKey, patch: Partial<Pick<DashboardAlertRule, "enabled" | "threshold">>) => {
-      const currentRule = alertRules.find((rule) => rule.key === ruleKey);
-      if (!currentRule) {
-        return;
-      }
-
-      const nextRule = { ...currentRule, ...patch };
-      setAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? nextRule : rule)));
-
-      if (!userId) {
-        return;
-      }
-
-      setSavingAlertRuleKey(ruleKey);
-      const { error } = await supabase.from("dashboard_alert_rules").upsert(
-        {
-          user_id: userId,
-          alert_key: ruleKey,
-          enabled: nextRule.enabled,
-          threshold: nextRule.threshold
-        },
-        { onConflict: "user_id,alert_key" }
-      );
-
-      if (error) {
-        setAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? currentRule : rule)));
-        setMessage("No hemos podido guardar la configuracion de alertas. Intentalo otra vez.");
-      }
-
-      setSavingAlertRuleKey((current) => (current === ruleKey ? null : current));
-    },
-    [alertRules, supabase, userId]
-  );
 
   const dashboardReminders = useMemo<DashboardReminder[]>(() => {
     if (!metrics) {
@@ -1502,70 +1410,8 @@ export default function DashboardPage() {
               <SectionHeader
                 eyebrow="Alertas automaticas"
                 title="Senales que conviene vigilar"
-                description="Ajusta que reglas quieres ver y con que umbral para que el panel te avise solo de lo importante."
+                description="Las reglas se configuran desde Configuracion para mantener el dashboard centrado en la lectura."
               />
-              <div className="mt-6 rounded-[24px] border border-white/8 bg-white/6 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Configuracion</p>
-                    <p className="mt-2 text-sm leading-6 text-white/72">Puedes activar, pausar o afinar cada alerta sin salir del dashboard.</p>
-                  </div>
-                  {alertRulesLoaded ? (
-                    <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] text-white/70">Sincronizado</span>
-                  ) : (
-                    <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] text-white/70">Cargando...</span>
-                  )}
-                </div>
-                <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                  {alertRules.map((rule) => (
-                    <article key={rule.key} className="rounded-[20px] border border-white/8 bg-slate-950/20 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-white">{rule.label}</p>
-                          <p className="mt-1 text-xs leading-5 text-white/60">{rule.description}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void updateAlertRule(rule.key, { enabled: !rule.enabled })}
-                          className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
-                            rule.enabled
-                              ? "border border-emerald-400/20 bg-emerald-500/18 text-emerald-200"
-                              : "border border-white/10 bg-white/6 text-white/60"
-                          }`}
-                        >
-                          {rule.enabled ? "Activa" : "Pausada"}
-                        </button>
-                      </div>
-                      {rule.threshold !== null ? (
-                        <label className="mt-3 block">
-                          <span className="text-[11px] uppercase tracking-[0.16em] text-white/46">Umbral</span>
-                          <div className="mt-2 flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={rule.min}
-                              max={rule.max}
-                              step={rule.step ?? 1}
-                              value={rule.threshold}
-                              onChange={(event) => {
-                                const rawValue = Number(event.target.value);
-                                const fallback = DASHBOARD_ALERT_RULE_DEFAULTS.find((item) => item.key === rule.key)?.threshold ?? 0;
-                                void updateAlertRule(rule.key, {
-                                  threshold: Number.isFinite(rawValue) ? rawValue : fallback
-                                });
-                              }}
-                              className="w-28 rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
-                            />
-                            <span className="text-xs text-white/56">{rule.suffix ?? ""}</span>
-                            {savingAlertRuleKey === rule.key ? <span className="text-[11px] text-emerald-300">Guardando...</span> : null}
-                          </div>
-                        </label>
-                      ) : (
-                        <p className="mt-3 text-[11px] text-white/46">{savingAlertRuleKey === rule.key ? "Guardando cambios..." : "Sin umbral numerico configurable."}</p>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </div>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {dashboardAlerts.map((alert) => (
                   <article key={alert.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
