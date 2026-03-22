@@ -762,7 +762,7 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Objetivo total</span><input className={inputClass()} type="number" min="0" step="0.01" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Importe actual</span><input className={inputClass()} type="number" min="0" step="0.01" value={currentAmount} onChange={(event) => setCurrentAmount(event.target.value)} /></label>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <label className="grid gap-2 text-sm text-slate-200"><span>Aportacion mensual</span><input className={inputClass()} type="number" min="0" step="0.01" value={monthlyContribution} onChange={(event) => setMonthlyContribution(event.target.value)} /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Fecha objetivo</span><input className={inputClass()} type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></label>
             </div>
