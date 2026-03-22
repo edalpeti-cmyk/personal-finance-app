@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
@@ -137,11 +137,14 @@ export default function GoalsPage() {
   const [selectedLinkedInvestmentAllocations, setSelectedLinkedInvestmentAllocations] = useState<Record<string, string>>({});
   const [assetTypesDropdownOpen, setAssetTypesDropdownOpen] = useState(false);
   const [investmentsDropdownOpen, setInvestmentsDropdownOpen] = useState(false);
+  const [investmentSearch, setInvestmentSearch] = useState("");
   const [snapshottingProgress, setSnapshottingProgress] = useState(false);
   const [selectedTimelineGoalId, setSelectedTimelineGoalId] = useState("");
   const [selectedTimelineYear, setSelectedTimelineYear] = useState(String(new Date().getFullYear()));
   const [contributionDrafts, setContributionDrafts] = useState<Record<string, string>>({});
   const [contributingGoalId, setContributingGoalId] = useState<string | null>(null);
+  const assetTypesDropdownRef = useRef<HTMLDivElement | null>(null);
+  const investmentsDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -166,6 +169,7 @@ export default function GoalsPage() {
     setSelectedLinkedInvestmentAllocations({});
     setAssetTypesDropdownOpen(false);
     setInvestmentsDropdownOpen(false);
+    setInvestmentSearch("");
   }, []);
 
   const loadGoals = useCallback(async (uid: string) => {
@@ -406,6 +410,29 @@ export default function GoalsPage() {
     }
     return `${selectedLinkedInvestmentIds.length} posiciones seleccionadas`;
   }, [investmentLinks, selectedLinkedInvestmentIds]);
+  const filteredInvestmentLinks = useMemo(() => {
+    const query = investmentSearch.trim().toLowerCase();
+    if (!query) return investmentLinks;
+    return investmentLinks.filter((investment) => {
+      const haystack = `${investment.asset_name} ${investment.asset_symbol ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [investmentLinks, investmentSearch]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (assetTypesDropdownRef.current && target && !assetTypesDropdownRef.current.contains(target)) {
+        setAssetTypesDropdownOpen(false);
+      }
+      if (investmentsDropdownRef.current && target && !investmentsDropdownRef.current.contains(target)) {
+        setInvestmentsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -775,7 +802,7 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
             </div>
             <div className="grid gap-4">
-              <div className="relative grid gap-2 text-sm text-slate-200">
+              <div ref={assetTypesDropdownRef} className="relative grid gap-2 text-sm text-slate-200">
                 <span>Tipo de activo conectado</span>
                 <button
                   type="button"
@@ -818,7 +845,7 @@ export default function GoalsPage() {
                 ) : null}
                 <span className="text-xs text-slate-400">Abre el desplegable y marca los tipos que quieras vincular.</span>
               </div>
-              <div className="relative grid gap-2 text-sm text-slate-200">
+              <div ref={investmentsDropdownRef} className="relative grid gap-2 text-sm text-slate-200">
                 <span>Posiciones conectadas</span>
                 <button
                   type="button"
@@ -833,8 +860,16 @@ export default function GoalsPage() {
                 </button>
                 {investmentsDropdownOpen ? (
                   <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                    <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+                      <input
+                        className={inputClass()}
+                        value={investmentSearch}
+                        onChange={(event) => setInvestmentSearch(event.target.value)}
+                        placeholder="Buscar por nombre o simbolo"
+                      />
+                    </div>
                     <div className="grid gap-1">
-                      {investmentLinks.map((investment) => {
+                      {filteredInvestmentLinks.map((investment) => {
                         const selected = selectedLinkedInvestmentIds.includes(investment.id);
                         return (
                           <button
@@ -866,6 +901,9 @@ export default function GoalsPage() {
                           </button>
                         );
                       })}
+                      {filteredInvestmentLinks.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-slate-400">No hay posiciones que coincidan con la busqueda.</div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
