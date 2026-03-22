@@ -3,15 +3,17 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
+  BarElement,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
   ArcElement,
   Tooltip,
-  Legend
+  Legend,
+  TooltipItem
 } from "chart.js";
-import { Doughnut, Line } from "react-chartjs-2";
+import { Bar, Doughnut, Line } from "react-chartjs-2";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
@@ -23,7 +25,7 @@ import { formatCurrencyByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR, SUPPORTED_ASSET_CURRENCIES } from "@/lib/currency-rates";
 import { AssetMarket } from "@/lib/market-prices";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, BarElement, Tooltip, Legend);
 
 type AssetType = "stock" | "etf" | "crypto" | "fund" | "commodity" | "cash" | "real_estate" | "loan";
 
@@ -1346,6 +1348,81 @@ export default function InvestmentsPage() {
           label: (context: { label?: string; parsed: number }) =>
             `${context.label ?? ""}: ${formatCurrencyByPreference(context.parsed, "EUR")}`
         }
+      }
+    }
+  };
+
+  const typeComparisonChartData = useMemo(
+    () => ({
+      labels: allocationByType.slice(0, 6).map((item) => item.label),
+      datasets: [
+        {
+          label: "Peso en cartera",
+          data: allocationByType.slice(0, 6).map((item) => Number(item.weightPct.toFixed(2))),
+          backgroundColor: "#14b8a6",
+          borderRadius: 10,
+          maxBarThickness: 18
+        }
+      ]
+    }),
+    [allocationByType]
+  );
+
+  const marketComparisonChartData = useMemo(
+    () => ({
+      labels: allocationByMarket.slice(0, 6).map((item) => item.label),
+      datasets: [
+        {
+          label: "Peso por mercado",
+          data: allocationByMarket.slice(0, 6).map((item) => Number(item.weightPct.toFixed(2))),
+          backgroundColor: "#0ea5e9",
+          borderRadius: 10,
+          maxBarThickness: 18
+        }
+      ]
+    }),
+    [allocationByMarket]
+  );
+
+  const currencyComparisonChartData = useMemo(
+    () => ({
+      labels: allocationByCurrency.slice(0, 6).map((item) => item.currency),
+      datasets: [
+        {
+          label: "Peso por divisa",
+          data: allocationByCurrency.slice(0, 6).map((item) => Number(item.weightPct.toFixed(2))),
+          backgroundColor: "#8b5cf6",
+          borderRadius: 10,
+          maxBarThickness: 18
+        }
+      ]
+    }),
+    [allocationByCurrency]
+  );
+
+  const comparisonChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: "y" as const,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context: TooltipItem<"bar">) => `${formatNumber(Number(context.parsed.x ?? 0), 1)}%`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: "rgba(148, 163, 184, 0.12)" },
+        ticks: {
+          color: "#94a3b8",
+          callback: (value: string | number) => `${Number(value).toFixed(0)}%`
+        }
+      },
+      y: {
+        grid: { display: false },
+        ticks: { color: "#e2e8f0" }
       }
     }
   };
@@ -2717,6 +2794,30 @@ export default function InvestmentsPage() {
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 grid gap-5 xl:grid-cols-3">
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Comparativa por tipo</p>
+              <p className="mt-2 text-sm text-slate-400">Que bloques pesan mas dentro de la cartera abierta.</p>
+              <div className="mt-4 h-[220px]">
+                <Bar data={typeComparisonChartData} options={comparisonChartOptions} />
+              </div>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Comparativa por mercado</p>
+              <p className="mt-2 text-sm text-slate-400">Lectura rapida de la exposicion geografica o de bolsa.</p>
+              <div className="mt-4 h-[220px]">
+                <Bar data={marketComparisonChartData} options={comparisonChartOptions} />
+              </div>
+            </article>
+            <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Comparativa por divisa</p>
+              <p className="mt-2 text-sm text-slate-400">Cuanta parte del riesgo total depende de cada moneda.</p>
+              <div className="mt-4 h-[220px]">
+                <Bar data={currencyComparisonChartData} options={comparisonChartOptions} />
+              </div>
+            </article>
           </div>
         </section>
 

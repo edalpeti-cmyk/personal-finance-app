@@ -128,6 +128,15 @@ type ConnectivityItem = {
   cta: string;
   href?: string;
 };
+type ConnectivityIncidentRow = {
+  incident_key: string;
+  title: string;
+  details: string;
+  status: "open" | "resolved";
+  first_detected_at: string;
+  last_detected_at: string;
+  resolved_at: string | null;
+};
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
@@ -491,6 +500,7 @@ export default function DashboardPage() {
   const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
   const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
+  const [connectivityHistory, setConnectivityHistory] = useState<ConnectivityIncidentRow[]>([]);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -860,6 +870,27 @@ export default function DashboardPage() {
     void loadAlertRules();
   }, [supabase, userId]);
 
+  useEffect(() => {
+    const loadConnectivityHistory = async () => {
+      if (!userId) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("connectivity_incidents")
+        .select("incident_key, title, details, status, first_detected_at, last_detected_at, resolved_at")
+        .eq("user_id", userId)
+        .order("last_detected_at", { ascending: false })
+        .limit(8);
+
+      if (!error && data) {
+        setConnectivityHistory((data as ConnectivityIncidentRow[]) ?? []);
+      }
+    };
+
+    void loadConnectivityHistory();
+  }, [supabase, userId]);
+
   const visibleWidgetOrder = useMemo(
     () => widgetOrder.filter((widgetId) => !hiddenWidgets.includes(widgetId)),
     [hiddenWidgets, widgetOrder]
@@ -1113,6 +1144,59 @@ export default function DashboardPage() {
       }
     ];
   }, [incomeRows, investmentRows, savingsTargetRows, snapshotRows]);
+
+  useEffect(() => {
+    const syncConnectivityIncidents = async () => {
+      if (!userId || connectivityItems.length === 0) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const openItems = connectivityItems.filter((item) => item.tone !== "success");
+      const resolvedKeys = connectivityItems.filter((item) => item.tone === "success").map((item) => item.id);
+
+      if (openItems.length > 0) {
+        await supabase.from("connectivity_incidents").upsert(
+          openItems.map((item) => ({
+            user_id: userId,
+            incident_key: item.id,
+            title: item.title,
+            details: item.body,
+            status: "open",
+            last_detected_at: nowIso,
+            resolved_at: null
+          })),
+          { onConflict: "user_id,incident_key" }
+        );
+      }
+
+      if (resolvedKeys.length > 0) {
+        await Promise.all(
+          resolvedKeys.map((incidentKey) =>
+            supabase
+              .from("connectivity_incidents")
+              .update({ status: "resolved", resolved_at: nowIso })
+              .eq("user_id", userId)
+              .eq("incident_key", incidentKey)
+              .eq("status", "open")
+          )
+        );
+      }
+
+      const { data, error } = await supabase
+        .from("connectivity_incidents")
+        .select("incident_key, title, details, status, first_detected_at, last_detected_at, resolved_at")
+        .eq("user_id", userId)
+        .order("last_detected_at", { ascending: false })
+        .limit(8);
+
+      if (!error && data) {
+        setConnectivityHistory((data as ConnectivityIncidentRow[]) ?? []);
+      }
+    };
+
+    void syncConnectivityIncidents();
+  }, [connectivityItems, supabase, userId]);
 
   const dismissReminder = useCallback((reminderId: string) => {
     setDismissedReminderIds((current) => {
@@ -1591,6 +1675,38 @@ export default function DashboardPage() {
                     )}
                   </article>
                 ))}
+              </div>
+              <div className="mt-6 rounded-[24px] border border-white/8 bg-white/6 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Historial de incidencias</p>
+                    <p className="mt-2 text-sm leading-6 text-white/72">Ultimos eventos de conectividad detectados por el panel para que veas si algo falla de forma recurrente.</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {connectivityHistory.length > 0 ? (
+                    connectivityHistory.map((item) => (
+                      <article key={`${item.incident_key}-${item.last_detected_at}`} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">{item.title}</p>
+                            <p className="mt-1 text-xs leading-5 text-white/60">{item.details}</p>
+                          </div>
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.status === "open" ? "border border-amber-400/20 bg-amber-500/14 text-amber-200" : "border border-emerald-400/20 bg-emerald-500/14 text-emerald-200"}`}>
+                            {item.status === "open" ? "Abierta" : "Resuelta"}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-[11px] text-white/46">
+                          Detectada: {formatDateByPreference(item.first_detected_at.slice(0, 10), dateFormat)} · Ultimo cambio: {formatDateByPreference(item.last_detected_at.slice(0, 10), dateFormat)}
+                        </p>
+                      </article>
+                    ))
+                  ) : (
+                    <article className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
+                      <p className="text-sm leading-6 text-white/72">Todavia no hay incidencias registradas. El centro empezara a guardar historial cuando detecte alguna senal operativa.</p>
+                    </article>
+                  )}
+                </div>
               </div>
             </section>
           );
