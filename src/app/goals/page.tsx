@@ -825,6 +825,25 @@ export default function GoalsPage() {
                 {assetTypesDropdownOpen ? (
                   <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
                     <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLinkedAssetTypes(ASSET_TYPE_OPTIONS.map((option) => option.value))}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                        >
+                          Seleccionar todo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLinkedAssetTypes([]);
+                            setAssetTypeSearch("");
+                          }}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                        >
+                          Limpiar
+                        </button>
+                      </div>
                       <input
                         className={inputClass()}
                         value={assetTypeSearch}
@@ -879,6 +898,36 @@ export default function GoalsPage() {
                 {investmentsDropdownOpen ? (
                   <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
                     <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allIds = filteredInvestmentLinks.map((investment) => investment.id);
+                            setSelectedLinkedInvestmentIds(allIds);
+                            setSelectedLinkedInvestmentAllocations((current) => {
+                              const next: Record<string, string> = {};
+                              for (const id of allIds) {
+                                next[id] = current[id] ?? "100";
+                              }
+                              return next;
+                            });
+                          }}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                        >
+                          Seleccionar todo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLinkedInvestmentIds([]);
+                            setSelectedLinkedInvestmentAllocations({});
+                            setInvestmentSearch("");
+                          }}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                        >
+                          Limpiar
+                        </button>
+                      </div>
                       <input
                         className={inputClass()}
                         value={investmentSearch}
