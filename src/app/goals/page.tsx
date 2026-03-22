@@ -766,7 +766,7 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Aportacion mensual</span><input className={inputClass()} type="number" min="0" step="0.01" value={monthlyContribution} onChange={(event) => setMonthlyContribution(event.target.value)} /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Fecha objetivo</span><input className={inputClass()} type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></label>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <label className="grid gap-2 text-sm text-slate-200"><span>Prioridad</span><select className={inputClass()} value={priority} onChange={(event) => setPriority(event.target.value)}>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Estado</span><select className={inputClass()} value={status} onChange={(event) => setStatus(event.target.value as GoalStatus)}>{GOAL_STATUSES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             </div>
@@ -774,7 +774,7 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Categoria conectada</span><input className={inputClass()} value={linkedCategory} onChange={(event) => setLinkedCategory(event.target.value)} placeholder="Ej: Vivienda, Inversiones, Viajes" /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <div className="relative grid gap-2 text-sm text-slate-200">
                 <span>Tipo de activo conectado</span>
                 <button
