@@ -137,6 +137,7 @@ type ConnectivityIncidentRow = {
   last_detected_at: string;
   resolved_at: string | null;
 };
+type ConnectivityHistoryFilter = "all" | "open" | "resolved";
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
@@ -501,6 +502,7 @@ export default function DashboardPage() {
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
   const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
   const [connectivityHistory, setConnectivityHistory] = useState<ConnectivityIncidentRow[]>([]);
+  const [connectivityHistoryFilter, setConnectivityHistoryFilter] = useState<ConnectivityHistoryFilter>("all");
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -1145,6 +1147,14 @@ export default function DashboardPage() {
     ];
   }, [incomeRows, investmentRows, savingsTargetRows, snapshotRows]);
 
+  const filteredConnectivityHistory = useMemo(() => {
+    if (connectivityHistoryFilter === "all") {
+      return connectivityHistory;
+    }
+
+    return connectivityHistory.filter((item) => item.status === connectivityHistoryFilter);
+  }, [connectivityHistory, connectivityHistoryFilter]);
+
   useEffect(() => {
     const syncConnectivityIncidents = async () => {
       if (!userId || connectivityItems.length === 0) {
@@ -1682,10 +1692,30 @@ export default function DashboardPage() {
                     <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Historial de incidencias</p>
                     <p className="mt-2 text-sm leading-6 text-white/72">Ultimos eventos de conectividad detectados por el panel para que veas si algo falla de forma recurrente.</p>
                   </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: "all", label: "Todas" },
+                      { value: "open", label: "Abiertas" },
+                      { value: "resolved", label: "Resueltas" }
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setConnectivityHistoryFilter(item.value as ConnectivityHistoryFilter)}
+                        className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                          connectivityHistoryFilter === item.value
+                            ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
+                            : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="mt-4 space-y-3">
-                  {connectivityHistory.length > 0 ? (
-                    connectivityHistory.map((item) => (
+                  {filteredConnectivityHistory.length > 0 ? (
+                    filteredConnectivityHistory.map((item) => (
                       <article key={`${item.incident_key}-${item.last_detected_at}`} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -1703,7 +1733,11 @@ export default function DashboardPage() {
                     ))
                   ) : (
                     <article className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
-                      <p className="text-sm leading-6 text-white/72">Todavia no hay incidencias registradas. El centro empezara a guardar historial cuando detecte alguna senal operativa.</p>
+                      <p className="text-sm leading-6 text-white/72">
+                        {connectivityHistory.length === 0
+                          ? "Todavia no hay incidencias registradas. El centro empezara a guardar historial cuando detecte alguna senal operativa."
+                          : "No hay incidencias en el filtro actual."}
+                      </p>
                     </article>
                   )}
                 </div>

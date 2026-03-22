@@ -72,6 +72,7 @@ type SavedViewRow = {
 };
 type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
 type TypeChartMode = "value" | "profitability";
+type ComparisonMode = "weight" | "profitability";
 type TransactionMode = "buy" | "sell";
 type HistoryPoint = {
   snapshot_date: string;
@@ -580,6 +581,7 @@ export default function InvestmentsPage() {
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
+  const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const investmentNameById = useMemo(
@@ -978,17 +980,21 @@ export default function InvestmentsPage() {
   }, [enrichedInvestments, marketFilter, profitFilter, searchTerm, sortDirection, sortField, typeFilter]);
 
   const allocationByType = useMemo(() => {
-    const totals = new Map<AssetType, number>();
+    const totals = new Map<AssetType, { currentValue: number; investedValue: number }>();
     for (const row of enrichedInvestments) {
-      totals.set(row.asset_type, (totals.get(row.asset_type) ?? 0) + row.currentValueEur);
+      const current = totals.get(row.asset_type) ?? { currentValue: 0, investedValue: 0 };
+      current.currentValue += row.currentValueEur;
+      current.investedValue += row.investedEur;
+      totals.set(row.asset_type, current);
     }
 
     return Array.from(totals.entries())
-      .map(([type, value]) => ({
+      .map(([type, values]) => ({
         type,
         label: ASSET_TYPE_LABELS[type],
-        value,
-        weightPct: metrics.totalValueEur > 0 ? (value / metrics.totalValueEur) * 100 : 0
+        value: values.currentValue,
+        weightPct: metrics.totalValueEur > 0 ? (values.currentValue / metrics.totalValueEur) * 100 : 0,
+        gainPct: values.investedValue > 0 ? ((values.currentValue - values.investedValue) / values.investedValue) * 100 : null
       }))
       .sort((a, b) => b.value - a.value);
   }, [enrichedInvestments, metrics.totalValueEur]);
@@ -1000,34 +1006,42 @@ export default function InvestmentsPage() {
   }, [enrichedInvestments]);
 
   const allocationByCurrency = useMemo(() => {
-    const totals = new Map<AssetCurrency, number>();
+    const totals = new Map<AssetCurrency, { currentValue: number; investedValue: number }>();
     for (const row of enrichedInvestments) {
       const currency = row.asset_currency ?? "EUR";
-      totals.set(currency, (totals.get(currency) ?? 0) + row.currentValueEur);
+      const current = totals.get(currency) ?? { currentValue: 0, investedValue: 0 };
+      current.currentValue += row.currentValueEur;
+      current.investedValue += row.investedEur;
+      totals.set(currency, current);
     }
 
     return Array.from(totals.entries())
-      .map(([currency, value]) => ({
+      .map(([currency, values]) => ({
         currency,
-        value,
-        weightPct: metrics.totalValueEur > 0 ? (value / metrics.totalValueEur) * 100 : 0
+        value: values.currentValue,
+        weightPct: metrics.totalValueEur > 0 ? (values.currentValue / metrics.totalValueEur) * 100 : 0,
+        gainPct: values.investedValue > 0 ? ((values.currentValue - values.investedValue) / values.investedValue) * 100 : null
       }))
       .sort((a, b) => b.value - a.value);
   }, [enrichedInvestments, metrics.totalValueEur]);
 
   const allocationByMarket = useMemo(() => {
-    const totals = new Map<AssetMarket, number>();
+    const totals = new Map<AssetMarket, { currentValue: number; investedValue: number }>();
     for (const row of enrichedInvestments) {
       const market = row.asset_market ?? "AUTO";
-      totals.set(market, (totals.get(market) ?? 0) + row.currentValueEur);
+      const current = totals.get(market) ?? { currentValue: 0, investedValue: 0 };
+      current.currentValue += row.currentValueEur;
+      current.investedValue += row.investedEur;
+      totals.set(market, current);
     }
 
     return Array.from(totals.entries())
-      .map(([market, value]) => ({
+      .map(([market, values]) => ({
         market,
         label: MARKET_LABELS[market],
-        value,
-        weightPct: metrics.totalValueEur > 0 ? (value / metrics.totalValueEur) * 100 : 0
+        value: values.currentValue,
+        weightPct: metrics.totalValueEur > 0 ? (values.currentValue / metrics.totalValueEur) * 100 : 0,
+        gainPct: values.investedValue > 0 ? ((values.currentValue - values.investedValue) / values.investedValue) * 100 : null
       }))
       .sort((a, b) => b.value - a.value);
   }, [enrichedInvestments, metrics.totalValueEur]);
@@ -1357,15 +1371,17 @@ export default function InvestmentsPage() {
       labels: allocationByType.slice(0, 6).map((item) => item.label),
       datasets: [
         {
-          label: "Peso en cartera",
-          data: allocationByType.slice(0, 6).map((item) => Number(item.weightPct.toFixed(2))),
+          label: comparisonMode === "weight" ? "Peso en cartera" : "Rentabilidad %",
+          data: allocationByType
+            .slice(0, 6)
+            .map((item) => Number((comparisonMode === "weight" ? item.weightPct : item.gainPct ?? 0).toFixed(2))),
           backgroundColor: "#14b8a6",
           borderRadius: 10,
           maxBarThickness: 18
         }
       ]
     }),
-    [allocationByType]
+    [allocationByType, comparisonMode]
   );
 
   const marketComparisonChartData = useMemo(
@@ -1373,15 +1389,17 @@ export default function InvestmentsPage() {
       labels: allocationByMarket.slice(0, 6).map((item) => item.label),
       datasets: [
         {
-          label: "Peso por mercado",
-          data: allocationByMarket.slice(0, 6).map((item) => Number(item.weightPct.toFixed(2))),
+          label: comparisonMode === "weight" ? "Peso por mercado" : "Rentabilidad %",
+          data: allocationByMarket
+            .slice(0, 6)
+            .map((item) => Number((comparisonMode === "weight" ? item.weightPct : item.gainPct ?? 0).toFixed(2))),
           backgroundColor: "#0ea5e9",
           borderRadius: 10,
           maxBarThickness: 18
         }
       ]
     }),
-    [allocationByMarket]
+    [allocationByMarket, comparisonMode]
   );
 
   const currencyComparisonChartData = useMemo(
@@ -1389,15 +1407,17 @@ export default function InvestmentsPage() {
       labels: allocationByCurrency.slice(0, 6).map((item) => item.currency),
       datasets: [
         {
-          label: "Peso por divisa",
-          data: allocationByCurrency.slice(0, 6).map((item) => Number(item.weightPct.toFixed(2))),
+          label: comparisonMode === "weight" ? "Peso por divisa" : "Rentabilidad %",
+          data: allocationByCurrency
+            .slice(0, 6)
+            .map((item) => Number((comparisonMode === "weight" ? item.weightPct : item.gainPct ?? 0).toFixed(2))),
           backgroundColor: "#8b5cf6",
           borderRadius: 10,
           maxBarThickness: 18
         }
       ]
     }),
-    [allocationByCurrency]
+    [allocationByCurrency, comparisonMode]
   );
 
   const comparisonChartOptions = {
@@ -2797,23 +2817,60 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="mt-6 grid gap-5 xl:grid-cols-3">
+            <div className="xl:col-span-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs uppercase tracking-[0.18em] text-slate-400">Modo comparativa</span>
+              <button
+                type="button"
+                onClick={() => setComparisonMode("weight")}
+                className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                  comparisonMode === "weight"
+                    ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
+                    : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                }`}
+              >
+                Peso
+              </button>
+              <button
+                type="button"
+                onClick={() => setComparisonMode("profitability")}
+                className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                  comparisonMode === "profitability"
+                    ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
+                    : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                }`}
+              >
+                Rentabilidad %
+              </button>
+            </div>
             <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Comparativa por tipo</p>
-              <p className="mt-2 text-sm text-slate-400">Que bloques pesan mas dentro de la cartera abierta.</p>
+              <p className="mt-2 text-sm text-slate-400">
+                {comparisonMode === "weight"
+                  ? "Que bloques pesan mas dentro de la cartera abierta."
+                  : "Que bloques aportan mas o menos rentabilidad porcentual."}
+              </p>
               <div className="mt-4 h-[220px]">
                 <Bar data={typeComparisonChartData} options={comparisonChartOptions} />
               </div>
             </article>
             <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Comparativa por mercado</p>
-              <p className="mt-2 text-sm text-slate-400">Lectura rapida de la exposicion geografica o de bolsa.</p>
+              <p className="mt-2 text-sm text-slate-400">
+                {comparisonMode === "weight"
+                  ? "Lectura rapida de la exposicion geografica o de bolsa."
+                  : "Rentabilidad comparada entre bolsas o mercados donde inviertes."}
+              </p>
               <div className="mt-4 h-[220px]">
                 <Bar data={marketComparisonChartData} options={comparisonChartOptions} />
               </div>
             </article>
             <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Comparativa por divisa</p>
-              <p className="mt-2 text-sm text-slate-400">Cuanta parte del riesgo total depende de cada moneda.</p>
+              <p className="mt-2 text-sm text-slate-400">
+                {comparisonMode === "weight"
+                  ? "Cuanta parte del riesgo total depende de cada moneda."
+                  : "Rentabilidad agregada que te aporta cada bloque de divisa."}
+              </p>
               <div className="mt-4 h-[220px]">
                 <Bar data={currencyComparisonChartData} options={comparisonChartOptions} />
               </div>
