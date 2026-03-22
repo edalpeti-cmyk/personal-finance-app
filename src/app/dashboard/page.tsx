@@ -160,6 +160,8 @@ const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
 const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
+const DASHBOARD_CONNECTIVITY_FILTER_KEY = "dashboard-connectivity-filter";
+const DASHBOARD_CONNECTIVITY_QUERY_KEY = "dashboard-connectivity-query";
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   { key: "low_savings_rate", enabled: true, threshold: 10 },
   { key: "missing_annual_savings", enabled: true, threshold: null },
@@ -503,6 +505,7 @@ export default function DashboardPage() {
   const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
   const [connectivityHistory, setConnectivityHistory] = useState<ConnectivityIncidentRow[]>([]);
   const [connectivityHistoryFilter, setConnectivityHistoryFilter] = useState<ConnectivityHistoryFilter>("all");
+  const [connectivitySearchTerm, setConnectivitySearchTerm] = useState("");
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -739,6 +742,8 @@ export default function DashboardPage() {
       const storedHidden = window.localStorage.getItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
       const storedSizes = window.localStorage.getItem(DASHBOARD_WIDGET_SIZES_KEY);
       const storedWidths = window.localStorage.getItem(DASHBOARD_WIDGET_WIDTHS_KEY);
+      const storedConnectivityFilter = window.localStorage.getItem(DASHBOARD_CONNECTIVITY_FILTER_KEY);
+      const storedConnectivityQuery = window.localStorage.getItem(DASHBOARD_CONNECTIVITY_QUERY_KEY);
 
       if (storedOrder) {
         const parsedOrder = JSON.parse(storedOrder) as DashboardWidgetId[];
@@ -786,6 +791,14 @@ export default function DashboardPage() {
           });
           return next;
         });
+      }
+
+      if (storedConnectivityFilter === "all" || storedConnectivityFilter === "open" || storedConnectivityFilter === "resolved") {
+        setConnectivityHistoryFilter(storedConnectivityFilter);
+      }
+
+      if (storedConnectivityQuery) {
+        setConnectivitySearchTerm(storedConnectivityQuery);
       }
     } catch {
       setWidgetOrder(DASHBOARD_WIDGETS.map((widget) => widget.id));
@@ -1148,12 +1161,19 @@ export default function DashboardPage() {
   }, [incomeRows, investmentRows, savingsTargetRows, snapshotRows]);
 
   const filteredConnectivityHistory = useMemo(() => {
+    const search = connectivitySearchTerm.trim().toLowerCase();
     if (connectivityHistoryFilter === "all") {
-      return connectivityHistory;
+      return connectivityHistory.filter((item) =>
+        !search || item.title.toLowerCase().includes(search) || item.details.toLowerCase().includes(search)
+      );
     }
 
-    return connectivityHistory.filter((item) => item.status === connectivityHistoryFilter);
-  }, [connectivityHistory, connectivityHistoryFilter]);
+    return connectivityHistory.filter(
+      (item) =>
+        item.status === connectivityHistoryFilter &&
+        (!search || item.title.toLowerCase().includes(search) || item.details.toLowerCase().includes(search))
+    );
+  }, [connectivityHistory, connectivityHistoryFilter, connectivitySearchTerm]);
 
   useEffect(() => {
     const syncConnectivityIncidents = async () => {
@@ -1692,7 +1712,18 @@ export default function DashboardPage() {
                     <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Historial de incidencias</p>
                     <p className="mt-2 text-sm leading-6 text-white/72">Ultimos eventos de conectividad detectados por el panel para que veas si algo falla de forma recurrente.</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-3">
+                    <input
+                      type="search"
+                      value={connectivitySearchTerm}
+                      onChange={(event) => {
+                        setConnectivitySearchTerm(event.target.value);
+                        window.localStorage.setItem(DASHBOARD_CONNECTIVITY_QUERY_KEY, event.target.value);
+                      }}
+                      placeholder="Buscar incidencia"
+                      className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                    />
+                    <div className="flex flex-wrap gap-2">
                     {[
                       { value: "all", label: "Todas" },
                       { value: "open", label: "Abiertas" },
@@ -1701,7 +1732,10 @@ export default function DashboardPage() {
                       <button
                         key={item.value}
                         type="button"
-                        onClick={() => setConnectivityHistoryFilter(item.value as ConnectivityHistoryFilter)}
+                        onClick={() => {
+                          setConnectivityHistoryFilter(item.value as ConnectivityHistoryFilter);
+                          window.localStorage.setItem(DASHBOARD_CONNECTIVITY_FILTER_KEY, item.value);
+                        }}
                         className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
                           connectivityHistoryFilter === item.value
                             ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
@@ -1711,6 +1745,7 @@ export default function DashboardPage() {
                         {item.label}
                       </button>
                     ))}
+                  </div>
                   </div>
                 </div>
                 <div className="mt-4 space-y-3">

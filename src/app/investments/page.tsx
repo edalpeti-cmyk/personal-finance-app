@@ -167,6 +167,7 @@ const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
 ];
 const INVESTMENT_VIEWS_KEY = "investment-saved-views";
 const INVESTMENT_VIEW_SCOPE = "investments";
+const INVESTMENT_COMPARISON_MODE_KEY = "investment-comparison-mode";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -639,6 +640,17 @@ export default function InvestmentsPage() {
   useEffect(() => {
     window.localStorage.setItem(INVESTMENT_VIEWS_KEY, JSON.stringify(savedViews));
   }, [savedViews]);
+
+  useEffect(() => {
+    const storedMode = window.localStorage.getItem(INVESTMENT_COMPARISON_MODE_KEY);
+    if (storedMode === "weight" || storedMode === "profitability") {
+      setComparisonMode(storedMode);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(INVESTMENT_COMPARISON_MODE_KEY, comparisonMode);
+  }, [comparisonMode]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
