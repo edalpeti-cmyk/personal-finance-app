@@ -758,7 +758,7 @@ export default function GoalsPage() {
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
             <label className="grid gap-2 text-sm text-slate-200"><span>Nombre</span><input className={inputClass()} value={goalName} onChange={(event) => setGoalName(event.target.value)} placeholder="Ej: Fondo de emergencia" /></label>
             <label className="grid gap-2 text-sm text-slate-200"><span>Tipo</span><select className={inputClass()} value={goalType} onChange={(event) => setGoalType(event.target.value as GoalType)}>{GOAL_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4">
               <label className="grid gap-2 text-sm text-slate-200"><span>Objetivo total</span><input className={inputClass()} type="number" min="0" step="0.01" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Importe actual</span><input className={inputClass()} type="number" min="0" step="0.01" value={currentAmount} onChange={(event) => setCurrentAmount(event.target.value)} /></label>
             </div>
@@ -789,7 +789,7 @@ export default function GoalsPage() {
                   <span className="text-slate-400">{assetTypesDropdownOpen ? "▲" : "▼"}</span>
                 </button>
                 {assetTypesDropdownOpen ? (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                  <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
                     <div className="grid gap-1">
                       {ASSET_TYPE_OPTIONS.map((option) => {
                         const selected = selectedLinkedAssetTypes.includes(option.value);
@@ -832,7 +832,7 @@ export default function GoalsPage() {
                   <span className="text-slate-400">{investmentsDropdownOpen ? "▲" : "▼"}</span>
                 </button>
                 {investmentsDropdownOpen ? (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                  <div className="mt-2 max-h-72 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
                     <div className="grid gap-1">
                       {investmentLinks.map((investment) => {
                         const selected = selectedLinkedInvestmentIds.includes(investment.id);
