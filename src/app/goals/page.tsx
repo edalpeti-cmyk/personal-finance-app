@@ -137,6 +137,7 @@ export default function GoalsPage() {
   const [selectedLinkedInvestmentAllocations, setSelectedLinkedInvestmentAllocations] = useState<Record<string, string>>({});
   const [assetTypesDropdownOpen, setAssetTypesDropdownOpen] = useState(false);
   const [investmentsDropdownOpen, setInvestmentsDropdownOpen] = useState(false);
+  const [assetTypeSearch, setAssetTypeSearch] = useState("");
   const [investmentSearch, setInvestmentSearch] = useState("");
   const [snapshottingProgress, setSnapshottingProgress] = useState(false);
   const [selectedTimelineGoalId, setSelectedTimelineGoalId] = useState("");
@@ -169,6 +170,7 @@ export default function GoalsPage() {
     setSelectedLinkedInvestmentAllocations({});
     setAssetTypesDropdownOpen(false);
     setInvestmentsDropdownOpen(false);
+    setAssetTypeSearch("");
     setInvestmentSearch("");
   }, []);
 
@@ -410,6 +412,11 @@ export default function GoalsPage() {
     }
     return `${selectedLinkedInvestmentIds.length} posiciones seleccionadas`;
   }, [investmentLinks, selectedLinkedInvestmentIds]);
+  const filteredAssetTypeOptions = useMemo(() => {
+    const query = assetTypeSearch.trim().toLowerCase();
+    if (!query) return ASSET_TYPE_OPTIONS;
+    return ASSET_TYPE_OPTIONS.filter((option) => option.label.toLowerCase().includes(query));
+  }, [assetTypeSearch]);
   const filteredInvestmentLinks = useMemo(() => {
     const query = investmentSearch.trim().toLowerCase();
     if (!query) return investmentLinks;
@@ -817,8 +824,16 @@ export default function GoalsPage() {
                 </button>
                 {assetTypesDropdownOpen ? (
                   <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                    <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+                      <input
+                        className={inputClass()}
+                        value={assetTypeSearch}
+                        onChange={(event) => setAssetTypeSearch(event.target.value)}
+                        placeholder="Buscar tipo de activo"
+                      />
+                    </div>
                     <div className="grid gap-1">
-                      {ASSET_TYPE_OPTIONS.map((option) => {
+                      {filteredAssetTypeOptions.map((option) => {
                         const selected = selectedLinkedAssetTypes.includes(option.value);
                         return (
                           <button
@@ -840,6 +855,9 @@ export default function GoalsPage() {
                           </button>
                         );
                       })}
+                      {filteredAssetTypeOptions.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-slate-400">No hay tipos que coincidan con la busqueda.</div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
