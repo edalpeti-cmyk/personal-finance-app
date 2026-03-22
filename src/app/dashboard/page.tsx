@@ -59,9 +59,32 @@ type DashboardMetrics = {
   investmentsValue: number;
 };
 type DashboardAlert = {
+  id: DashboardAlertRuleKey | "stable_panel";
   tone: "warning" | "info" | "success";
   title: string;
   body: string;
+};
+type DashboardAlertRuleKey =
+  | "low_savings_rate"
+  | "missing_annual_savings"
+  | "early_fire_progress"
+  | "high_concentration"
+  | "missing_prices";
+type DashboardAlertRule = {
+  key: DashboardAlertRuleKey;
+  label: string;
+  description: string;
+  enabled: boolean;
+  threshold: number | null;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+};
+type DashboardAlertRulesRow = {
+  alert_key: DashboardAlertRuleKey;
+  enabled: boolean;
+  threshold: number | null;
 };
 type DashboardReminder = {
   id: string;
@@ -119,7 +142,73 @@ const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
 const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
+const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
+  {
+    key: "low_savings_rate",
+    label: "Tasa de ahorro baja",
+    description: "Avisar si el ahorro mensual cae por debajo del umbral.",
+    enabled: true,
+    threshold: 10,
+    min: 0,
+    max: 100,
+    step: 1,
+    suffix: "%"
+  },
+  {
+    key: "missing_annual_savings",
+    label: "Ahorro anual sin objetivo",
+    description: "Avisar si el ano actual no acumula ahorro objetivo.",
+    enabled: true,
+    threshold: null
+  },
+  {
+    key: "early_fire_progress",
+    label: "FIRE en fase inicial",
+    description: "Avisar si el progreso FIRE sigue por debajo del umbral.",
+    enabled: true,
+    threshold: 25,
+    min: 0,
+    max: 100,
+    step: 1,
+    suffix: "%"
+  },
+  {
+    key: "high_concentration",
+    label: "Concentracion elevada",
+    description: "Avisar si una posicion supera este peso en cartera.",
+    enabled: true,
+    threshold: 35,
+    min: 0,
+    max: 100,
+    step: 1,
+    suffix: "%"
+  },
+  {
+    key: "missing_prices",
+    label: "Activos sin precio",
+    description: "Avisar si faltan precios actualizados en cartera.",
+    enabled: true,
+    threshold: 1,
+    min: 1,
+    max: 999,
+    step: 1,
+    suffix: " act."
+  }
+];
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
+
+function mergeAlertRules(rows: DashboardAlertRulesRow[] | null | undefined) {
+  return DASHBOARD_ALERT_RULE_DEFAULTS.map((rule) => {
+    const remoteRule = rows?.find((row) => row.alert_key === rule.key);
+    return remoteRule
+      ? {
+          ...rule,
+          enabled: remoteRule.enabled,
+          threshold: remoteRule.threshold
+        }
+      : rule;
+  });
+}
 
 function isSameMonth(dateString: string, now: Date) {
   const date = new Date(`${dateString}T00:00:00`);
@@ -407,6 +496,9 @@ export default function DashboardPage() {
   });
   const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
+  const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
+  const [alertRulesLoaded, setAlertRulesLoaded] = useState(false);
+  const [savingAlertRuleKey, setSavingAlertRuleKey] = useState<DashboardAlertRuleKey | null>(null);
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -537,6 +629,8 @@ export default function DashboardPage() {
     }
 
     const alerts: DashboardAlert[] = [];
+    const alertRuleMap = Object.fromEntries(alertRules.map((rule) => [rule.key, rule])) as Record<DashboardAlertRuleKey, DashboardAlertRule>;
+    const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
     const topHolding = investmentRows
       .map((row) => {
         const qty = Number(row.quantity) || 0;
@@ -547,40 +641,68 @@ export default function DashboardPage() {
       })
       .sort((a, b) => b.valueEur - a.valueEur)[0];
 
-    if (metrics.savingsRate !== null && metrics.savingsRate < 10) {
+    if (
+      alertRuleMap.low_savings_rate.enabled &&
+      metrics.savingsRate !== null &&
+      metrics.savingsRate < Number(alertRuleMap.low_savings_rate.threshold ?? 10)
+    ) {
       alerts.push({
+        id: "low_savings_rate",
         tone: "warning",
         title: "Tasa de ahorro baja",
         body: `Tu tasa de ahorro del mes esta en ${metrics.savingsRate.toFixed(1)}%. Revisar gasto variable puede darte margen rapido.`
       });
     }
 
-    if (metrics.annualSavings === 0) {
+    if (alertRuleMap.missing_annual_savings.enabled && metrics.annualSavings === 0) {
       alerts.push({
+        id: "missing_annual_savings",
         tone: "info",
         title: "Ahorro anual sin objetivo",
         body: "Aun no has acumulado ahorro objetivo en el ano actual. Definir una cifra mensual hara mas util el seguimiento."
       });
     }
 
-    if (metrics.fireProgress < 25) {
+    if (
+      alertRuleMap.early_fire_progress.enabled &&
+      metrics.fireProgress < Number(alertRuleMap.early_fire_progress.threshold ?? 25)
+    ) {
       alerts.push({
+        id: "early_fire_progress",
         tone: "info",
         title: "FIRE aun en fase inicial",
         body: "Tu progreso FIRE sigue en una fase temprana. La consistencia mensual importa mas que buscar rentabilidades puntuales."
       });
     }
 
-    if (topHolding && topHolding.weight >= 35) {
+    if (
+      alertRuleMap.high_concentration.enabled &&
+      topHolding &&
+      topHolding.weight >= Number(alertRuleMap.high_concentration.threshold ?? 35)
+    ) {
       alerts.push({
+        id: "high_concentration",
         tone: "warning",
         title: "Concentracion elevada",
         body: `${topHolding.name} pesa ${topHolding.weight.toFixed(1)}% de tu cartera. Puede valer la pena diversificar gradualmente.`
       });
     }
 
+    if (
+      alertRuleMap.missing_prices.enabled &&
+      assetsWithoutCurrentPrice.length >= Number(alertRuleMap.missing_prices.threshold ?? 1)
+    ) {
+      alerts.push({
+        id: "missing_prices",
+        tone: "warning",
+        title: "Precios pendientes de actualizar",
+        body: `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado. La valoracion de la cartera pierde precision mientras sigan pendientes.`
+      });
+    }
+
     if (alerts.length === 0) {
       alerts.push({
+        id: "stable_panel",
         tone: "success",
         title: "Panel estable",
         body: "No hay alertas criticas ahora mismo. Tus metricas principales no muestran desequilibrios relevantes."
@@ -588,7 +710,7 @@ export default function DashboardPage() {
     }
 
     return alerts.slice(0, 4);
-  }, [investmentRows, metrics, ratesToEur]);
+  }, [alertRules, investmentRows, metrics, ratesToEur]);
 
   useEffect(() => {
     try {
@@ -726,6 +848,28 @@ export default function DashboardPage() {
     void loadRemoteDashboardPreferences();
   }, [supabase, userId]);
 
+  useEffect(() => {
+    const loadAlertRules = async () => {
+      if (!userId) {
+        setAlertRulesLoaded(true);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("dashboard_alert_rules")
+        .select("alert_key, enabled, threshold")
+        .eq("user_id", userId);
+
+      if (!error && data) {
+        setAlertRules(mergeAlertRules(data as DashboardAlertRulesRow[]));
+      }
+
+      setAlertRulesLoaded(true);
+    };
+
+    void loadAlertRules();
+  }, [supabase, userId]);
+
   const visibleWidgetOrder = useMemo(
     () => widgetOrder.filter((widgetId) => !hiddenWidgets.includes(widgetId)),
     [hiddenWidgets, widgetOrder]
@@ -846,6 +990,41 @@ export default function DashboardPage() {
 
     void syncDashboardPreferences();
   }, [hiddenWidgets, supabase, userId, widgetOrder, widgetPrefsLoaded, widgetSizes, widgetWidths]);
+
+  const updateAlertRule = useCallback(
+    async (ruleKey: DashboardAlertRuleKey, patch: Partial<Pick<DashboardAlertRule, "enabled" | "threshold">>) => {
+      const currentRule = alertRules.find((rule) => rule.key === ruleKey);
+      if (!currentRule) {
+        return;
+      }
+
+      const nextRule = { ...currentRule, ...patch };
+      setAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? nextRule : rule)));
+
+      if (!userId) {
+        return;
+      }
+
+      setSavingAlertRuleKey(ruleKey);
+      const { error } = await supabase.from("dashboard_alert_rules").upsert(
+        {
+          user_id: userId,
+          alert_key: ruleKey,
+          enabled: nextRule.enabled,
+          threshold: nextRule.threshold
+        },
+        { onConflict: "user_id,alert_key" }
+      );
+
+      if (error) {
+        setAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? currentRule : rule)));
+        setMessage("No hemos podido guardar la configuracion de alertas. Intentalo otra vez.");
+      }
+
+      setSavingAlertRuleKey((current) => (current === ruleKey ? null : current));
+    },
+    [alertRules, supabase, userId]
+  );
 
   const dashboardReminders = useMemo<DashboardReminder[]>(() => {
     if (!metrics) {
@@ -1320,10 +1499,76 @@ export default function DashboardPage() {
         case "alerts":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <SectionHeader eyebrow="Alertas automaticas" title="Senales que conviene vigilar" />
+              <SectionHeader
+                eyebrow="Alertas automaticas"
+                title="Senales que conviene vigilar"
+                description="Ajusta que reglas quieres ver y con que umbral para que el panel te avise solo de lo importante."
+              />
+              <div className="mt-6 rounded-[24px] border border-white/8 bg-white/6 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Configuracion</p>
+                    <p className="mt-2 text-sm leading-6 text-white/72">Puedes activar, pausar o afinar cada alerta sin salir del dashboard.</p>
+                  </div>
+                  {alertRulesLoaded ? (
+                    <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] text-white/70">Sincronizado</span>
+                  ) : (
+                    <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[11px] text-white/70">Cargando...</span>
+                  )}
+                </div>
+                <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                  {alertRules.map((rule) => (
+                    <article key={rule.key} className="rounded-[20px] border border-white/8 bg-slate-950/20 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">{rule.label}</p>
+                          <p className="mt-1 text-xs leading-5 text-white/60">{rule.description}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void updateAlertRule(rule.key, { enabled: !rule.enabled })}
+                          className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                            rule.enabled
+                              ? "border border-emerald-400/20 bg-emerald-500/18 text-emerald-200"
+                              : "border border-white/10 bg-white/6 text-white/60"
+                          }`}
+                        >
+                          {rule.enabled ? "Activa" : "Pausada"}
+                        </button>
+                      </div>
+                      {rule.threshold !== null ? (
+                        <label className="mt-3 block">
+                          <span className="text-[11px] uppercase tracking-[0.16em] text-white/46">Umbral</span>
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={rule.min}
+                              max={rule.max}
+                              step={rule.step ?? 1}
+                              value={rule.threshold}
+                              onChange={(event) => {
+                                const rawValue = Number(event.target.value);
+                                const fallback = DASHBOARD_ALERT_RULE_DEFAULTS.find((item) => item.key === rule.key)?.threshold ?? 0;
+                                void updateAlertRule(rule.key, {
+                                  threshold: Number.isFinite(rawValue) ? rawValue : fallback
+                                });
+                              }}
+                              className="w-28 rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                            />
+                            <span className="text-xs text-white/56">{rule.suffix ?? ""}</span>
+                            {savingAlertRuleKey === rule.key ? <span className="text-[11px] text-emerald-300">Guardando...</span> : null}
+                          </div>
+                        </label>
+                      ) : (
+                        <p className="mt-3 text-[11px] text-white/46">{savingAlertRuleKey === rule.key ? "Guardando cambios..." : "Sin umbral numerico configurable."}</p>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </div>
               <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {dashboardAlerts.map((alert) => (
-                  <article key={alert.title} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                  <article key={alert.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
                     <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
                       {alert.title}
                     </p>
