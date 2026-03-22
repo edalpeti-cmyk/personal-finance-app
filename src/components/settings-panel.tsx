@@ -28,6 +28,28 @@ type DashboardAlertRulesRow = {
   enabled: boolean;
   threshold: number | null;
 };
+type ConnectivityItem = {
+  id: string;
+  tone: "warning" | "info" | "success";
+  title: string;
+  body: string;
+  cta: string;
+  href?: string;
+};
+type ConnectivityIncidentRow = {
+  incident_key: string;
+  title: string;
+  details: string;
+  status: "open" | "resolved";
+  first_detected_at: string;
+  last_detected_at: string;
+  resolved_at: string | null;
+};
+type ConnectivityHistoryFilter = "all" | "open" | "resolved";
+type IncomeRow = { income_date: string; amount: number };
+type SavingsTargetRow = { month: string; savings_target: number };
+type SnapshotRow = { snapshot_date: string };
+type InvestmentStatusRow = { current_price: number | null };
 
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   {
@@ -94,6 +116,11 @@ function mergeAlertRules(rows: DashboardAlertRulesRow[] | null | undefined) {
         }
       : rule;
   });
+}
+
+function isSameMonth(dateString: string, now: Date) {
+  const date = new Date(`${dateString}T00:00:00`);
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 }
 
 function ThemeOption({
@@ -168,6 +195,11 @@ export default function SettingsPanel() {
   const [alertRulesLoaded, setAlertRulesLoaded] = useState(false);
   const [savingAlertRuleKey, setSavingAlertRuleKey] = useState<DashboardAlertRuleKey | null>(null);
   const [alertSettingsMessage, setAlertSettingsMessage] = useState<string | null>(null);
+  const [connectivityItems, setConnectivityItems] = useState<ConnectivityItem[]>([]);
+  const [connectivityHistory, setConnectivityHistory] = useState<ConnectivityIncidentRow[]>([]);
+  const [connectivityHistoryFilter, setConnectivityHistoryFilter] = useState<ConnectivityHistoryFilter>("all");
+  const [connectivitySearchTerm, setConnectivitySearchTerm] = useState("");
+  const [connectivityLoaded, setConnectivityLoaded] = useState(false);
 
   const previewDate = dateFormat === "us" ? "03/13/2026" : "13/03/2026";
   const previewMoney =
@@ -204,6 +236,110 @@ export default function SettingsPanel() {
 
     void loadAlertRules();
   }, [supabase]);
+
+  useEffect(() => {
+    const loadConnectivityData = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setConnectivityLoaded(true);
+        return;
+      }
+
+      const [incomeResult, savingsResult, snapshotsResult, investmentsResult, incidentsResult] = await Promise.all([
+        supabase.from("income").select("income_date, amount").eq("user_id", user.id),
+        supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", user.id),
+        supabase.from("net_worth_snapshots").select("snapshot_date").eq("user_id", user.id),
+        supabase.from("investments").select("current_price").eq("user_id", user.id),
+        supabase
+          .from("connectivity_incidents")
+          .select("incident_key, title, details, status, first_detected_at, last_detected_at, resolved_at")
+          .eq("user_id", user.id)
+          .order("last_detected_at", { ascending: false })
+          .limit(8)
+      ]);
+
+      const now = new Date();
+      const incomeRows = ((incomeResult.data as IncomeRow[] | null) ?? []);
+      const savingsRows = ((savingsResult.data as SavingsTargetRow[] | null) ?? []);
+      const snapshotRows = ((snapshotsResult.data as SnapshotRow[] | null) ?? []);
+      const investmentRows = ((investmentsResult.data as InvestmentStatusRow[] | null) ?? []);
+      const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
+      const hasSnapshotToday = snapshotRows.some((row) => row.snapshot_date === new Date().toISOString().slice(0, 10));
+      const hasCurrentMonthIncome = incomeRows.some((row) => isSameMonth(row.income_date, now));
+      const hasCurrentMonthSavingsTarget = savingsRows.some((row) => isSameMonth(row.month, now));
+
+      setConnectivityItems([
+        {
+          id: "prices",
+          tone: assetsWithoutCurrentPrice.length > 0 ? "warning" : "success",
+          title: "Precios de mercado",
+          body:
+            assetsWithoutCurrentPrice.length > 0
+              ? `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado.`
+              : "Toda la cartera abierta tiene precio actual disponible.",
+          cta: "Abrir Inversiones",
+          href: "/investments"
+        },
+        {
+          id: "snapshot",
+          tone: hasSnapshotToday ? "success" : snapshotRows.length > 0 ? "warning" : "info",
+          title: "Snapshot diario",
+          body: hasSnapshotToday
+            ? "Ya hay snapshot guardado hoy para el historico de patrimonio."
+            : snapshotRows.length > 0
+              ? "Hoy aun no se ha guardado snapshot diario."
+              : "Todavia no hay snapshots guardados para construir historico real.",
+          cta: "Volver al dashboard",
+          href: "/dashboard"
+        },
+        {
+          id: "monthly-data",
+          tone: hasCurrentMonthIncome && hasCurrentMonthSavingsTarget ? "success" : "warning",
+          title: "Datos del mes",
+          body:
+            hasCurrentMonthIncome && hasCurrentMonthSavingsTarget
+              ? "El mes actual ya tiene ingresos y ahorro objetivo definidos."
+              : "Falta completar ingresos o ahorro objetivo del mes actual.",
+          cta: "Revisar Presupuestos",
+          href: "/budgets"
+        },
+        {
+          id: "imports",
+          tone: investmentRows.length > 0 ? "info" : "warning",
+          title: "Importacion y cartera",
+          body:
+            investmentRows.length > 0
+              ? `Tienes ${investmentRows.length} posiciones registradas. Puedes importar o refrescar la cartera cuando lo necesites.`
+              : "La cartera aun esta vacia. Puedes crear posiciones a mano o importar desde CSV.",
+          cta: "Gestionar cartera",
+          href: "/investments"
+        }
+      ]);
+
+      if (!incidentsResult.error && incidentsResult.data) {
+        setConnectivityHistory((incidentsResult.data as ConnectivityIncidentRow[]) ?? []);
+      }
+
+      setConnectivityLoaded(true);
+    };
+
+    if (settingsOpen) {
+      void loadConnectivityData();
+    }
+  }, [settingsOpen, supabase]);
+
+  const filteredConnectivityHistory = useMemo(() => {
+    const search = connectivitySearchTerm.trim().toLowerCase();
+
+    return connectivityHistory.filter((item) => {
+      const matchesFilter = connectivityHistoryFilter === "all" || item.status === connectivityHistoryFilter;
+      const matchesSearch = !search || item.title.toLowerCase().includes(search) || item.details.toLowerCase().includes(search);
+      return matchesFilter && matchesSearch;
+    });
+  }, [connectivityHistory, connectivityHistoryFilter, connectivitySearchTerm]);
 
   const updateAlertRule = async (
     ruleKey: DashboardAlertRuleKey,
@@ -411,6 +547,105 @@ export default function SettingsPanel() {
               ))}
             </div>
             {alertSettingsMessage ? <p className="mt-3 text-xs text-amber-300">{alertSettingsMessage}</p> : null}
+          </div>
+
+          <div className="mt-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Conectividad e importacion</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Aqui centralizamos el estado operativo de precios, snapshots, datos del mes e incidencias recientes.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
+                {connectivityLoaded ? "Sincronizado" : "Cargando..."}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {connectivityItems.map((item) => (
+                <article key={item.id} className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+                  <p className={`text-xs uppercase tracking-[0.18em] ${item.tone === "warning" ? "text-amber-300" : item.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
+                    {item.title}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.body}</p>
+                  {item.href ? (
+                    <a href={item.href} className="mt-3 inline-flex text-xs font-medium text-emerald-300 transition hover:text-emerald-200">
+                      {item.cta}
+                    </a>
+                  ) : (
+                    <p className="mt-3 text-xs font-medium text-emerald-300">{item.cta}</p>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Historial de incidencias</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">Busca rapido incidencias abiertas o resueltas para ver si algo se repite.</p>
+                  </div>
+                </div>
+                <input
+                  type="search"
+                  value={connectivitySearchTerm}
+                  onChange={(event) => setConnectivitySearchTerm(event.target.value)}
+                  placeholder="Buscar incidencia"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "all", label: "Todas" },
+                    { value: "open", label: "Abiertas" },
+                    { value: "resolved", label: "Resueltas" }
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setConnectivityHistoryFilter(item.value as ConnectivityHistoryFilter)}
+                      className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                        connectivityHistoryFilter === item.value
+                          ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
+                          : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {filteredConnectivityHistory.length > 0 ? (
+                  filteredConnectivityHistory.map((item) => (
+                    <article key={`${item.incident_key}-${item.last_detected_at}`} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">{item.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-white/60">{item.details}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.status === "open" ? "border border-amber-400/20 bg-amber-500/14 text-amber-200" : "border border-emerald-400/20 bg-emerald-500/14 text-emerald-200"}`}>
+                          {item.status === "open" ? "Abierta" : "Resuelta"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-[11px] text-white/46">
+                        Detectada: {new Date(item.first_detected_at).toLocaleDateString(dateFormat === "us" ? "en-US" : "es-ES")} · Ultimo cambio: {new Date(item.last_detected_at).toLocaleDateString(dateFormat === "us" ? "en-US" : "es-ES")}
+                      </p>
+                    </article>
+                  ))
+                ) : (
+                  <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                    <p className="text-sm leading-6 text-slate-300">
+                      {connectivityHistory.length === 0
+                        ? "Todavia no hay incidencias registradas. Este historial se ira llenando cuando aparezcan señales operativas."
+                        : "No hay incidencias para el filtro actual."}
+                    </p>
+                  </article>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="mt-8 rounded-[24px] border border-white/8 bg-white/5 p-4">

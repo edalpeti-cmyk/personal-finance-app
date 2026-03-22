@@ -92,7 +92,7 @@ type DashboardReminder = {
   cta: string;
   href?: string;
 };
-type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "connectivity" | "monthlyTrend" | "fireOverview" | "aiInsights";
+type DashboardWidgetId = "netWorthChart" | "reminders" | "alerts" | "monthlyTrend" | "fireOverview" | "aiInsights";
 type DashboardWidgetSize = "compact" | "expanded";
 type DashboardWidgetWidth = "normal" | "full";
 type DashboardPreferencesRow = {
@@ -120,24 +120,6 @@ type AiInsightDebug = {
   fireTarget: number;
   fireProgress: number;
 };
-type ConnectivityItem = {
-  id: string;
-  tone: "warning" | "info" | "success";
-  title: string;
-  body: string;
-  cta: string;
-  href?: string;
-};
-type ConnectivityIncidentRow = {
-  incident_key: string;
-  title: string;
-  details: string;
-  status: "open" | "resolved";
-  first_detected_at: string;
-  last_detected_at: string;
-  resolved_at: string | null;
-};
-type ConnectivityHistoryFilter = "all" | "open" | "resolved";
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
@@ -151,7 +133,6 @@ const DASHBOARD_WIDGETS: Array<{ id: DashboardWidgetId; label: string; descripti
   { id: "netWorthChart", label: "Patrimonio", description: "Grafico de evolucion, snapshots y exportes." },
   { id: "reminders", label: "Recordatorios", description: "Pendientes operativos del mes y de la cartera." },
   { id: "alerts", label: "Alertas", description: "Riesgos y senales automaticas del panel." },
-  { id: "connectivity", label: "Conectividad", description: "Estado de precios, snapshots e importacion." },
   { id: "monthlyTrend", label: "Historico mensual", description: "Ingresos frente a ahorro objetivo." },
   { id: "fireOverview", label: "FIRE", description: "Progreso y horizonte hacia independencia financiera." },
   { id: "aiInsights", label: "IA financiera", description: "Lectura automatica de habitos y contexto." }
@@ -160,8 +141,6 @@ const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
 const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
-const DASHBOARD_CONNECTIVITY_FILTER_KEY = "dashboard-connectivity-filter";
-const DASHBOARD_CONNECTIVITY_QUERY_KEY = "dashboard-connectivity-query";
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   { key: "low_savings_rate", enabled: true, threshold: 10 },
   { key: "missing_annual_savings", enabled: true, threshold: null },
@@ -486,7 +465,6 @@ export default function DashboardPage() {
     netWorthChart: "expanded",
     reminders: "compact",
     alerts: "compact",
-    connectivity: "compact",
     monthlyTrend: "expanded",
     fireOverview: "compact",
     aiInsights: "expanded"
@@ -495,7 +473,6 @@ export default function DashboardPage() {
     netWorthChart: "full",
     reminders: "full",
     alerts: "full",
-    connectivity: "full",
     monthlyTrend: "full",
     fireOverview: "normal",
     aiInsights: "full"
@@ -503,9 +480,6 @@ export default function DashboardPage() {
   const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
   const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
-  const [connectivityHistory, setConnectivityHistory] = useState<ConnectivityIncidentRow[]>([]);
-  const [connectivityHistoryFilter, setConnectivityHistoryFilter] = useState<ConnectivityHistoryFilter>("all");
-  const [connectivitySearchTerm, setConnectivitySearchTerm] = useState("");
 
   const hasFinancialData = Boolean(
     metrics && (metrics.totalNetWorth > 0 || metrics.annualExpenses > 0 || metrics.annualSavings !== 0)
@@ -742,8 +716,6 @@ export default function DashboardPage() {
       const storedHidden = window.localStorage.getItem(DASHBOARD_HIDDEN_WIDGETS_KEY);
       const storedSizes = window.localStorage.getItem(DASHBOARD_WIDGET_SIZES_KEY);
       const storedWidths = window.localStorage.getItem(DASHBOARD_WIDGET_WIDTHS_KEY);
-      const storedConnectivityFilter = window.localStorage.getItem(DASHBOARD_CONNECTIVITY_FILTER_KEY);
-      const storedConnectivityQuery = window.localStorage.getItem(DASHBOARD_CONNECTIVITY_QUERY_KEY);
 
       if (storedOrder) {
         const parsedOrder = JSON.parse(storedOrder) as DashboardWidgetId[];
@@ -793,13 +765,6 @@ export default function DashboardPage() {
         });
       }
 
-      if (storedConnectivityFilter === "all" || storedConnectivityFilter === "open" || storedConnectivityFilter === "resolved") {
-        setConnectivityHistoryFilter(storedConnectivityFilter);
-      }
-
-      if (storedConnectivityQuery) {
-        setConnectivitySearchTerm(storedConnectivityQuery);
-      }
     } catch {
       setWidgetOrder(DASHBOARD_WIDGETS.map((widget) => widget.id));
       setHiddenWidgets([]);
@@ -885,27 +850,6 @@ export default function DashboardPage() {
     void loadAlertRules();
   }, [supabase, userId]);
 
-  useEffect(() => {
-    const loadConnectivityHistory = async () => {
-      if (!userId) {
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("connectivity_incidents")
-        .select("incident_key, title, details, status, first_detected_at, last_detected_at, resolved_at")
-        .eq("user_id", userId)
-        .order("last_detected_at", { ascending: false })
-        .limit(8);
-
-      if (!error && data) {
-        setConnectivityHistory((data as ConnectivityIncidentRow[]) ?? []);
-      }
-    };
-
-    void loadConnectivityHistory();
-  }, [supabase, userId]);
-
   const visibleWidgetOrder = useMemo(
     () => widgetOrder.filter((widgetId) => !hiddenWidgets.includes(widgetId)),
     [hiddenWidgets, widgetOrder]
@@ -946,7 +890,6 @@ export default function DashboardPage() {
       netWorthChart: "expanded",
       reminders: "compact",
       alerts: "compact",
-      connectivity: "compact",
       monthlyTrend: "expanded",
       fireOverview: "compact",
       aiInsights: "expanded"
@@ -955,7 +898,6 @@ export default function DashboardPage() {
       netWorthChart: "full",
       reminders: "full",
       alerts: "full",
-      connectivity: "full",
       monthlyTrend: "full",
       fireOverview: "normal",
       aiInsights: "full"
@@ -1105,128 +1047,6 @@ export default function DashboardPage() {
     return incomeRows.reduce((sum, row) => (isSameMonth(row.income_date, now) ? sum + Number(row.amount) : sum), 0);
   }, [incomeRows]);
 
-  const connectivityItems = useMemo<ConnectivityItem[]>(() => {
-    const now = new Date();
-    const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
-    const hasSnapshotToday = snapshotRows.some((row) => row.snapshot_date === new Date().toISOString().slice(0, 10));
-    const hasCurrentMonthIncome = incomeRows.some((row) => isSameMonth(row.income_date, now));
-    const hasCurrentMonthSavingsTarget = savingsTargetRows.some((row) => isSameMonth(row.month, now));
-
-    return [
-      {
-        id: "prices",
-        tone: assetsWithoutCurrentPrice.length > 0 ? "warning" : "success",
-        title: "Precios de mercado",
-        body:
-          assetsWithoutCurrentPrice.length > 0
-            ? `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado.`
-            : "Toda la cartera abierta tiene precio actual disponible.",
-        cta: "Abrir Inversiones",
-        href: "/investments"
-      },
-      {
-        id: "snapshot",
-        tone: hasSnapshotToday ? "success" : snapshotRows.length > 0 ? "warning" : "info",
-        title: "Snapshot diario",
-        body: hasSnapshotToday
-          ? "Ya hay snapshot guardado hoy para el historico de patrimonio."
-          : snapshotRows.length > 0
-            ? "Hoy aun no se ha guardado snapshot diario."
-            : "Todavia no hay snapshots guardados para construir historico real.",
-        cta: "Volver al panel",
-      },
-      {
-        id: "monthly-data",
-        tone: hasCurrentMonthIncome && hasCurrentMonthSavingsTarget ? "success" : "warning",
-        title: "Datos del mes",
-        body:
-          hasCurrentMonthIncome && hasCurrentMonthSavingsTarget
-            ? "El mes actual ya tiene ingresos y ahorro objetivo definidos."
-            : "Falta completar ingresos o ahorro objetivo del mes actual.",
-        cta: "Revisar Presupuestos",
-        href: "/budgets"
-      },
-      {
-        id: "imports",
-        tone: investmentRows.length > 0 ? "info" : "warning",
-        title: "Importacion y cartera",
-        body:
-          investmentRows.length > 0
-            ? `Tienes ${investmentRows.length} posiciones registradas. Puedes importar o refrescar la cartera cuando lo necesites.`
-            : "La cartera aun esta vacia. Puedes crear posiciones a mano o importar desde CSV.",
-        cta: "Gestionar cartera",
-        href: "/investments"
-      }
-    ];
-  }, [incomeRows, investmentRows, savingsTargetRows, snapshotRows]);
-
-  const filteredConnectivityHistory = useMemo(() => {
-    const search = connectivitySearchTerm.trim().toLowerCase();
-    if (connectivityHistoryFilter === "all") {
-      return connectivityHistory.filter((item) =>
-        !search || item.title.toLowerCase().includes(search) || item.details.toLowerCase().includes(search)
-      );
-    }
-
-    return connectivityHistory.filter(
-      (item) =>
-        item.status === connectivityHistoryFilter &&
-        (!search || item.title.toLowerCase().includes(search) || item.details.toLowerCase().includes(search))
-    );
-  }, [connectivityHistory, connectivityHistoryFilter, connectivitySearchTerm]);
-
-  useEffect(() => {
-    const syncConnectivityIncidents = async () => {
-      if (!userId || connectivityItems.length === 0) {
-        return;
-      }
-
-      const nowIso = new Date().toISOString();
-      const openItems = connectivityItems.filter((item) => item.tone !== "success");
-      const resolvedKeys = connectivityItems.filter((item) => item.tone === "success").map((item) => item.id);
-
-      if (openItems.length > 0) {
-        await supabase.from("connectivity_incidents").upsert(
-          openItems.map((item) => ({
-            user_id: userId,
-            incident_key: item.id,
-            title: item.title,
-            details: item.body,
-            status: "open",
-            last_detected_at: nowIso,
-            resolved_at: null
-          })),
-          { onConflict: "user_id,incident_key" }
-        );
-      }
-
-      if (resolvedKeys.length > 0) {
-        await Promise.all(
-          resolvedKeys.map((incidentKey) =>
-            supabase
-              .from("connectivity_incidents")
-              .update({ status: "resolved", resolved_at: nowIso })
-              .eq("user_id", userId)
-              .eq("incident_key", incidentKey)
-              .eq("status", "open")
-          )
-        );
-      }
-
-      const { data, error } = await supabase
-        .from("connectivity_incidents")
-        .select("incident_key, title, details, status, first_detected_at, last_detected_at, resolved_at")
-        .eq("user_id", userId)
-        .order("last_detected_at", { ascending: false })
-        .limit(8);
-
-      if (!error && data) {
-        setConnectivityHistory((data as ConnectivityIncidentRow[]) ?? []);
-      }
-    };
-
-    void syncConnectivityIncidents();
-  }, [connectivityItems, supabase, userId]);
 
   const dismissReminder = useCallback((reminderId: string) => {
     setDismissedReminderIds((current) => {
@@ -1677,104 +1497,6 @@ export default function DashboardPage() {
                       </article>
                     )}
                   </div>
-                </div>
-              </div>
-            </section>
-          );
-        case "connectivity":
-          return (
-            <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <SectionHeader
-                eyebrow="Conectividad e importacion"
-                title="Estado de las fuentes y del flujo operativo"
-                description="Aqui se concentran los puntos que afectan a la calidad del dato: precios, snapshots, datos del mes e importacion de cartera."
-              />
-              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {connectivityItems.map((item) => (
-                  <article key={item.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                    <p className={`text-xs uppercase tracking-[0.18em] ${item.tone === "warning" ? "text-amber-300" : item.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
-                      {item.title}
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-white/80">{item.body}</p>
-                    {item.href ? (
-                      <Link href={item.href} className="mt-3 inline-flex text-xs font-medium text-emerald-300 transition hover:text-emerald-200">
-                        {item.cta}
-                      </Link>
-                    ) : (
-                      <p className="mt-3 text-xs font-medium text-emerald-300">{item.cta}</p>
-                    )}
-                  </article>
-                ))}
-              </div>
-              <div className="mt-6 rounded-[24px] border border-white/8 bg-white/6 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Historial de incidencias</p>
-                    <p className="mt-2 text-sm leading-6 text-white/72">Ultimos eventos de conectividad detectados por el panel para que veas si algo falla de forma recurrente.</p>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <input
-                      type="search"
-                      value={connectivitySearchTerm}
-                      onChange={(event) => {
-                        setConnectivitySearchTerm(event.target.value);
-                        window.localStorage.setItem(DASHBOARD_CONNECTIVITY_QUERY_KEY, event.target.value);
-                      }}
-                      placeholder="Buscar incidencia"
-                      className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "all", label: "Todas" },
-                      { value: "open", label: "Abiertas" },
-                      { value: "resolved", label: "Resueltas" }
-                    ].map((item) => (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => {
-                          setConnectivityHistoryFilter(item.value as ConnectivityHistoryFilter);
-                          window.localStorage.setItem(DASHBOARD_CONNECTIVITY_FILTER_KEY, item.value);
-                        }}
-                        className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
-                          connectivityHistoryFilter === item.value
-                            ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
-                            : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {filteredConnectivityHistory.length > 0 ? (
-                    filteredConnectivityHistory.map((item) => (
-                      <article key={`${item.incident_key}-${item.last_detected_at}`} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-white">{item.title}</p>
-                            <p className="mt-1 text-xs leading-5 text-white/60">{item.details}</p>
-                          </div>
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.status === "open" ? "border border-amber-400/20 bg-amber-500/14 text-amber-200" : "border border-emerald-400/20 bg-emerald-500/14 text-emerald-200"}`}>
-                            {item.status === "open" ? "Abierta" : "Resuelta"}
-                          </span>
-                        </div>
-                        <p className="mt-3 text-[11px] text-white/46">
-                          Detectada: {formatDateByPreference(item.first_detected_at.slice(0, 10), dateFormat)} · Ultimo cambio: {formatDateByPreference(item.last_detected_at.slice(0, 10), dateFormat)}
-                        </p>
-                      </article>
-                    ))
-                  ) : (
-                    <article className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
-                      <p className="text-sm leading-6 text-white/72">
-                        {connectivityHistory.length === 0
-                          ? "Todavia no hay incidencias registradas. El centro empezara a guardar historial cuando detecte alguna senal operativa."
-                          : "No hay incidencias en el filtro actual."}
-                      </p>
-                    </article>
-                  )}
                 </div>
               </div>
             </section>
