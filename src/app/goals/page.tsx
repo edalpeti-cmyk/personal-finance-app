@@ -67,6 +67,7 @@ type GoalInvestmentLinkRow = {
 type GoalAssetTypeLinkRow = {
   goal_id: string;
   asset_type: AssetType;
+  allocation_pct: number;
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
@@ -133,6 +134,7 @@ export default function GoalsPage() {
   const [linkedAccount, setLinkedAccount] = useState("");
   const [linkedInvestmentId, setLinkedInvestmentId] = useState("");
   const [selectedLinkedAssetTypes, setSelectedLinkedAssetTypes] = useState<AssetType[]>([]);
+  const [selectedLinkedAssetTypeAllocations, setSelectedLinkedAssetTypeAllocations] = useState<Record<AssetType, string>>({} as Record<AssetType, string>);
   const [selectedLinkedInvestmentIds, setSelectedLinkedInvestmentIds] = useState<string[]>([]);
   const [selectedLinkedInvestmentAllocations, setSelectedLinkedInvestmentAllocations] = useState<Record<string, string>>({});
   const [assetTypesDropdownOpen, setAssetTypesDropdownOpen] = useState(false);
@@ -166,6 +168,7 @@ export default function GoalsPage() {
     setLinkedAccount("");
     setLinkedInvestmentId("");
     setSelectedLinkedAssetTypes([]);
+    setSelectedLinkedAssetTypeAllocations({} as Record<AssetType, string>);
     setSelectedLinkedInvestmentIds([]);
     setSelectedLinkedInvestmentAllocations({});
     setAssetTypesDropdownOpen(false);
@@ -189,7 +192,7 @@ export default function GoalsPage() {
       supabase.from("expenses").select("amount, expense_date").eq("user_id", uid),
       supabase.from("investments").select("id, asset_name, asset_symbol, asset_type, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true }),
       supabase.from("goal_investment_links").select("goal_id, investment_id, allocation_pct").eq("user_id", uid),
-      supabase.from("goal_asset_type_links").select("goal_id, asset_type").eq("user_id", uid)
+      supabase.from("goal_asset_type_links").select("goal_id, asset_type, allocation_pct").eq("user_id", uid)
     ]);
 
     const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error ?? linksResult.error ?? assetTypeLinksResult.error;
@@ -271,46 +274,55 @@ export default function GoalsPage() {
     () => new Map(Array.from(linkedInvestmentConfigsByGoal.entries()).map(([goalId, items]) => [goalId, items.map((item) => item.investment_id)])),
     [linkedInvestmentConfigsByGoal]
   );
-  const linkedAssetTypesByGoal = useMemo(() => {
-    const map = new Map<string, AssetType[]>();
+  const linkedAssetTypeConfigsByGoal = useMemo(() => {
+    const map = new Map<string, Array<{ asset_type: AssetType; allocation_pct: number }>>();
     for (const row of goalAssetTypeLinks) {
       const current = map.get(row.goal_id) ?? [];
-      if (!current.includes(row.asset_type)) current.push(row.asset_type);
+      if (!current.some((item) => item.asset_type === row.asset_type)) {
+        current.push({ asset_type: row.asset_type, allocation_pct: Number(row.allocation_pct ?? 100) || 100 });
+      }
       map.set(row.goal_id, current);
     }
     for (const goal of goals) {
       if (goal.linked_asset_type) {
         const current = map.get(goal.id) ?? [];
-        if (!current.includes(goal.linked_asset_type)) {
-          current.push(goal.linked_asset_type);
+        if (!current.some((item) => item.asset_type === goal.linked_asset_type)) {
+          current.push({ asset_type: goal.linked_asset_type, allocation_pct: 100 });
           map.set(goal.id, current);
         }
       }
     }
     return map;
   }, [goalAssetTypeLinks, goals]);
+  const linkedAssetTypesByGoal = useMemo(
+    () => new Map(Array.from(linkedAssetTypeConfigsByGoal.entries()).map(([goalId, items]) => [goalId, items.map((item) => item.asset_type)])),
+    [linkedAssetTypeConfigsByGoal]
+  );
   const combinedCurrentByGoal = useMemo(() => {
     const map = new Map<string, { manual: number; linked: number; total: number }>();
     for (const goal of goals) {
       const selectedConfigs = linkedInvestmentConfigsByGoal.get(goal.id) ?? [];
       const selectedIds = new Set(selectedConfigs.map((item) => item.investment_id));
-      const selectedAssetTypes = new Set(linkedAssetTypesByGoal.get(goal.id) ?? []);
+      const selectedAssetTypeConfigs = linkedAssetTypeConfigsByGoal.get(goal.id) ?? [];
       const linkedByIds = selectedConfigs.reduce((sum, item) => {
         const value = Number(investmentValueById[item.investment_id] ?? 0);
         return sum + value * (Math.max(0, Math.min(Number(item.allocation_pct ?? 100), 100)) / 100);
       }, 0);
       const linkedByType =
-        selectedAssetTypes.size > 0
-          ? investmentLinks
-              .filter((investment) => selectedAssetTypes.has(investment.asset_type) && !selectedIds.has(investment.id))
-              .reduce((sum, investment) => sum + Number(investmentValueById[investment.id] ?? 0), 0)
+        selectedAssetTypeConfigs.length > 0
+          ? selectedAssetTypeConfigs.reduce((sum, item) => {
+              const typeTotal = investmentLinks
+                .filter((investment) => investment.asset_type === item.asset_type && !selectedIds.has(investment.id))
+                .reduce((typeSum, investment) => typeSum + Number(investmentValueById[investment.id] ?? 0), 0);
+              return sum + typeTotal * (Math.max(0, Math.min(Number(item.allocation_pct ?? 100), 100)) / 100);
+            }, 0)
           : 0;
       const manual = Number(goal.current_amount || 0);
       const linked = linkedByIds + linkedByType;
       map.set(goal.id, { manual, linked, total: manual + linked });
     }
     return map;
-  }, [goals, investmentLinks, investmentValueById, linkedAssetTypesByGoal, linkedInvestmentConfigsByGoal]);
+  }, [goals, investmentLinks, investmentValueById, linkedAssetTypeConfigsByGoal, linkedInvestmentConfigsByGoal]);
   const goalsWithComputedProgress = useMemo(
     () =>
       goals.map((goal) => {
@@ -538,6 +550,7 @@ export default function GoalsPage() {
           selectedLinkedAssetTypes.map((assetType) => ({
             goal_id: goalId,
             asset_type: assetType,
+            allocation_pct: Math.max(0, Math.min(Number(selectedLinkedAssetTypeAllocations[assetType] || 100), 100)),
             user_id: userId
           }))
         );
@@ -569,7 +582,11 @@ export default function GoalsPage() {
     setLinkedCategory(goal.linked_category ?? "");
     setLinkedAccount(goal.linked_account ?? "");
     setLinkedInvestmentId(goal.linked_investment_id ?? "");
-    setSelectedLinkedAssetTypes(linkedAssetTypesByGoal.get(goal.id) ?? (goal.linked_asset_type ? [goal.linked_asset_type] : []));
+    const linkedAssetTypeConfigs = linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : []);
+    setSelectedLinkedAssetTypes(linkedAssetTypeConfigs.map((item) => item.asset_type));
+    setSelectedLinkedAssetTypeAllocations(
+      Object.fromEntries(linkedAssetTypeConfigs.map((item) => [item.asset_type, String(Number(item.allocation_pct ?? 100) || 100)])) as Record<AssetType, string>
+    );
     const linkedConfigs = linkedInvestmentConfigsByGoal.get(goal.id) ?? (goal.linked_investment_id ? [{ investment_id: goal.linked_investment_id, allocation_pct: 100 }] : []);
     setSelectedLinkedInvestmentIds(linkedConfigs.map((item) => item.investment_id));
     setSelectedLinkedInvestmentAllocations(
@@ -844,6 +861,7 @@ export default function GoalsPage() {
                           type="button"
                           onClick={() => {
                             setSelectedLinkedAssetTypes([]);
+                            setSelectedLinkedAssetTypeAllocations({} as Record<AssetType, string>);
                             setAssetTypeSearch("");
                           }}
                           className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
@@ -866,11 +884,21 @@ export default function GoalsPage() {
                             key={option.value}
                             type="button"
                             onClick={() =>
-                              setSelectedLinkedAssetTypes((current) =>
-                                current.includes(option.value)
-                                  ? current.filter((item) => item !== option.value)
-                                  : [...current, option.value]
-                              )
+                              {
+                                setSelectedLinkedAssetTypes((current) =>
+                                  current.includes(option.value)
+                                    ? current.filter((item) => item !== option.value)
+                                    : [...current, option.value]
+                                );
+                                setSelectedLinkedAssetTypeAllocations((current) => {
+                                  if (selected) {
+                                    const next = { ...current };
+                                    delete next[option.value];
+                                    return next;
+                                  }
+                                  return { ...current, [option.value]: current[option.value] ?? "100" };
+                                });
+                              }
                             }
                             className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/5"
                           >
@@ -889,14 +917,46 @@ export default function GoalsPage() {
                 ) : null}
                 <span className="text-xs text-slate-400">Abre el desplegable y marca los tipos que quieras vincular.</span>
                 {selectedLinkedAssetTypes.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedLinkedAssetTypes.map((assetType) => (
+                        <span
+                          key={`asset-type-chip-${assetType}`}
+                          className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100"
+                        >
+                          {ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType}
+                        </span>
+                      ))}
+                    </div>
                     {selectedLinkedAssetTypes.map((assetType) => (
-                      <span
-                        key={`asset-type-chip-${assetType}`}
-                        className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100"
-                      >
-                        {ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType}
-                      </span>
+                      <div key={`asset-type-allocation-${assetType}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px] md:items-center">
+                        <div>
+                          <p className="text-sm text-white">
+                            {ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType}
+                          </p>
+                          <p className="text-xs text-slate-400">Define que porcentaje de este tipo de activo cuenta para la meta.</p>
+                        </div>
+                        <label className="grid gap-1 text-xs text-slate-300">
+                          <span>Porcentaje vinculado</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              className={inputClass()}
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={selectedLinkedAssetTypeAllocations[assetType] ?? "100"}
+                              onChange={(event) =>
+                                setSelectedLinkedAssetTypeAllocations((current) => ({
+                                  ...current,
+                                  [assetType]: event.target.value
+                                }))
+                              }
+                            />
+                            <span className="text-sm text-slate-400">%</span>
+                          </div>
+                        </label>
+                      </div>
                     ))}
                   </div>
                 ) : null}
@@ -1214,7 +1274,7 @@ export default function GoalsPage() {
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
-                      <p>Tipos vinculados: <span className="font-medium text-white">{(linkedAssetTypesByGoal.get(goal.id) ?? (goal.linked_asset_type ? [goal.linked_asset_type] : [])).length > 0 ? (linkedAssetTypesByGoal.get(goal.id) ?? (goal.linked_asset_type ? [goal.linked_asset_type] : [])).map((assetType) => ASSET_TYPE_OPTIONS.find((item) => item.value === assetType)?.label ?? assetType).join(", ") : "Sin tipo"}</span></p>
+                      <p>Tipos vinculados: <span className="font-medium text-white">{(linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : [])).length > 0 ? (linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : [])).map((item) => `${ASSET_TYPE_OPTIONS.find((option) => option.value === item.asset_type)?.label ?? item.asset_type} (${Number(item.allocation_pct ?? 100).toFixed(0)}%)`).join(", ") : "Sin tipo"}</span></p>
                       <p>Posiciones vinculadas: <span className="font-medium text-white">{linkedConfigs.length > 0 ? linkedConfigs.map((item) => `${investmentLinks.find((investment) => investment.id === item.investment_id)?.asset_name ?? "Posicion"} (${Number(item.allocation_pct ?? 100).toFixed(0)}%)`).join(", ") : "Sin posiciones"}</span></p>
                     </div>
                     <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/35 p-4">
