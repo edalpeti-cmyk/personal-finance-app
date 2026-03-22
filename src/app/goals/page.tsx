@@ -400,9 +400,16 @@ export default function GoalsPage() {
   }, [latestHistoryByGoal, selectedTimelineGoal, selectedTimelineYear]);
   const selectedAssetTypesLabel = useMemo(() => {
     if (selectedLinkedAssetTypes.length === 0) return "Sin tipos vinculados";
-    return selectedLinkedAssetTypes
-      .map((assetType) => ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType)
-      .join(", ");
+    if (selectedLinkedAssetTypes.length === 1) {
+      const assetType = selectedLinkedAssetTypes[0];
+      return ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType;
+    }
+    if (selectedLinkedAssetTypes.length <= 3) {
+      return selectedLinkedAssetTypes
+        .map((assetType) => ASSET_TYPE_OPTIONS.find((option) => option.value === assetType)?.label ?? assetType)
+        .join(", ");
+    }
+    return `${selectedLinkedAssetTypes.length} tipos seleccionados`;
   }, [selectedLinkedAssetTypes]);
   const selectedInvestmentsLabel = useMemo(() => {
     if (selectedLinkedInvestmentIds.length === 0) return "Sin posiciones vinculadas";
@@ -817,9 +824,9 @@ export default function GoalsPage() {
                     setAssetTypesDropdownOpen((current) => !current);
                     setInvestmentsDropdownOpen(false);
                   }}
-                  className={`${inputClass()} flex items-center justify-between text-left`}
+                  className={`${inputClass()} flex min-w-0 items-center justify-between text-left`}
                 >
-                  <span className="truncate">{selectedAssetTypesLabel}</span>
+                  <span className="min-w-0 truncate">{selectedAssetTypesLabel}</span>
                   <span className="text-slate-400">{assetTypesDropdownOpen ? "▲" : "▼"}</span>
                 </button>
                 {assetTypesDropdownOpen ? (
@@ -902,9 +909,9 @@ export default function GoalsPage() {
                     setInvestmentsDropdownOpen((current) => !current);
                     setAssetTypesDropdownOpen(false);
                   }}
-                  className={`${inputClass()} flex items-center justify-between text-left`}
+                  className={`${inputClass()} flex min-w-0 items-center justify-between text-left`}
                 >
-                  <span className="truncate">{selectedInvestmentsLabel}</span>
+                  <span className="min-w-0 truncate">{selectedInvestmentsLabel}</span>
                   <span className="text-slate-400">{investmentsDropdownOpen ? "▲" : "▼"}</span>
                 </button>
                 {investmentsDropdownOpen ? (
