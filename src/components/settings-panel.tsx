@@ -41,6 +41,8 @@ type ConnectivityIncidentRow = {
   title: string;
   details: string;
   status: "open" | "resolved";
+  severity: "low" | "medium" | "high";
+  recurrence_count: number;
   first_detected_at: string;
   last_detected_at: string;
   resolved_at: string | null;
@@ -49,7 +51,31 @@ type ConnectivityHistoryFilter = "all" | "open" | "resolved";
 type IncomeRow = { income_date: string; amount: number };
 type SavingsTargetRow = { month: string; savings_target: number };
 type SnapshotRow = { snapshot_date: string };
-type InvestmentStatusRow = { current_price: number | null };
+type InvestmentStatusRow = { current_price: number | null; updated_at?: string | null };
+type GoalAlertRuleKey = "low_goal_progress" | "overdue_goal" | "paused_priority_goal";
+type GoalAlertRule = {
+  key: GoalAlertRuleKey;
+  label: string;
+  description: string;
+  enabled: boolean;
+  threshold: number | null;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+};
+type GoalAlertRuleRow = {
+  alert_key: GoalAlertRuleKey;
+  enabled: boolean;
+  threshold: number | null;
+};
+type GoalSettingsRow = {
+  target_amount: number;
+  current_amount: number;
+  target_date: string | null;
+  status: "active" | "paused" | "completed" | "cancelled";
+  priority: number;
+};
 
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   {
@@ -104,9 +130,52 @@ const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
     suffix: " act."
   }
 ];
+const GOAL_ALERT_RULE_DEFAULTS: GoalAlertRule[] = [
+  {
+    key: "low_goal_progress",
+    label: "Meta con poco avance",
+    description: "Avisar si una meta activa sigue por debajo de este porcentaje de progreso.",
+    enabled: true,
+    threshold: 25,
+    min: 0,
+    max: 100,
+    step: 1,
+    suffix: "%"
+  },
+  {
+    key: "overdue_goal",
+    label: "Meta vencida",
+    description: "Avisar si hay metas activas cuya fecha objetivo ya ha pasado.",
+    enabled: true,
+    threshold: null
+  },
+  {
+    key: "paused_priority_goal",
+    label: "Meta prioritaria pausada",
+    description: "Avisar si una meta pausada tiene prioridad igual o superior al umbral.",
+    enabled: true,
+    threshold: 2,
+    min: 1,
+    max: 5,
+    step: 1
+  }
+];
 
 function mergeAlertRules(rows: DashboardAlertRulesRow[] | null | undefined) {
   return DASHBOARD_ALERT_RULE_DEFAULTS.map((rule) => {
+    const remoteRule = rows?.find((row) => row.alert_key === rule.key);
+    return remoteRule
+      ? {
+          ...rule,
+          enabled: remoteRule.enabled,
+          threshold: remoteRule.threshold
+        }
+      : rule;
+  });
+}
+
+function mergeGoalAlertRules(rows: GoalAlertRuleRow[] | null | undefined) {
+  return GOAL_ALERT_RULE_DEFAULTS.map((rule) => {
     const remoteRule = rows?.find((row) => row.alert_key === rule.key);
     return remoteRule
       ? {
@@ -195,11 +264,17 @@ export default function SettingsPanel() {
   const [alertRulesLoaded, setAlertRulesLoaded] = useState(false);
   const [savingAlertRuleKey, setSavingAlertRuleKey] = useState<DashboardAlertRuleKey | null>(null);
   const [alertSettingsMessage, setAlertSettingsMessage] = useState<string | null>(null);
+  const [goalAlertRules, setGoalAlertRules] = useState<GoalAlertRule[]>(GOAL_ALERT_RULE_DEFAULTS);
+  const [goalAlertRulesLoaded, setGoalAlertRulesLoaded] = useState(false);
+  const [savingGoalAlertRuleKey, setSavingGoalAlertRuleKey] = useState<GoalAlertRuleKey | null>(null);
+  const [goalAlertSettingsMessage, setGoalAlertSettingsMessage] = useState<string | null>(null);
   const [connectivityItems, setConnectivityItems] = useState<ConnectivityItem[]>([]);
   const [connectivityHistory, setConnectivityHistory] = useState<ConnectivityIncidentRow[]>([]);
   const [connectivityHistoryFilter, setConnectivityHistoryFilter] = useState<ConnectivityHistoryFilter>("all");
   const [connectivitySearchTerm, setConnectivitySearchTerm] = useState("");
   const [connectivityLoaded, setConnectivityLoaded] = useState(false);
+  const [lastPriceUpdateAt, setLastPriceUpdateAt] = useState<string | null>(null);
+  const [goalAlertsPreview, setGoalAlertsPreview] = useState<Array<{ id: GoalAlertRuleKey; tone: "warning" | "info"; title: string; body: string }>>([]);
 
   const previewDate = dateFormat === "us" ? "03/13/2026" : "13/03/2026";
   const previewMoney =
@@ -238,6 +313,32 @@ export default function SettingsPanel() {
   }, [supabase]);
 
   useEffect(() => {
+    const loadGoalAlertRules = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setGoalAlertRulesLoaded(true);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("goal_alert_rules")
+        .select("alert_key, enabled, threshold")
+        .eq("user_id", user.id);
+
+      if (!error && data) {
+        setGoalAlertRules(mergeGoalAlertRules(data as GoalAlertRuleRow[]));
+      }
+
+      setGoalAlertRulesLoaded(true);
+    };
+
+    void loadGoalAlertRules();
+  }, [supabase]);
+
+  useEffect(() => {
     const loadConnectivityData = async () => {
       const {
         data: { user }
@@ -248,17 +349,18 @@ export default function SettingsPanel() {
         return;
       }
 
-      const [incomeResult, savingsResult, snapshotsResult, investmentsResult, incidentsResult] = await Promise.all([
+      const [incomeResult, savingsResult, snapshotsResult, investmentsResult, incidentsResult, goalsResult] = await Promise.all([
         supabase.from("income").select("income_date, amount").eq("user_id", user.id),
         supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", user.id),
         supabase.from("net_worth_snapshots").select("snapshot_date").eq("user_id", user.id),
-        supabase.from("investments").select("current_price").eq("user_id", user.id),
+        supabase.from("investments").select("current_price, updated_at").eq("user_id", user.id),
         supabase
           .from("connectivity_incidents")
-          .select("incident_key, title, details, status, first_detected_at, last_detected_at, resolved_at")
+          .select("incident_key, title, details, status, severity, recurrence_count, first_detected_at, last_detected_at, resolved_at")
           .eq("user_id", user.id)
           .order("last_detected_at", { ascending: false })
-          .limit(8)
+          .limit(12),
+        supabase.from("financial_goals").select("target_amount, current_amount, target_date, status, priority").eq("user_id", user.id)
       ]);
 
       const now = new Date();
@@ -266,10 +368,16 @@ export default function SettingsPanel() {
       const savingsRows = ((savingsResult.data as SavingsTargetRow[] | null) ?? []);
       const snapshotRows = ((snapshotsResult.data as SnapshotRow[] | null) ?? []);
       const investmentRows = ((investmentsResult.data as InvestmentStatusRow[] | null) ?? []);
+      const goalRows = ((goalsResult.data as GoalSettingsRow[] | null) ?? []);
       const assetsWithoutCurrentPrice = investmentRows.filter((row) => row.current_price === null);
       const hasSnapshotToday = snapshotRows.some((row) => row.snapshot_date === new Date().toISOString().slice(0, 10));
       const hasCurrentMonthIncome = incomeRows.some((row) => isSameMonth(row.income_date, now));
       const hasCurrentMonthSavingsTarget = savingsRows.some((row) => isSameMonth(row.month, now));
+      const latestInvestmentUpdate = investmentRows
+        .map((row) => row.updated_at)
+        .filter((value): value is string => Boolean(value))
+        .sort((a, b) => b.localeCompare(a))[0] ?? null;
+      setLastPriceUpdateAt(latestInvestmentUpdate);
 
       setConnectivityItems([
         {
@@ -319,8 +427,122 @@ export default function SettingsPanel() {
         }
       ]);
 
+      const nowIsoDate = new Date().toISOString().slice(0, 10);
+      const lowProgressThreshold = Number(goalAlertRules.find((rule) => rule.key === "low_goal_progress")?.threshold ?? 25);
+      const pausedPriorityThreshold = Number(goalAlertRules.find((rule) => rule.key === "paused_priority_goal")?.threshold ?? 2);
+      const nextGoalAlerts: Array<{ id: GoalAlertRuleKey; tone: "warning" | "info"; title: string; body: string }> = [];
+
+      if (goalAlertRules.find((rule) => rule.key === "low_goal_progress")?.enabled) {
+        const lowProgressCount = goalRows.filter((goal) => {
+          if (goal.status !== "active" || Number(goal.target_amount || 0) <= 0) return false;
+          const progressPct = (Number(goal.current_amount || 0) / Number(goal.target_amount || 0)) * 100;
+          return progressPct < lowProgressThreshold;
+        }).length;
+
+        if (lowProgressCount > 0) {
+          nextGoalAlerts.push({
+            id: "low_goal_progress",
+            tone: "info",
+            title: "Metas con poco avance",
+            body: `${lowProgressCount} meta(s) activas siguen por debajo del ${lowProgressThreshold}% de progreso.`
+          });
+        }
+      }
+
+      if (goalAlertRules.find((rule) => rule.key === "overdue_goal")?.enabled) {
+        const overdueCount = goalRows.filter((goal) => goal.status === "active" && goal.target_date && goal.target_date < nowIsoDate).length;
+        if (overdueCount > 0) {
+          nextGoalAlerts.push({
+            id: "overdue_goal",
+            tone: "warning",
+            title: "Metas vencidas",
+            body: `${overdueCount} meta(s) activas ya han superado su fecha objetivo.`
+          });
+        }
+      }
+
+      if (goalAlertRules.find((rule) => rule.key === "paused_priority_goal")?.enabled) {
+        const pausedPriorityCount = goalRows.filter(
+          (goal) => goal.status === "paused" && Number(goal.priority || 99) <= pausedPriorityThreshold
+        ).length;
+        if (pausedPriorityCount > 0) {
+          nextGoalAlerts.push({
+            id: "paused_priority_goal",
+            tone: "info",
+            title: "Metas prioritarias pausadas",
+            body: `${pausedPriorityCount} meta(s) pausadas tienen prioridad ${pausedPriorityThreshold} o superior.`
+          });
+        }
+      }
+
+      setGoalAlertsPreview(nextGoalAlerts);
+
       if (!incidentsResult.error && incidentsResult.data) {
         setConnectivityHistory((incidentsResult.data as ConnectivityIncidentRow[]) ?? []);
+      }
+
+      const openItems = [
+        ...(assetsWithoutCurrentPrice.length > 0
+          ? [
+              {
+                incident_key: "prices",
+                title: "Precios de mercado",
+                details: `${assetsWithoutCurrentPrice.length} activo(s) siguen sin precio actual guardado.`,
+                severity: assetsWithoutCurrentPrice.length >= 3 ? "high" : "medium"
+              }
+            ]
+          : []),
+        ...(!hasSnapshotToday && snapshotRows.length > 0
+          ? [
+              {
+                incident_key: "snapshot",
+                title: "Snapshot diario",
+                details: "Hoy aun no se ha guardado snapshot diario.",
+                severity: "medium"
+              }
+            ]
+          : []),
+        ...(!(hasCurrentMonthIncome && hasCurrentMonthSavingsTarget)
+          ? [
+              {
+                incident_key: "monthly-data",
+                title: "Datos del mes",
+                details: "Falta completar ingresos o ahorro objetivo del mes actual.",
+                severity: "medium"
+              }
+            ]
+          : []),
+        ...(investmentRows.length === 0
+          ? [
+              {
+                incident_key: "imports",
+                title: "Importacion y cartera",
+                details: "La cartera aun esta vacia. Puedes crear posiciones a mano o importar desde CSV.",
+                severity: "low"
+              }
+            ]
+          : [])
+      ];
+
+      if (openItems.length > 0) {
+        for (const item of openItems) {
+          const existing = ((incidentsResult.data as ConnectivityIncidentRow[] | null) ?? []).find((row) => row.incident_key === item.incident_key);
+          await supabase.from("connectivity_incidents").upsert(
+            {
+              user_id: user.id,
+              incident_key: item.incident_key,
+              title: item.title,
+              details: item.details,
+              status: "open",
+              severity: item.severity,
+              recurrence_count: existing ? Number(existing.recurrence_count ?? 0) + 1 : 1,
+              first_detected_at: existing?.first_detected_at ?? new Date().toISOString(),
+              last_detected_at: new Date().toISOString(),
+              resolved_at: null
+            },
+            { onConflict: "user_id,incident_key" }
+          );
+        }
       }
 
       setConnectivityLoaded(true);
@@ -381,6 +603,48 @@ export default function SettingsPanel() {
     }
 
     setSavingAlertRuleKey((current) => (current === ruleKey ? null : current));
+  };
+
+  const updateGoalAlertRule = async (
+    ruleKey: GoalAlertRuleKey,
+    patch: Partial<Pick<GoalAlertRule, "enabled" | "threshold">>
+  ) => {
+    const currentRule = goalAlertRules.find((rule) => rule.key === ruleKey);
+    if (!currentRule) {
+      return;
+    }
+
+    const nextRule = { ...currentRule, ...patch };
+    setGoalAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? nextRule : rule)));
+    setGoalAlertSettingsMessage(null);
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setGoalAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? currentRule : rule)));
+      setGoalAlertSettingsMessage("No hemos podido validar tu sesion para guardar alertas de objetivos.");
+      return;
+    }
+
+    setSavingGoalAlertRuleKey(ruleKey);
+    const { error } = await supabase.from("goal_alert_rules").upsert(
+      {
+        user_id: user.id,
+        alert_key: ruleKey,
+        enabled: nextRule.enabled,
+        threshold: nextRule.threshold
+      },
+      { onConflict: "user_id,alert_key" }
+    );
+
+    if (error) {
+      setGoalAlertRules((current) => current.map((rule) => (rule.key === ruleKey ? currentRule : rule)));
+      setGoalAlertSettingsMessage("No hemos podido guardar esta regla de objetivos. Intentalo otra vez.");
+    }
+
+    setSavingGoalAlertRuleKey((current) => (current === ruleKey ? null : current));
   };
 
   return (
@@ -581,6 +845,15 @@ export default function SettingsPanel() {
             </div>
 
             <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ultima actualizacion de precios</p>
+              <p className="mt-2 text-sm text-slate-200">
+                {lastPriceUpdateAt
+                  ? new Date(lastPriceUpdateAt).toLocaleString(dateFormat === "us" ? "en-US" : "es-ES")
+                  : "Aun no hay una marca de actualizacion disponible."}
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
               <div className="flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -626,12 +899,23 @@ export default function SettingsPanel() {
                           <p className="text-sm font-medium text-white">{item.title}</p>
                           <p className="mt-1 text-xs leading-5 text-white/60">{item.details}</p>
                         </div>
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.status === "open" ? "border border-amber-400/20 bg-amber-500/14 text-amber-200" : "border border-emerald-400/20 bg-emerald-500/14 text-emerald-200"}`}>
-                          {item.status === "open" ? "Abierta" : "Resuelta"}
-                        </span>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${item.status === "open" ? "border border-amber-400/20 bg-amber-500/14 text-amber-200" : "border border-emerald-400/20 bg-emerald-500/14 text-emerald-200"}`}>
+                            {item.status === "open" ? "Abierta" : "Resuelta"}
+                          </span>
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                            item.severity === "high"
+                              ? "border border-red-400/20 bg-red-500/14 text-red-200"
+                              : item.severity === "medium"
+                                ? "border border-amber-400/20 bg-amber-500/14 text-amber-200"
+                                : "border border-sky-400/20 bg-sky-500/14 text-sky-200"
+                          }`}>
+                            {item.severity === "high" ? "Alta" : item.severity === "medium" ? "Media" : "Baja"}
+                          </span>
+                        </div>
                       </div>
                       <p className="mt-3 text-[11px] text-white/46">
-                        Detectada: {new Date(item.first_detected_at).toLocaleDateString(dateFormat === "us" ? "en-US" : "es-ES")} · Ultimo cambio: {new Date(item.last_detected_at).toLocaleDateString(dateFormat === "us" ? "en-US" : "es-ES")}
+                        Detectada: {new Date(item.first_detected_at).toLocaleDateString(dateFormat === "us" ? "en-US" : "es-ES")} · Ultimo cambio: {new Date(item.last_detected_at).toLocaleDateString(dateFormat === "us" ? "en-US" : "es-ES")} · Recurrencia: {item.recurrence_count}
                       </p>
                     </article>
                   ))
@@ -642,6 +926,92 @@ export default function SettingsPanel() {
                         ? "Todavia no hay incidencias registradas. Este historial se ira llenando cuando aparezcan señales operativas."
                         : "No hay incidencias para el filtro actual."}
                     </p>
+                  </article>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Alertas de objetivos</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Ajusta aqui las reglas que vigilan el avance de tus metas y veras una vista previa con las incidencias actuales.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
+                {goalAlertRulesLoaded ? "Sincronizado" : "Cargando..."}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {goalAlertRules.map((rule) => (
+                <article key={rule.key} className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{rule.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{rule.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void updateGoalAlertRule(rule.key, { enabled: !rule.enabled })}
+                      className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                        rule.enabled
+                          ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
+                          : "border border-white/10 bg-white/5 text-slate-300"
+                      }`}
+                    >
+                      {rule.enabled ? "Activa" : "Pausada"}
+                    </button>
+                  </div>
+                  {rule.threshold !== null ? (
+                    <label className="mt-3 block">
+                      <span className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Umbral</span>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={rule.min}
+                          max={rule.max}
+                          step={rule.step ?? 1}
+                          value={rule.threshold}
+                          onChange={(event) => {
+                            const rawValue = Number(event.target.value);
+                            const fallback = GOAL_ALERT_RULE_DEFAULTS.find((item) => item.key === rule.key)?.threshold ?? 0;
+                            void updateGoalAlertRule(rule.key, {
+                              threshold: Number.isFinite(rawValue) ? rawValue : fallback
+                            });
+                          }}
+                          className="w-28 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                        />
+                        <span className="text-xs text-slate-400">{rule.suffix ?? ""}</span>
+                        {savingGoalAlertRuleKey === rule.key ? <span className="text-[11px] text-emerald-300">Guardando...</span> : null}
+                      </div>
+                    </label>
+                  ) : (
+                    <p className="mt-3 text-[11px] text-slate-500">
+                      {savingGoalAlertRuleKey === rule.key ? "Guardando cambios..." : "Sin umbral numerico configurable."}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            {goalAlertSettingsMessage ? <p className="mt-3 text-xs text-amber-300">{goalAlertSettingsMessage}</p> : null}
+
+            <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-sky-300">Vista previa de incidencias</p>
+              <div className="mt-3 space-y-3">
+                {goalAlertsPreview.length > 0 ? (
+                  goalAlertsPreview.map((alert) => (
+                    <article key={alert.id} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                      <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : "text-sky-300"}`}>{alert.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">{alert.body}</p>
+                    </article>
+                  ))
+                ) : (
+                  <article className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
+                    <p className="text-sm leading-6 text-slate-300">Ahora mismo no hay alertas de objetivos activas con tu configuracion actual.</p>
                   </article>
                 )}
               </div>
