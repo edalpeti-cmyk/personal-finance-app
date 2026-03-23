@@ -671,6 +671,7 @@ export default function InvestmentsPage() {
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const backfillingTransactionsRef = useRef(false);
+  const historicalFxCheckedRef = useRef<string | null>(null);
   const investmentNameById = useMemo(
     () => Object.fromEntries(investments.map((row) => [row.id, row.asset_name])),
     [investments]
@@ -1013,8 +1014,8 @@ export default function InvestmentsPage() {
 
   const backfillHistoricalTransactionFx = useCallback(
     async (uid: string, rows: InvestmentTransactionRow[]) => {
-      const rowsNeedingFx = rows.filter((row) => !row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider);
-      if (rowsNeedingFx.length === 0 || backfillingTransactionsRef.current) {
+      const rowsNeedingReview = rows.filter((row) => row.asset_currency !== "EUR" && Boolean(row.executed_at));
+      if (rowsNeedingReview.length === 0 || backfillingTransactionsRef.current) {
         return;
       }
 
@@ -1065,20 +1066,24 @@ export default function InvestmentsPage() {
             if (quantityValue <= 0) continue;
 
             const currency = row.asset_currency ?? "EUR";
-            const fxRate =
-              row.fx_rate_to_eur && row.fx_rate_to_eur > 0
-                ? Number(row.fx_rate_to_eur)
-                : await getRateForDate(row.executed_at, currency);
+            const fxRate = await getRateForDate(row.executed_at, currency);
             const totalLocal = Number(row.total_local) || 0;
             const commissionLocal = Number(row.commission_local ?? 0) || 0;
             const totalEur = Number((totalLocal * fxRate).toFixed(4));
             const commissionEur = Number((commissionLocal * fxRate).toFixed(4));
+            const shouldRefreshBaseFields =
+              !row.fx_rate_to_eur ||
+              !row.fx_rate_date ||
+              row.fx_rate_date !== row.executed_at ||
+              row.fx_provider !== "frankfurter" ||
+              Math.abs((Number(row.total_eur) || 0) - totalEur) > 0.01 ||
+              Math.abs((Number(row.commission_eur ?? 0) || 0) - commissionEur) > 0.01;
 
             if (row.transaction_type === "buy") {
               openQuantity += quantityValue;
               openCostEur += totalEur + commissionEur;
 
-              if (!row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider) {
+              if (shouldRefreshBaseFields) {
                 updates.push({
                   id: row.id,
                   total_eur: totalEur,
@@ -1096,11 +1101,15 @@ export default function InvestmentsPage() {
             const avgCostPerUnitEur = openQuantity > 0 ? openCostEur / openQuantity : 0;
             const realizedGainEur = Number((totalEur - commissionEur - avgCostPerUnitEur * quantityValue).toFixed(4));
             const soldCostEur = avgCostPerUnitEur * quantityValue;
+            const shouldRefreshSell =
+              shouldRefreshBaseFields ||
+              row.realized_gain_eur === null ||
+              Math.abs(Number(row.realized_gain_eur ?? 0) - realizedGainEur) > 0.01;
 
             openQuantity = Math.max(0, openQuantity - quantityValue);
             openCostEur = Math.max(0, openCostEur - soldCostEur);
 
-            if (!row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider) {
+            if (shouldRefreshSell) {
               updates.push({
                 id: row.id,
                 total_eur: totalEur,
@@ -1115,19 +1124,28 @@ export default function InvestmentsPage() {
         }
 
         for (const row of rowsWithoutInvestment) {
-          if (row.fx_rate_to_eur && row.fx_rate_date && row.fx_provider) {
-            continue;
-          }
-
           const currency = row.asset_currency ?? "EUR";
           const fxRate = await getRateForDate(row.executed_at, currency);
           const totalLocal = Number(row.total_local) || 0;
           const commissionLocal = Number(row.commission_local ?? 0) || 0;
+          const totalEur = Number((totalLocal * fxRate).toFixed(4));
+          const commissionEur = Number((commissionLocal * fxRate).toFixed(4));
+          const shouldRefreshBaseFields =
+            !row.fx_rate_to_eur ||
+            !row.fx_rate_date ||
+            row.fx_rate_date !== row.executed_at ||
+            row.fx_provider !== "frankfurter" ||
+            Math.abs((Number(row.total_eur) || 0) - totalEur) > 0.01 ||
+            Math.abs((Number(row.commission_eur ?? 0) || 0) - commissionEur) > 0.01;
+
+          if (!shouldRefreshBaseFields) {
+            continue;
+          }
 
           updates.push({
             id: row.id,
-            total_eur: Number((totalLocal * fxRate).toFixed(4)),
-            commission_eur: Number((commissionLocal * fxRate).toFixed(4)),
+            total_eur: totalEur,
+            commission_eur: commissionEur,
             realized_gain_eur: row.realized_gain_eur,
             fx_rate_to_eur: Number(fxRate.toFixed(8)),
             fx_rate_date: row.executed_at,
@@ -1166,6 +1184,7 @@ export default function InvestmentsPage() {
         showToast({ type: "success", text: `${updates.length} operaciones antiguas han recuperado su tipo de cambio historico.` });
       } finally {
         backfillingTransactionsRef.current = false;
+        historicalFxCheckedRef.current = uid;
       }
     },
     [loadRealizedGainTotal, loadTransactions, showToast, supabase]
@@ -1190,7 +1209,12 @@ export default function InvestmentsPage() {
       return;
     }
 
-    if (!transactions.some((row) => !row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider)) {
+    if (historicalFxCheckedRef.current === userId) {
+      return;
+    }
+
+    if (!transactions.some((row) => row.asset_currency !== "EUR")) {
+      historicalFxCheckedRef.current = userId;
       return;
     }
 
