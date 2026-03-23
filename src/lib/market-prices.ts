@@ -40,6 +40,13 @@ const STOOQ_SUFFIX: Partial<Record<AssetMarket, string>> = {
 
 const AUTO_SUFFIXES = [".MC", ".DE", ".PA", ".AS", ".MI", ".L", ".CO", ".SW", ".ST", ".HE", ".OL"];
 
+function pushUnique(target: string[], value: string | undefined) {
+  if (!value) return;
+  if (!target.includes(value)) {
+    target.push(value);
+  }
+}
+
 async function fetchYahooQuote(providerSymbol: string): Promise<MarketQuote | null> {
   const response = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(providerSymbol)}?range=1d&interval=1d`,
@@ -165,69 +172,75 @@ async function fetchTwelveDataQuote(providerSymbol: string): Promise<MarketQuote
 function getCandidateSymbols(assetType: string, symbol: string, market?: string | null) {
   const cleanSymbol = symbol.trim().toUpperCase().replace(/\s+/g, "");
   const cleanMarket = (market ?? "AUTO").toUpperCase() as AssetMarket;
-  const candidates = new Set<string>();
+  const candidates: string[] = [];
 
   if (!cleanSymbol) {
     return [];
   }
 
   if (assetType === "crypto") {
-    candidates.add(cleanSymbol.replace("/", "-"));
+    pushUnique(candidates, cleanSymbol.replace("/", "-"));
 
     if (!cleanSymbol.includes("-") && !cleanSymbol.includes("/")) {
-      candidates.add(`${cleanSymbol}-USD`);
-      candidates.add(`${cleanSymbol}-EUR`);
+      pushUnique(candidates, `${cleanSymbol}-USD`);
+      pushUnique(candidates, `${cleanSymbol}-EUR`);
     }
 
     if (cleanSymbol.endsWith("USDT")) {
-      candidates.add(`${cleanSymbol.slice(0, -4)}-USD`);
+      pushUnique(candidates, `${cleanSymbol.slice(0, -4)}-USD`);
     }
 
-    return Array.from(candidates);
+    return candidates;
   }
 
-  candidates.add(cleanSymbol);
+  if (cleanSymbol.includes(".")) {
+    pushUnique(candidates, cleanSymbol);
+    return candidates;
+  }
 
-  if (!cleanSymbol.includes(".")) {
-    if (cleanMarket !== "AUTO") {
-      const suffix = MARKET_SUFFIX[cleanMarket];
-      if (suffix) {
-        candidates.add(`${cleanSymbol}${suffix}`);
-      }
-    }
-
-    for (const suffix of AUTO_SUFFIXES) {
-      candidates.add(`${cleanSymbol}${suffix}`);
+  if (cleanMarket !== "AUTO") {
+    const marketSuffix = MARKET_SUFFIX[cleanMarket];
+    if (marketSuffix) {
+      pushUnique(candidates, `${cleanSymbol}${marketSuffix}`);
     }
   }
 
-  return Array.from(candidates);
+  pushUnique(candidates, cleanSymbol);
+
+  for (const suffix of AUTO_SUFFIXES) {
+    pushUnique(candidates, `${cleanSymbol}${suffix}`);
+  }
+
+  return candidates;
 }
 
 function getStooqCandidates(symbol: string, market?: string | null) {
   const cleanSymbol = symbol.trim().toLowerCase().replace(/\s+/g, "");
   const cleanMarket = (market ?? "AUTO").toUpperCase() as AssetMarket;
-  const candidates = new Set<string>();
+  const candidates: string[] = [];
 
   if (!cleanSymbol) {
     return [];
   }
 
-  candidates.add(cleanSymbol);
+  if (cleanSymbol.includes(".")) {
+    pushUnique(candidates, cleanSymbol);
+    return candidates;
+  }
 
-  if (!cleanSymbol.includes(".")) {
-    if (cleanMarket !== "AUTO" && STOOQ_SUFFIX[cleanMarket]) {
-      candidates.add(`${cleanSymbol}${STOOQ_SUFFIX[cleanMarket]}`);
-    }
+  if (cleanMarket !== "AUTO" && STOOQ_SUFFIX[cleanMarket]) {
+    pushUnique(candidates, `${cleanSymbol}${STOOQ_SUFFIX[cleanMarket]}`);
+  }
 
-    for (const suffix of Object.values(STOOQ_SUFFIX)) {
-      if (suffix) {
-        candidates.add(`${cleanSymbol}${suffix}`);
-      }
+  pushUnique(candidates, cleanSymbol);
+
+  for (const suffix of Object.values(STOOQ_SUFFIX)) {
+    if (suffix) {
+      pushUnique(candidates, `${cleanSymbol}${suffix}`);
     }
   }
 
-  return Array.from(candidates);
+  return candidates;
 }
 
 function normalizeQuotedPrice(rawPrice: number, resolvedSymbol: string, market?: string | null, assetCurrency: AssetCurrency = "EUR") {
