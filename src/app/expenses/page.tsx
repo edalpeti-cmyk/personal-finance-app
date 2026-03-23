@@ -70,6 +70,7 @@ const MONTH_LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "S
 const BUDGET_IMPORT_DESCRIPTION = "Base importada desde presupuesto mensual";
 const EXPENSE_VIEWS_KEY = "expense-saved-views";
 const EXPENSE_VIEW_SCOPE = "expenses";
+const EXPENSES_QUICK_ANALYSIS_OPEN_KEY = "expenses-quick-analysis-open";
 
 function monthToDate(month: string) {
   return `${month}-01`;
@@ -117,6 +118,7 @@ export default function ExpensesPage() {
   const [importedFilter, setImportedFilter] = useState<ExpenseImportedFilter>("all");
   const [savedViews, setSavedViews] = useState<SavedExpenseView[]>([]);
   const [viewName, setViewName] = useState("");
+  const [quickAnalysisOpen, setQuickAnalysisOpen] = useState(true);
   const formRef = useRef<HTMLElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -151,6 +153,17 @@ export default function ExpensesPage() {
     },
     [supabase]
   );
+
+  useEffect(() => {
+    const storedQuickAnalysis = window.localStorage.getItem(EXPENSES_QUICK_ANALYSIS_OPEN_KEY);
+    if (storedQuickAnalysis) {
+      setQuickAnalysisOpen(storedQuickAnalysis === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(EXPENSES_QUICK_ANALYSIS_OPEN_KEY, String(quickAnalysisOpen));
+  }, [quickAnalysisOpen]);
 
   useEffect(() => {
     const init = async () => {
@@ -647,7 +660,9 @@ export default function ExpensesPage() {
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Control de gasto</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Gastos con analisis accionable</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-            Registra movimientos, clasificalos, editalos cuando haga falta y detecta rapidamente en que categoria se te va mas presupuesto.
+            {expenses.length > 0
+              ? "Registra, corrige y revisa rapido en que categorias se concentra el gasto."
+              : "Registra movimientos, clasificalos, editalos cuando haga falta y detecta rapidamente en que categoria se te va mas presupuesto."}
           </p>
         </section>
 
@@ -682,9 +697,11 @@ export default function ExpensesPage() {
             <div className="flex flex-col gap-3">
               <div>
                 <p className="text-sm font-medium text-white">Copiar presupuesto del mes a gastos</p>
-                <p className="mt-1 text-sm leading-6 text-slate-300">
-                  Importa las categorias presupuestadas del mes de la fecha seleccionada como gastos base.
-                </p>
+                {expenses.length === 0 ? (
+                  <p className="mt-1 text-sm leading-6 text-slate-300">
+                    Importa las categorias presupuestadas del mes de la fecha seleccionada como gastos base.
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -787,7 +804,7 @@ export default function ExpensesPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
-          <details className="group" open>
+          <details className="group" open={quickAnalysisOpen} onToggle={(event) => setQuickAnalysisOpen(event.currentTarget.open)}>
             <summary className="list-none cursor-pointer">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
               <div className="mt-2 flex items-center justify-between gap-4">

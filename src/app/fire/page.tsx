@@ -56,6 +56,7 @@ type FireSettingsRow = {
 
 const MAX_YEARS = 60;
 const FIRE_SETTINGS_KEY = "personal-finance-fire-settings";
+const FIRE_TABLE_OPEN_KEY = "fire-table-open";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -76,6 +77,18 @@ export default function FirePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [tableOpen, setTableOpen] = useState(false);
+
+  useEffect(() => {
+    const storedTableOpen = window.localStorage.getItem(FIRE_TABLE_OPEN_KEY);
+    if (storedTableOpen) {
+      setTableOpen(storedTableOpen === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(FIRE_TABLE_OPEN_KEY, String(tableOpen));
+  }, [tableOpen]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -400,7 +413,7 @@ export default function FirePage() {
 
         {simulation.points.length > 0 ? (
           <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-            <details className="group">
+            <details className="group" open={tableOpen} onToggle={(event) => setTableOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
                 <div className="flex items-center justify-between gap-4">
                   <SectionHeader eyebrow="Tabla" title="Evolucion del patrimonio" />

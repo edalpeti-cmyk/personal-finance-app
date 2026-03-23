@@ -141,6 +141,7 @@ const DASHBOARD_WIDGET_ORDER_KEY = "dashboard-widget-order";
 const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
+const DASHBOARD_ALERTS_OPEN_KEY = "dashboard-alerts-open";
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   { key: "low_savings_rate", enabled: true, threshold: 10 },
   { key: "missing_annual_savings", enabled: true, threshold: null },
@@ -478,6 +479,7 @@ export default function DashboardPage() {
     aiInsights: "full"
   });
   const [widgetPrefsLoaded, setWidgetPrefsLoaded] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [draggedWidgetId, setDraggedWidgetId] = useState<DashboardWidgetId | null>(null);
   const [alertRules, setAlertRules] = useState<DashboardAlertRule[]>(DASHBOARD_ALERT_RULE_DEFAULTS);
 
@@ -709,6 +711,17 @@ export default function DashboardPage() {
       setDismissedReminderIds([]);
     }
   }, []);
+
+  useEffect(() => {
+    const storedAlertsOpen = window.localStorage.getItem(DASHBOARD_ALERTS_OPEN_KEY);
+    if (storedAlertsOpen === "true") {
+      setAlertsOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_ALERTS_OPEN_KEY, String(alertsOpen));
+  }, [alertsOpen]);
 
   useEffect(() => {
     try {
@@ -1445,7 +1458,7 @@ export default function DashboardPage() {
         case "alerts":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <details className="group">
+              <details className="group" open={alertsOpen} onToggle={(event) => setAlertsOpen(event.currentTarget.open)}>
                 <summary className="list-none cursor-pointer">
                   <div className="flex items-start justify-between gap-4">
                     <SectionHeader eyebrow="Alertas automaticas" title="Senales que conviene vigilar" />

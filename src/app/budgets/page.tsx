@@ -137,6 +137,10 @@ function inputClass() {
   return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
 }
 
+const BUDGETS_COMPARISON_OPEN_KEY = "budgets-comparison-open";
+const BUDGETS_CATEGORY_COMPARISON_OPEN_KEY = "budgets-category-comparison-open";
+const BUDGETS_UNBUDGETED_OPEN_KEY = "budgets-unbudgeted-open";
+
 export default function BudgetsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -166,6 +170,9 @@ export default function BudgetsPage() {
   const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
   const [unbudgetedExpenses, setUnbudgetedExpenses] = useState<Array<{ category: string; actual: number }>>([]);
   const [currentIncomeEntries, setCurrentIncomeEntries] = useState<IncomeRow[]>([]);
+  const [comparisonOpen, setComparisonOpen] = useState(true);
+  const [categoryComparisonOpen, setCategoryComparisonOpen] = useState(false);
+  const [unbudgetedOpen, setUnbudgetedOpen] = useState(false);
   const [incomeSummary, setIncomeSummary] = useState<IncomeSavingsSummary>({
     currentIncome: 0,
     currentExpenses: 0,
@@ -195,6 +202,27 @@ export default function BudgetsPage() {
     setIncomeAmount("");
     setIncomeDate(`${selectedMonth}-01`);
   }, [selectedMonth]);
+
+  useEffect(() => {
+    const storedComparison = window.localStorage.getItem(BUDGETS_COMPARISON_OPEN_KEY);
+    const storedCategoryComparison = window.localStorage.getItem(BUDGETS_CATEGORY_COMPARISON_OPEN_KEY);
+    const storedUnbudgeted = window.localStorage.getItem(BUDGETS_UNBUDGETED_OPEN_KEY);
+    if (storedComparison) setComparisonOpen(storedComparison === "true");
+    if (storedCategoryComparison) setCategoryComparisonOpen(storedCategoryComparison === "true");
+    if (storedUnbudgeted) setUnbudgetedOpen(storedUnbudgeted === "true");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUDGETS_COMPARISON_OPEN_KEY, String(comparisonOpen));
+  }, [comparisonOpen]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUDGETS_CATEGORY_COMPARISON_OPEN_KEY, String(categoryComparisonOpen));
+  }, [categoryComparisonOpen]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUDGETS_UNBUDGETED_OPEN_KEY, String(unbudgetedOpen));
+  }, [unbudgetedOpen]);
 
   const handleSaveSavingsTarget = async (event: FormEvent) => {
     event.preventDefault();
@@ -628,7 +656,11 @@ export default function BudgetsPage() {
         <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Presupuesto mensual</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Plan mensual con ingresos y ahorro</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Gestiona limites por categoria, registra ingresos del mes y fija un ahorro objetivo mensual para medir tu plan con claridad.</p>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
+            {rows.length > 0 || currentIncomeEntries.length > 0
+              ? "Ajusta categorias, ingresos y ahorro objetivo del mes activo."
+              : "Gestiona limites por categoria, registra ingresos del mes y fija un ahorro objetivo mensual para medir tu plan con claridad."}
+          </p>
         </section>
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
@@ -657,7 +689,7 @@ export default function BudgetsPage() {
           <div className="mt-4 grid gap-4 rounded-3xl border border-white/8 bg-white/5 p-4">
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Copiar otro mes</p>
-              <p className="mt-2 text-sm leading-6 text-slate-300">Duplica categorias y ahorro objetivo de un mes anterior al mes activo.</p>
+              {rows.length === 0 ? <p className="mt-2 text-sm leading-6 text-slate-300">Duplica categorias y ahorro objetivo de un mes anterior al mes activo.</p> : null}
             </div>
             <label className="grid gap-2 text-sm text-slate-200">
               Mes origen
@@ -676,7 +708,7 @@ export default function BudgetsPage() {
           <form onSubmit={handleSaveSavingsTarget} className="mt-4 grid gap-4 rounded-3xl border border-white/8 bg-white/5 p-4" noValidate>
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ahorro objetivo</p>
-              <p className="mt-2 text-sm leading-6 text-slate-300">Este valor se usará para calcular el ahorro y la tasa de ahorro del mes seleccionado.</p>
+              {rows.length === 0 ? <p className="mt-2 text-sm leading-6 text-slate-300">Este valor se usara para calcular el ahorro y la tasa de ahorro del mes seleccionado.</p> : null}
             </div>
             <label className="grid gap-2 text-sm text-slate-200">
               Ahorro planificado del mes
@@ -748,7 +780,7 @@ export default function BudgetsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
-          <details className="group" open>
+          <details className="group" open={comparisonOpen} onToggle={(event) => setComparisonOpen(event.currentTarget.open)}>
             <summary className="list-none cursor-pointer">
               <div className="flex items-start justify-between gap-4">
                 <SectionHeader eyebrow="Resumen" title="Comparativa mensual" />
@@ -870,7 +902,7 @@ export default function BudgetsPage() {
 
         {categoryComparison.length > 0 ? (
           <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
-            <details className="group">
+            <details className="group" open={categoryComparisonOpen} onToggle={(event) => setCategoryComparisonOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
                 <div className="mt-2 flex items-center justify-between gap-4">
@@ -899,7 +931,7 @@ export default function BudgetsPage() {
 
         {unbudgetedExpenses.length > 0 ? (
           <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-            <details className="group">
+            <details className="group" open={unbudgetedOpen} onToggle={(event) => setUnbudgetedOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
                 <div className="mt-2 flex items-center justify-between gap-4">
