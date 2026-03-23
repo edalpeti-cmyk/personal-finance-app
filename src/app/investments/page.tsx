@@ -623,7 +623,7 @@ function buildTransactionCostBasisMap(transactions: InvestmentTransactionRow[]) 
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
-  const { showLocalValues } = useTheme();
+  const { showLocalValues, hideBalances } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -681,6 +681,11 @@ export default function InvestmentsPage() {
     setToast(nextToast);
     window.setTimeout(() => setToast(null), 3000);
   }, []);
+
+  const formatAssetUnits = useCallback(
+    (value: number, digits: number) => (hideBalances ? "••••" : formatNumber(value, digits)),
+    [hideBalances]
+  );
 
   useEffect(() => {
     const loadSavedViews = async () => {
@@ -2697,7 +2702,7 @@ export default function InvestmentsPage() {
                             Posicion detectada: <span className="font-medium text-white">{matchedSellPosition.asset_name}</span>
                           </span>
                           <span className="text-emerald-300">
-                            Disponible: {formatNumber(Number(matchedSellPosition.quantity) || 0, 8)} unidades
+                            Disponible: {formatAssetUnits(Number(matchedSellPosition.quantity) || 0, 8)} unidades
                           </span>
                         </div>
                         {sellPreview ? (
@@ -3657,7 +3662,7 @@ export default function InvestmentsPage() {
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cantidad</p>
-                  <p className="mt-3 break-words font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{formatNumber(Number(selectedAsset.quantity) || 0, 4)}</p>
+                  <p className="mt-3 break-words font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{formatAssetUnits(Number(selectedAsset.quantity) || 0, 4)}</p>
                   <p className="mt-2 text-sm leading-5 text-slate-300">Unidades actuales en cartera.</p>
                 </article>
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
@@ -3799,7 +3804,7 @@ export default function InvestmentsPage() {
                             <p className="mt-1 text-xs text-slate-400">{transaction.executed_at}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium text-white">{formatNumber(Number(transaction.quantity) || 0, 8)} unidades</p>
+                            <p className="text-sm font-medium text-white">{formatAssetUnits(Number(transaction.quantity) || 0, 8)} unidades</p>
                             <p className="mt-1 text-xs text-slate-400">{formatCurrencyByPreference(Number(transaction.price_local) || 0, transaction.asset_currency)}</p>
                           </div>
                         </div>
