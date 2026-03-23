@@ -13,7 +13,19 @@ const DATE_LOCALE: Record<DateFormat, string> = {
   us: "en-US"
 };
 
+export function shouldHideBalances() {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  return document.documentElement.dataset.hideBalances === "true";
+}
+
 export function formatCurrencyByPreference(value: number, currency: CurrencyCode) {
+  if (shouldHideBalances()) {
+    return "••••";
+  }
+
   return new Intl.NumberFormat(CURRENCY_LOCALE[currency], {
     style: "currency",
     currency,
