@@ -850,7 +850,7 @@ export default function ReviewPage() {
                 <summary className="accordion-summary cursor-pointer list-none">
                   <div className="accordion-summary-main">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Desviaciones</p>
-                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias a revisar</h2>
+                    <h2 className="mt-2 max-w-[14ch] font-[var(--font-heading)] text-xl font-semibold leading-tight text-white md:max-w-none md:text-2xl">Categorias a revisar</h2>
                   </div>
                   <div className="accordion-summary-side">
                     <span className="accordion-metric">{reviewMetrics.overspent.length} alertas</span>
@@ -874,7 +874,7 @@ export default function ReviewPage() {
                 <summary className="accordion-summary cursor-pointer list-none">
                   <div className="accordion-summary-main">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivos activos</p>
-                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Metas conectadas al plan</h2>
+                    <h2 className="mt-2 max-w-[15ch] font-[var(--font-heading)] text-xl font-semibold leading-tight text-white md:max-w-none md:text-2xl">Metas conectadas al plan</h2>
                   </div>
                   <div className="accordion-summary-side">
                     <span className="accordion-metric">{reviewMetrics.topGoals.length} metas</span>
@@ -898,7 +898,7 @@ export default function ReviewPage() {
                 <summary className="accordion-summary cursor-pointer list-none">
                   <div className="accordion-summary-main">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Avance de metas</p>
-                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Que ha cambiado este mes en tus objetivos</h2>
+                    <h2 className="mt-2 max-w-[16ch] font-[var(--font-heading)] text-xl font-semibold leading-tight text-white md:max-w-none md:text-2xl">Que ha cambiado este mes en tus objetivos</h2>
                   </div>
                   <div className="accordion-summary-side">
                     <span className="accordion-metric">{goalMonthlyAdvance.length} con avance</span>
