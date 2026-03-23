@@ -670,6 +670,7 @@ export default function InvestmentsPage() {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
+  const backfillingTransactionsRef = useRef(false);
   const investmentNameById = useMemo(
     () => Object.fromEntries(investments.map((row) => [row.id, row.asset_name])),
     [investments]
@@ -1010,6 +1011,166 @@ export default function InvestmentsPage() {
     [supabase]
   );
 
+  const backfillHistoricalTransactionFx = useCallback(
+    async (uid: string, rows: InvestmentTransactionRow[]) => {
+      const rowsNeedingFx = rows.filter((row) => !row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider);
+      if (rowsNeedingFx.length === 0 || backfillingTransactionsRef.current) {
+        return;
+      }
+
+      backfillingTransactionsRef.current = true;
+
+      try {
+        const rateCache = new Map<string, Record<AssetCurrency, number>>();
+        const getRateForDate = async (date: string, currency: AssetCurrency) => {
+          if (currency === "EUR") return 1;
+          if (!rateCache.has(date)) {
+            const rates = await fetchRatesToEurAtDate(date);
+            rateCache.set(date, rates);
+          }
+
+          const cachedRates = rateCache.get(date);
+          return cachedRates?.[currency] ?? FALLBACK_RATES_TO_EUR[currency] ?? 1;
+        };
+
+        const updates: Array<{
+          id: string;
+          total_eur: number;
+          commission_eur: number;
+          realized_gain_eur: number | null;
+          fx_rate_to_eur: number;
+          fx_rate_date: string;
+          fx_provider: string;
+        }> = [];
+
+        const rowsByInvestment = new Map<string, InvestmentTransactionRow[]>();
+        const rowsWithoutInvestment: InvestmentTransactionRow[] = [];
+
+        for (const row of rows) {
+          if (row.investment_id) {
+            const current = rowsByInvestment.get(row.investment_id) ?? [];
+            current.push(row);
+            rowsByInvestment.set(row.investment_id, current);
+          } else {
+            rowsWithoutInvestment.push(row);
+          }
+        }
+
+        for (const investmentRows of rowsByInvestment.values()) {
+          let openQuantity = 0;
+          let openCostEur = 0;
+
+          for (const row of sortTransactionsForCostBasis(investmentRows)) {
+            const quantityValue = Number(row.quantity) || 0;
+            if (quantityValue <= 0) continue;
+
+            const currency = row.asset_currency ?? "EUR";
+            const fxRate =
+              row.fx_rate_to_eur && row.fx_rate_to_eur > 0
+                ? Number(row.fx_rate_to_eur)
+                : await getRateForDate(row.executed_at, currency);
+            const totalLocal = Number(row.total_local) || 0;
+            const commissionLocal = Number(row.commission_local ?? 0) || 0;
+            const totalEur = Number((totalLocal * fxRate).toFixed(4));
+            const commissionEur = Number((commissionLocal * fxRate).toFixed(4));
+
+            if (row.transaction_type === "buy") {
+              openQuantity += quantityValue;
+              openCostEur += totalEur + commissionEur;
+
+              if (!row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider) {
+                updates.push({
+                  id: row.id,
+                  total_eur: totalEur,
+                  commission_eur: commissionEur,
+                  realized_gain_eur: null,
+                  fx_rate_to_eur: Number(fxRate.toFixed(8)),
+                  fx_rate_date: row.executed_at,
+                  fx_provider: "frankfurter"
+                });
+              }
+
+              continue;
+            }
+
+            const avgCostPerUnitEur = openQuantity > 0 ? openCostEur / openQuantity : 0;
+            const realizedGainEur = Number((totalEur - commissionEur - avgCostPerUnitEur * quantityValue).toFixed(4));
+            const soldCostEur = avgCostPerUnitEur * quantityValue;
+
+            openQuantity = Math.max(0, openQuantity - quantityValue);
+            openCostEur = Math.max(0, openCostEur - soldCostEur);
+
+            if (!row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider) {
+              updates.push({
+                id: row.id,
+                total_eur: totalEur,
+                commission_eur: commissionEur,
+                realized_gain_eur: realizedGainEur,
+                fx_rate_to_eur: Number(fxRate.toFixed(8)),
+                fx_rate_date: row.executed_at,
+                fx_provider: "frankfurter"
+              });
+            }
+          }
+        }
+
+        for (const row of rowsWithoutInvestment) {
+          if (row.fx_rate_to_eur && row.fx_rate_date && row.fx_provider) {
+            continue;
+          }
+
+          const currency = row.asset_currency ?? "EUR";
+          const fxRate = await getRateForDate(row.executed_at, currency);
+          const totalLocal = Number(row.total_local) || 0;
+          const commissionLocal = Number(row.commission_local ?? 0) || 0;
+
+          updates.push({
+            id: row.id,
+            total_eur: Number((totalLocal * fxRate).toFixed(4)),
+            commission_eur: Number((commissionLocal * fxRate).toFixed(4)),
+            realized_gain_eur: row.realized_gain_eur,
+            fx_rate_to_eur: Number(fxRate.toFixed(8)),
+            fx_rate_date: row.executed_at,
+            fx_provider: "frankfurter"
+          });
+        }
+
+        if (updates.length === 0) {
+          return;
+        }
+
+        const results = await Promise.all(
+          updates.map((update) =>
+            supabase
+              .from("investment_transactions")
+              .update({
+                total_eur: update.total_eur,
+                commission_eur: update.commission_eur,
+                realized_gain_eur: update.realized_gain_eur,
+                fx_rate_to_eur: update.fx_rate_to_eur,
+                fx_rate_date: update.fx_rate_date,
+                fx_provider: update.fx_provider
+              })
+              .eq("id", update.id)
+              .eq("user_id", uid)
+          )
+        );
+
+        const failed = results.find((result) => result.error);
+        if (failed?.error) {
+          showToast({ type: "error", text: "No se pudo completar el backfill historico de divisas." });
+          return;
+        }
+
+        await Promise.all([loadTransactions(uid), loadRealizedGainTotal(uid)]);
+        showToast({ type: "success", text: `${updates.length} operaciones antiguas han recuperado su tipo de cambio historico.` });
+      } finally {
+        backfillingTransactionsRef.current = false;
+      }
+    },
+    [loadRealizedGainTotal, loadTransactions, showToast, supabase]
+  );
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -1023,6 +1184,18 @@ export default function InvestmentsPage() {
 
     void init();
   }, [authLoading, loadInvestments, loadRealizedGainTotal, loadTransactions, userId]);
+
+  useEffect(() => {
+    if (!userId || transactions.length === 0) {
+      return;
+    }
+
+    if (!transactions.some((row) => !row.fx_rate_to_eur || !row.fx_rate_date || !row.fx_provider)) {
+      return;
+    }
+
+    void backfillHistoricalTransactionFx(userId, transactions);
+  }, [backfillHistoricalTransactionFx, transactions, userId]);
 
   const costBasisMap = useMemo(() => buildTransactionCostBasisMap(transactions), [transactions]);
 
