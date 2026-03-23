@@ -847,12 +847,12 @@ export default function ReviewPage() {
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
               <details className="group">
-                <summary className="accordion-summary cursor-pointer list-none">
-                  <div className="accordion-summary-main">
+                <summary className="flex cursor-pointer list-none flex-col items-start gap-3">
+                  <div className="w-full min-w-0">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Desviaciones</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Categorias a revisar</h2>
                   </div>
-                  <div className="accordion-summary-side">
+                  <div className="flex items-center gap-2 self-start">
                     <span className="accordion-metric">{reviewMetrics.overspent.length} alertas</span>
                     <span className="accordion-chevron" aria-hidden="true">v</span>
                   </div>
@@ -871,12 +871,12 @@ export default function ReviewPage() {
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
               <details className="group">
-                <summary className="accordion-summary cursor-pointer list-none">
-                  <div className="accordion-summary-main">
+                <summary className="flex cursor-pointer list-none flex-col items-start gap-3">
+                  <div className="w-full min-w-0">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivos activos</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Metas conectadas al plan</h2>
                   </div>
-                  <div className="accordion-summary-side">
+                  <div className="flex items-center gap-2 self-start">
                     <span className="accordion-metric">{reviewMetrics.topGoals.length} metas</span>
                     <span className="accordion-chevron" aria-hidden="true">v</span>
                   </div>
@@ -895,12 +895,12 @@ export default function ReviewPage() {
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
               <details className="group">
-                <summary className="accordion-summary cursor-pointer list-none">
-                  <div className="accordion-summary-main">
+                <summary className="flex cursor-pointer list-none flex-col items-start gap-3">
+                  <div className="w-full min-w-0">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Avance de metas</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Que ha cambiado este mes en tus objetivos</h2>
                   </div>
-                  <div className="accordion-summary-side">
+                  <div className="flex items-center gap-2 self-start">
                     <span className="accordion-metric">{goalMonthlyAdvance.length} con avance</span>
                     <span className="accordion-chevron" aria-hidden="true">v</span>
                   </div>

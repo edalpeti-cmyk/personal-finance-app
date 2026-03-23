@@ -1121,12 +1121,12 @@ export default function GoalsPage() {
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <details className="group">
-            <summary className="accordion-summary cursor-pointer list-none">
-              <div className="accordion-summary-main">
+            <summary className="flex cursor-pointer list-none flex-col items-start gap-3">
+              <div className="w-full min-w-0">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plan automatico</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Conectar metas con el ahorro del mes</h2>
               </div>
-              <div className="accordion-summary-side">
+              <div className="flex items-center gap-2 self-start">
                 <span className="accordion-metric">{activeGoals.length} activas</span>
                 <span className="accordion-chevron" aria-hidden="true">v</span>
               </div>
@@ -1202,12 +1202,12 @@ export default function GoalsPage() {
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <details className="group">
-            <summary className="accordion-summary cursor-pointer list-none">
-              <div className="accordion-summary-main">
+            <summary className="flex cursor-pointer list-none flex-col items-start gap-3">
+              <div className="w-full min-w-0">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista anual</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Evolucion mes a mes de una meta</h2>
               </div>
-              <div className="accordion-summary-side">
+              <div className="flex items-center gap-2 self-start">
                 <span className="accordion-metric">{availableTimelineYears.length} anos</span>
                 <span className="accordion-chevron" aria-hidden="true">v</span>
               </div>
