@@ -805,7 +805,7 @@ export default function BudgetsPage() {
                 </div>
               </div>
             </summary>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="accordion-content mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta presupuesto</p>
               <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(monthOverMonth.budgetDelta, currency)}</p>
@@ -916,7 +916,7 @@ export default function BudgetsPage() {
                   </div>
                 </div>
               </summary>
-            <div className={`table-scroll mt-6 ${categoryComparison.length > 6 ? "max-h-[420px]" : ""}`}>
+            <div className={`accordion-content table-scroll mt-6 ${categoryComparison.length > 6 ? "max-h-[420px]" : ""}`}>
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
                 <tbody>
@@ -948,7 +948,7 @@ export default function BudgetsPage() {
                   </div>
                 </div>
               </summary>
-              <ul className="mt-6 grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-3">
+              <ul className="accordion-content mt-6 grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-3">
                 {unbudgetedExpenses.map((item) => (
                   <li key={item.category} className="rounded-3xl border border-white/8 bg-white/5 px-4 py-3"><span className="font-medium text-white">{item.category}</span>: {formatCurrencyByPreference(item.actual, currency)}</li>
                 ))}

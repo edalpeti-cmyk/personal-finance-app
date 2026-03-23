@@ -1131,7 +1131,7 @@ export default function GoalsPage() {
                 <span className="accordion-chevron" aria-hidden="true">v</span>
               </div>
             </summary>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="accordion-content mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void snapshotMonthlyGoalProgress()}
@@ -1212,6 +1212,7 @@ export default function GoalsPage() {
                 <span className="accordion-chevron" aria-hidden="true">v</span>
               </div>
             </summary>
+          <div className="accordion-content">
           {timelineGoalOptions.length === 0 ? (
             <div className="mt-6">
               <EmptyStateCard eyebrow="Sin metas" title="No hay metas activas para dibujar una vista anual" description="Crea una meta activa y guarda fotos mensuales para ver su evolucion." compact />
@@ -1253,6 +1254,7 @@ export default function GoalsPage() {
               </div>
             </>
           )}
+          </div>
           </details>
         </section>
 

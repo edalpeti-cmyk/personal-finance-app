@@ -425,7 +425,7 @@ export default function FirePage() {
                   </div>
                 </div>
               </summary>
-              <div className="table-scroll mt-6">
+              <div className="accordion-content table-scroll mt-6">
                 <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                   <thead>
                     <tr className="text-left text-slate-400">

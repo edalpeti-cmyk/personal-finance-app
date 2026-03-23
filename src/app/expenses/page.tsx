@@ -815,7 +815,7 @@ export default function ExpensesPage() {
                 </div>
               </div>
             </summary>
-            <div className="mt-5 grid gap-3 text-sm text-slate-200 2xl:grid-cols-2">
+            <div className="accordion-content mt-5 grid gap-3 text-sm text-slate-200 2xl:grid-cols-2">
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mayor gasto</p>
               {monthlyAnalysis.topCategory ? (

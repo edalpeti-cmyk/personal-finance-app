@@ -135,6 +135,9 @@ textarea {
   border-radius: 999px;
   white-space: nowrap;
   line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
 }
 
 .panel h1,
@@ -172,6 +175,22 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+details.group {
+  border-radius: 1.5rem;
+}
+
+details.group > summary {
+  transition: margin-bottom 180ms ease;
+}
+
+details.group:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+details.group[open] > summary {
+  margin-bottom: 0.35rem;
 }
 
 .accordion-summary-main {
@@ -217,6 +236,22 @@ textarea {
 details[open] .accordion-chevron {
   transform: rotate(180deg);
   background: rgba(255, 255, 255, 0.1);
+}
+
+.accordion-content {
+  overflow: hidden;
+  animation: accordion-fade-in 180ms ease;
+}
+
+@keyframes accordion-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 html[data-theme="light"] {

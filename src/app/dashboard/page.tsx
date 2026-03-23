@@ -1475,7 +1475,7 @@ export default function DashboardPage() {
                       : "Sin alertas activas. Abre el bloque si quieres revisar tambien resueltas y silenciadas."}
                   </p>
                 </summary>
-                <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                <div className="accordion-content mt-6 grid gap-4 xl:grid-cols-3">
                   <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Activas</p>
                     <div className="mt-4 space-y-3">
@@ -1967,7 +1967,7 @@ export default function DashboardPage() {
                     <span className="accordion-chevron" aria-hidden="true">v</span>
                   </div>
                 </summary>
-                <div className="mt-6">
+                <div className="accordion-content mt-6">
                   <div className="flex justify-end">
                     <button
                       type="button"

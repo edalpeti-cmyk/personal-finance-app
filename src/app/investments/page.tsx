@@ -3033,7 +3033,7 @@ export default function InvestmentsPage() {
               </div>
             </summary>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="accordion-content mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
               <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Plusvalia latente</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
