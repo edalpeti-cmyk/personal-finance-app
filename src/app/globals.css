@@ -182,7 +182,21 @@ details.group {
 }
 
 details.group > summary {
+  position: relative;
   transition: margin-bottom 180ms ease;
+}
+
+details.group > summary::after {
+  content: "";
+  display: block;
+  margin-top: 0.9rem;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 100%);
+  transform-origin: left center;
+  transform: scaleX(0.42);
+  opacity: 0.32;
+  transition: transform 180ms ease, opacity 180ms ease;
 }
 
 details.group:not([open]) > summary {
@@ -191,6 +205,11 @@ details.group:not([open]) > summary {
 
 details.group[open] > summary {
   margin-bottom: 0.35rem;
+}
+
+details.group[open] > summary::after {
+  transform: scaleX(1);
+  opacity: 0.7;
 }
 
 .accordion-summary-main {
