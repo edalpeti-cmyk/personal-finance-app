@@ -1124,7 +1124,7 @@ export default function GoalsPage() {
             <summary className="accordion-summary cursor-pointer list-none">
               <div className="accordion-summary-main">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plan automatico</p>
-                <h2 className="mt-2 max-w-[12ch] font-[var(--font-heading)] text-xl font-semibold leading-tight text-white md:max-w-none md:text-2xl">Conectar metas con el ahorro del mes</h2>
+                <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Conectar metas con el ahorro del mes</h2>
               </div>
               <div className="accordion-summary-side">
                 <span className="accordion-metric">{activeGoals.length} activas</span>
@@ -1205,7 +1205,7 @@ export default function GoalsPage() {
             <summary className="accordion-summary cursor-pointer list-none">
               <div className="accordion-summary-main">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista anual</p>
-                <h2 className="mt-2 max-w-[11ch] font-[var(--font-heading)] text-xl font-semibold leading-tight text-white md:max-w-none md:text-2xl">Evolucion mes a mes de una meta</h2>
+                <h2 className="mt-2 font-[var(--font-heading)] text-[1.7rem] font-semibold leading-[1.08] text-white md:text-2xl">Evolucion mes a mes de una meta</h2>
               </div>
               <div className="accordion-summary-side">
                 <span className="accordion-metric">{availableTimelineYears.length} anos</span>
