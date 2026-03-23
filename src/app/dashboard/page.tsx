@@ -1393,7 +1393,7 @@ export default function DashboardPage() {
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <SectionHeader
                 eyebrow="Recordatorios automaticos"
-                title="Pequenos pendientes para mantener el panel al dia"
+                title="Pendientes del panel"
                 aside={
                   dismissedReminderIds.length > 0 ? (
                     <button
@@ -1445,60 +1445,72 @@ export default function DashboardPage() {
         case "alerts":
           return (
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
-              <SectionHeader
-                eyebrow="Alertas automaticas"
-                title="Senales que conviene vigilar"
-                description="Las reglas se configuran desde Configuracion para mantener el dashboard centrado en la lectura."
-              />
-              <div className="mt-6 grid gap-4 xl:grid-cols-3">
-                <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Activas</p>
-                  <div className="mt-4 space-y-3">
-                    {dashboardAlerts.map((alert) => (
-                      <article key={alert.id} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
-                        <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
-                          {alert.title}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
-                      </article>
-                    ))}
+              <details className="group">
+                <summary className="list-none cursor-pointer">
+                  <div className="flex items-start justify-between gap-4">
+                    <SectionHeader eyebrow="Alertas automaticas" title="Senales que conviene vigilar" />
+                    <div className="flex flex-wrap justify-end gap-2 pt-1 text-xs">
+                      <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-amber-200">{dashboardAlerts.length} activas</span>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-200">{dashboardAlertGroups.resolved.length} resueltas</span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">{dashboardAlertGroups.silenced.length} silenciadas</span>
+                    </div>
                   </div>
-                </div>
-                <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Resueltas</p>
-                  <div className="mt-4 space-y-3">
-                    {dashboardAlertGroups.resolved.length > 0 ? (
-                      dashboardAlertGroups.resolved.map((alert) => (
-                        <article key={alert.id} className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{alert.title}</p>
-                          <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
-                        </article>
-                      ))
-                    ) : (
-                      <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
-                        <p className="text-sm leading-6 text-white/72">No hay reglas resueltas aparte de las que ya estan activas o silenciadas.</p>
-                      </article>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Silenciadas</p>
-                  <div className="mt-4 space-y-3">
-                    {dashboardAlertGroups.silenced.length > 0 ? (
-                      dashboardAlertGroups.silenced.map((alert) => (
+                  <p className="mt-3 text-sm text-white/64">
+                    {dashboardAlerts.length > 0
+                      ? `${dashboardAlerts.length} alerta(s) activa(s). Abre el bloque para ver el detalle completo.`
+                      : "Sin alertas activas. Abre el bloque si quieres revisar tambien resueltas y silenciadas."}
+                  </p>
+                </summary>
+                <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Activas</p>
+                    <div className="mt-4 space-y-3">
+                      {dashboardAlerts.map((alert) => (
                         <article key={alert.id} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-300">{alert.title}</p>
+                          <p className={`text-xs uppercase tracking-[0.18em] ${alert.tone === "warning" ? "text-amber-300" : alert.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>
+                            {alert.title}
+                          </p>
                           <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
                         </article>
-                      ))
-                    ) : (
-                      <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
-                        <p className="text-sm leading-6 text-white/72">No hay alertas silenciadas. Puedes pausar reglas desde Configuracion si quieres menos ruido.</p>
-                      </article>
-                    )}
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Resueltas</p>
+                    <div className="mt-4 space-y-3">
+                      {dashboardAlertGroups.resolved.length > 0 ? (
+                        dashboardAlertGroups.resolved.map((alert) => (
+                          <article key={alert.id} className="rounded-[18px] border border-emerald-400/12 bg-slate-950/20 p-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{alert.title}</p>
+                            <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
+                          </article>
+                        ))
+                      ) : (
+                        <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                          <p className="text-sm leading-6 text-white/72">No hay reglas resueltas aparte de las que ya estan activas o silenciadas.</p>
+                        </article>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-300">Silenciadas</p>
+                    <div className="mt-4 space-y-3">
+                      {dashboardAlertGroups.silenced.length > 0 ? (
+                        dashboardAlertGroups.silenced.map((alert) => (
+                          <article key={alert.id} className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-300">{alert.title}</p>
+                            <p className="mt-2 text-sm leading-6 text-white/80">{alert.body}</p>
+                          </article>
+                        ))
+                      ) : (
+                        <article className="rounded-[18px] border border-white/8 bg-slate-950/20 p-3">
+                          <p className="text-sm leading-6 text-white/72">No hay alertas silenciadas. Puedes pausar reglas desde Configuracion si quieres menos ruido.</p>
+                        </article>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </details>
             </section>
           );
         case "monthlyTrend":

@@ -748,34 +748,44 @@ export default function BudgetsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
-          <SectionHeader
-            eyebrow="Resumen"
-            title="Comparativa mensual"
-            aside={
-              <button className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10" type="button" onClick={handleExportCsv}>Exportar CSV</button>
-            }
-          />
-
+          <details className="group" open>
+            <summary className="list-none cursor-pointer">
+              <div className="flex items-start justify-between gap-4">
+                <SectionHeader eyebrow="Resumen" title="Comparativa mensual" />
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
+                    Delta {formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}
+                  </span>
+                  <button
+                    className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10"
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleExportCsv();
+                    }}
+                  >
+                    Exportar CSV
+                  </button>
+                </div>
+              </div>
+            </summary>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta presupuesto</p>
               <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none text-white">{formatCurrencyByPreference(monthOverMonth.budgetDelta, currency)}</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Cambio del presupuesto frente al mes anterior.</p>
             </div>
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta gasto real</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${monthOverMonth.actualDelta > 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(monthOverMonth.actualDelta, currency)}</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Variacion del gasto registrado respecto al mes previo.</p>
             </div>
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ingresos</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${incomeComparison.incomeDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.incomeDelta, currency)}</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Cambio de ingresos comparado con el mes anterior.</p>
             </div>
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Delta ahorro objetivo</p>
               <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-none ${incomeComparison.savingsDelta >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">Cambio del ahorro objetivo frente al mes anterior.</p>
             </div>
           </div>
           <div className="mt-3 rounded-[24px] border border-white/8 bg-white/5 p-4 text-sm text-slate-300">
@@ -788,6 +798,7 @@ export default function BudgetsPage() {
               Delta: <span className={`font-medium ${monthOverMonth.spentPercentDelta > 0 ? "text-red-300" : monthOverMonth.spentPercentDelta < 0 ? "text-emerald-300" : "text-slate-100"}`}>{monthOverMonth.spentPercentDelta >= 0 ? "+" : ""}{monthOverMonth.spentPercentDelta.toFixed(1)} pts</span>
             </p>
           </div>
+          </details>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
@@ -857,22 +868,16 @@ export default function BudgetsPage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
-
-          {categoryComparison.length === 0 ? (
-            <div className="mt-6">
-              <EmptyStateCard
-                eyebrow="Comparativa"
-                title="Aun no hay base suficiente para comparar"
-                description="Necesitas datos en el mes actual y en el anterior para que la comparativa mensual tenga sentido."
-                actionLabel="Completa al menos dos meses"
-                actionHref="/budgets"
-                compact
-              />
-            </div>
-          ) : (
+        {categoryComparison.length > 0 ? (
+          <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
+            <details className="group">
+              <summary className="list-none cursor-pointer">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
+                <div className="mt-2 flex items-center justify-between gap-4">
+                  <h2 className="font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">{categoryComparison.length} categorias</span>
+                </div>
+              </summary>
             <div className={`table-scroll mt-6 ${categoryComparison.length > 6 ? "max-h-[420px]" : ""}`}>
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Anterior</th><th className="px-3 py-2 text-right">Delta</th></tr></thead>
@@ -888,24 +893,28 @@ export default function BudgetsPage() {
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
+            </details>
+          </section>
+        ) : null}
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
-          {unbudgetedExpenses.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-white/8 bg-white/5 p-5">
-              <p className="max-w-[42ch] text-sm leading-7 text-slate-300">Todo el gasto del mes actual esta cubierto por categorias presupuestadas.</p>
-            </div>
-          ) : (
-            <ul className="mt-6 grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-3">
-              {unbudgetedExpenses.map((item) => (
-                <li key={item.category} className="rounded-3xl border border-white/8 bg-white/5 px-4 py-3"><span className="font-medium text-white">{item.category}</span>: {formatCurrencyByPreference(item.actual, currency)}</li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {unbudgetedExpenses.length > 0 ? (
+          <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+            <details className="group">
+              <summary className="list-none cursor-pointer">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
+                <div className="mt-2 flex items-center justify-between gap-4">
+                  <h2 className="font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">{unbudgetedExpenses.length} pendientes</span>
+                </div>
+              </summary>
+              <ul className="mt-6 grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-3">
+                {unbudgetedExpenses.map((item) => (
+                  <li key={item.category} className="rounded-3xl border border-white/8 bg-white/5 px-4 py-3"><span className="font-medium text-white">{item.category}</span>: {formatCurrencyByPreference(item.actual, currency)}</li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        ) : null}
       </main>
     </>
   );

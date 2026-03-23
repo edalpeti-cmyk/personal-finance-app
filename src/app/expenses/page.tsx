@@ -787,9 +787,17 @@ export default function ExpensesPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
-          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
-          <div className="mt-5 grid gap-3 text-sm text-slate-200 2xl:grid-cols-2">
+          <details className="group" open>
+            <summary className="list-none cursor-pointer">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <h2 className="font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
+                  {monthlyAnalysis.recommendations.length} ideas
+                </span>
+              </div>
+            </summary>
+            <div className="mt-5 grid gap-3 text-sm text-slate-200 2xl:grid-cols-2">
             <div className="rounded-[24px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mayor gasto</p>
               {monthlyAnalysis.topCategory ? (
@@ -826,15 +834,12 @@ export default function ExpensesPage() {
                 ))}
               </ul>
             </div>
-          </div>
+            </div>
+          </details>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader
-            eyebrow="Vista por niveles"
-            title="Categorias de gasto"
-            description="Primero entras en una categoria y despues abres los gastos concretos de ese grupo."
-          />
+          <SectionHeader eyebrow="Vista por niveles" title="Categorias de gasto" />
 
           <div className="mt-6 grid gap-4 xl:grid-cols-6">
             <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2">

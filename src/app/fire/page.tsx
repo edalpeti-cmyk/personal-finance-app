@@ -327,13 +327,13 @@ export default function FirePage() {
         <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Calculadora FIRE</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Planifica tu independencia financiera</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Calcula tu numero FIRE, estima cuantos anos te faltan y visualiza la evolucion esperada de tu patrimonio.</p>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">Calcula tu numero FIRE y el horizonte estimado con tu configuracion actual.</p>
         </section>
 
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Formula base</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">Gastos anuales / 0.04</p>
-          <p className="mt-3 text-sm leading-6 text-slate-200">Usamos la regla del 4% para estimar el capital necesario para vivir de tu patrimonio. Esta configuracion se comparte con el dashboard.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Base compartida con el dashboard.</p>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
@@ -398,10 +398,46 @@ export default function FirePage() {
           </div>
         </section>
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader eyebrow="Tabla" title="Evolucion del patrimonio" />
-
-          {simulation.points.length === 0 ? (
+        {simulation.points.length > 0 ? (
+          <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+            <details className="group">
+              <summary className="list-none cursor-pointer">
+                <div className="flex items-center justify-between gap-4">
+                  <SectionHeader eyebrow="Tabla" title="Evolucion del patrimonio" />
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
+                    {Math.min(simulation.points.length, 31)} anos
+                  </span>
+                </div>
+              </summary>
+              <div className="table-scroll mt-6">
+                <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-400">
+                      <th className="sticky-col-header px-3 py-2">Ano</th>
+                      <th className="px-3 py-2">Edad</th>
+                      <th className="px-3 py-2 text-right">Patrimonio</th>
+                      <th className="px-3 py-2 text-right">Aporte anual</th>
+                      <th className="px-3 py-2 text-right">Crecimiento anual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {simulation.points.slice(0, 31).map((point) => (
+                      <tr key={point.year} className="bg-white/5 shadow-sm">
+                        <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">{point.year}</td>
+                        <td className="px-3 py-4 text-slate-300">{point.age}</td>
+                        <td className="px-3 py-4 text-right font-medium text-white">{formatCurrencyByPreference(point.netWorth, currency)}</td>
+                        <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(point.contribution, currency)}</td>
+                        <td className="rounded-r-2xl px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(point.growth, currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </section>
+        ) : (
+          <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+            <SectionHeader eyebrow="Proyeccion" title="Evolucion del patrimonio" />
             <div className="mt-6">
               <EmptyStateCard
                 eyebrow="Proyeccion"
@@ -412,33 +448,8 @@ export default function FirePage() {
                 compact
               />
             </div>
-          ) : (
-            <div className="table-scroll mt-6">
-              <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead>
-                  <tr className="text-left text-slate-400">
-                    <th className="sticky-col-header px-3 py-2">Ano</th>
-                    <th className="px-3 py-2">Edad</th>
-                    <th className="px-3 py-2 text-right">Patrimonio</th>
-                    <th className="px-3 py-2 text-right">Aporte anual</th>
-                    <th className="px-3 py-2 text-right">Crecimiento anual</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {simulation.points.slice(0, 31).map((point) => (
-                    <tr key={point.year} className="bg-white/5 shadow-sm">
-                      <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">{point.year}</td>
-                      <td className="px-3 py-4 text-slate-300">{point.age}</td>
-                      <td className="px-3 py-4 text-right font-medium text-white">{formatCurrencyByPreference(point.netWorth, currency)}</td>
-                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(point.contribution, currency)}</td>
-                      <td className="rounded-r-2xl px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(point.growth, currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
       </main>
     </>
   );
