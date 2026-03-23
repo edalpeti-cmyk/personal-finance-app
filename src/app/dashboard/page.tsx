@@ -1929,102 +1929,90 @@ export default function DashboardPage() {
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
-              <SectionHeader
-                eyebrow="Widgets del dashboard"
-                title="Personaliza lo que quieres ver primero"
-                description="Puedes ocultar bloques que ahora no te aporten valor y mover arriba los que quieres revisar siempre primero."
-                aside={
-                  <button
-                    type="button"
-                    onClick={resetWidgets}
-                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
-                  >
-                    Restaurar orden
-                  </button>
-                }
-              />
-
-              <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {widgetOrder.map((widgetId, index) => {
-                  const widget = DASHBOARD_WIDGETS.find((entry) => entry.id === widgetId);
-                  if (!widget) {
-                    return null;
-                  }
-
-                  const hidden = hiddenWidgets.includes(widgetId);
-                  return (
-                    <article
-                      key={widget.id}
-                      draggable
-                      onDragStart={() => setDraggedWidgetId(widget.id)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => {
-                        if (draggedWidgetId) {
-                          moveWidgetByDrop(draggedWidgetId, widget.id);
-                        }
-                        setDraggedWidgetId(null);
-                      }}
-                      onDragEnd={() => setDraggedWidgetId(null)}
-                      className={`rounded-[24px] border border-white/8 bg-white/6 p-4 transition ${draggedWidgetId === widget.id ? "opacity-60" : ""}`}
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Widgets del dashboard</p>
+                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Personalizacion avanzada</h2>
+                    <p className="mt-2 text-sm text-white/72">Oculta, reordena y compacta widgets solo cuando lo necesites.</p>
+                  </div>
+                  <span className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Configurar</span>
+                </summary>
+                <div className="mt-6">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={resetWidgets}
+                      className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition hover:border-white/20 hover:bg-white/10"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{widget.label}</p>
-                          <p className="mt-2 text-sm leading-6 text-white/80">{widget.description}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => toggleWidgetVisibility(widget.id)}
-                          className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                            hidden ? "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                          }`}
+                      Restaurar orden
+                    </button>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {widgetOrder.map((widgetId, index) => {
+                      const widget = DASHBOARD_WIDGETS.find((entry) => entry.id === widgetId);
+                      if (!widget) {
+                        return null;
+                      }
+
+                      const hidden = hiddenWidgets.includes(widgetId);
+                      return (
+                        <article
+                          key={widget.id}
+                          draggable
+                          onDragStart={() => setDraggedWidgetId(widget.id)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={() => {
+                            if (draggedWidgetId) {
+                              moveWidgetByDrop(draggedWidgetId, widget.id);
+                            }
+                            setDraggedWidgetId(null);
+                          }}
+                          onDragEnd={() => setDraggedWidgetId(null)}
+                          className={`rounded-[24px] border border-white/8 bg-white/6 p-4 transition ${draggedWidgetId === widget.id ? "opacity-60" : ""}`}
                         >
-                          {hidden ? "Mostrar" : "Visible"}
-                        </button>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => toggleWidgetWidth(widget.id)}
-                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                          >
-                            {widgetWidths[widget.id] === "full" ? "Ancho normal" : "Ancho completo"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => toggleWidgetSize(widget.id)}
-                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                          >
-                            {widgetSizes[widget.id] === "compact" ? "Expandir" : "Compactar"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveWidget(widget.id, "up")}
-                            disabled={index === 0}
-                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            Subir
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveWidget(widget.id, "down")}
-                            disabled={index === widgetOrder.length - 1}
-                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            Bajar
-                          </button>
-                        </div>
-                        <div className="grid gap-1 text-xs text-slate-400 sm:grid-cols-3">
-                          <span>Posicion {index + 1}</span>
-                          <span>{widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"}</span>
-                          <span>{widgetWidths[widget.id] === "full" ? "Completo" : "Normal"}</span>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{widget.label}</p>
+                              <p className="mt-2 text-sm leading-6 text-white/80">{widget.description}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleWidgetVisibility(widget.id)}
+                              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                                hidden ? "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10" : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                              }`}
+                            >
+                              {hidden ? "Mostrar" : "Visible"}
+                            </button>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            <div className="flex flex-wrap gap-2">
+                              <button type="button" onClick={() => toggleWidgetWidth(widget.id)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10">
+                                {widgetWidths[widget.id] === "full" ? "Ancho normal" : "Ancho completo"}
+                              </button>
+                              <button type="button" onClick={() => toggleWidgetSize(widget.id)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10">
+                                {widgetSizes[widget.id] === "compact" ? "Expandir" : "Compactar"}
+                              </button>
+                              <button type="button" onClick={() => moveWidget(widget.id, "up")} disabled={index === 0} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40">
+                                Subir
+                              </button>
+                              <button type="button" onClick={() => moveWidget(widget.id, "down")} disabled={index === widgetOrder.length - 1} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40">
+                                Bajar
+                              </button>
+                            </div>
+                            <div className="grid gap-1 text-xs text-slate-400 sm:grid-cols-3">
+                              <span>Posicion {index + 1}</span>
+                              <span>{widgetSizes[widget.id] === "compact" ? "Compacto" : "Expandido"}</span>
+                              <span>{widgetWidths[widget.id] === "full" ? "Completo" : "Normal"}</span>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </details>
             </section>
 
             {visibleWidgetOrder.map((widgetId) => renderDashboardWidget(widgetId))}

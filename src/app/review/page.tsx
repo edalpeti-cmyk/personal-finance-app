@@ -846,7 +846,15 @@ export default function ReviewPage() {
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
-              <SectionHeader eyebrow="Desviaciones" title="Categorias a revisar" description="Categorias del mes donde el gasto real ya supera el presupuesto." />
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Desviaciones</p>
+                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias a revisar</h2>
+                    <p className="mt-2 text-sm text-slate-400">Detalle del mes solo cuando quieras revisar excesos concretos.</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver detalle</span>
+                </summary>
               {reviewMetrics.overspent.length === 0 ? (
                 <div className="mt-6">
                   <EmptyStateCard eyebrow="Mes estable" title="No hay categorias excedidas" description="De momento no hay categorias por encima del presupuesto del mes seleccionado." actionLabel="Revisar presupuestos" actionHref="/budgets" compact />
@@ -854,10 +862,19 @@ export default function ReviewPage() {
               ) : (
                 <div className="table-scroll mt-6"><table className="min-w-full border-separate border-spacing-y-2 text-sm"><thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Exceso</th></tr></thead><tbody>{reviewMetrics.overspent.map((row) => (<tr key={row.category} className="bg-white/5 shadow-sm"><td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">{row.category}</td><td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.budget, currency)}</td><td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td><td className="rounded-r-2xl px-3 py-4 text-right font-medium text-red-300">{formatCurrencyByPreference(row.delta, currency)}</td></tr>))}</tbody></table></div>
               )}
+              </details>
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
-              <SectionHeader eyebrow="Objetivos activos" title="Metas conectadas al plan" description="Los objetivos convierten la revision mensual en decisiones de ahorro concretas." aside={<Link href="/goals" className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10">Abrir objetivos</Link>} />
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivos activos</p>
+                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Metas conectadas al plan</h2>
+                    <p className="mt-2 text-sm text-slate-400">Resumen de metas y seguimiento detallado solo cuando haga falta.</p>
+                  </div>
+                  <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10">Abrir detalle</span>
+                </summary>
               {reviewMetrics.topGoals.length === 0 ? (
                 <div className="mt-6">
                   <EmptyStateCard eyebrow="Sin objetivos" title="Todavia no hay metas activas" description="Crea objetivos como fondo de emergencia, viaje o vivienda para enlazar ahorro y progreso real." actionLabel="Crear objetivos" actionHref="/goals" compact />
@@ -865,10 +882,19 @@ export default function ReviewPage() {
               ) : (
                 <div className="mt-5 grid gap-3">{reviewMetrics.topGoals.map((goal) => (<article key={goal.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{goal.goal_type}</p><h3 className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{goal.goal_name}</h3></div><p className="text-sm text-slate-300">Prioridad {goal.priority}</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[linear-gradient(90deg,#0f766e_0%,#14b8a6_100%)]" style={{ width: `${Math.min(goal.progressPct, 100)}%` }} /></div><div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2"><p>Actual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.current_amount, currency)}</span></p><p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p><p>Progreso: <span className="font-medium text-white">{goal.progressPct.toFixed(1)}%</span></p><p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p><p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p><p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p></div></article>))}</div>
               )}
+              </details>
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-              <SectionHeader eyebrow="Avance de metas" title="Que ha cambiado este mes en tus objetivos" description="Compara la foto actual con la ultima snapshot guardada para saber si las metas han avanzado de verdad." />
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Avance de metas</p>
+                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Que ha cambiado este mes en tus objetivos</h2>
+                    <p className="mt-2 text-sm text-slate-400">Comparativa mensual disponible solo cuando quieras revisar evolucion real.</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver avance</span>
+                </summary>
               {goalMonthlyAdvance.length === 0 ? (
                 <div className="mt-6">
                   <EmptyStateCard
@@ -917,6 +943,7 @@ export default function ReviewPage() {
                   ))}
                 </div>
               )}
+              </details>
             </section>
           </>
         ) : null}

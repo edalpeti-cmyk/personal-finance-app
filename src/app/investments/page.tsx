@@ -3019,13 +3019,14 @@ export default function InvestmentsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analitica avanzada</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura extra de cartera</h2>
-            </div>
-            <p className="text-sm text-slate-400">Distribucion por divisa, calidad media y senales rapidas de la cartera abierta.</p>
-          </div>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analitica avanzada</p>
+                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura extra de cartera</h2>
+              </div>
+              <p className="text-sm text-slate-400">Distribucion por divisa, calidad media y senales rapidas de la cartera abierta.</p>
+            </summary>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article className="rounded-3xl border border-white/8 bg-white/5 p-5">
@@ -3228,6 +3229,7 @@ export default function InvestmentsPage() {
               </div>
             </article>
           </div>
+          </details>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">

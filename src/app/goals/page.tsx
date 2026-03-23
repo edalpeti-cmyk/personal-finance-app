@@ -1120,39 +1120,41 @@ export default function GoalsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader
-            eyebrow="Plan automatico"
-            title="Conectar metas con el ahorro del mes"
-            description="Puedes repartir automaticamente el ahorro objetivo o el ahorro real del mes entre tus metas activas segun prioridad."
-            aside={
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void snapshotMonthlyGoalProgress()}
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={snapshottingProgress || goals.length === 0}
-                >
-                  {snapshottingProgress ? "Guardando..." : "Guardar foto del mes"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void applySavingsTargetDistribution()}
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={saving || suggestedAllocations.length === 0}
-                >
-                  Repartir ahorro objetivo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void applyActualSavingsDistribution()}
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={saving || suggestedActualAllocations.length === 0}
-                >
-                  Repartir ahorro real
-                </button>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plan automatico</p>
+                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Conectar metas con el ahorro del mes</h2>
+                <p className="mt-2 text-sm text-slate-400">Reparto automatico y fotos mensuales solo cuando necesites afinar el plan.</p>
               </div>
-            }
-          />
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver automatizacion</span>
+            </summary>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void snapshotMonthlyGoalProgress()}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={snapshottingProgress || goals.length === 0}
+              >
+                {snapshottingProgress ? "Guardando..." : "Guardar foto del mes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void applySavingsTargetDistribution()}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={saving || suggestedAllocations.length === 0}
+              >
+                Repartir ahorro objetivo
+              </button>
+              <button
+                type="button"
+                onClick={() => void applyActualSavingsDistribution()}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={saving || suggestedActualAllocations.length === 0}
+              >
+                Repartir ahorro real
+              </button>
+            </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <article className="rounded-[22px] border border-white/8 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Ahorro real del mes</p>
@@ -1193,10 +1195,19 @@ export default function GoalsPage() {
               ))}
             </div>
           )}
+          </details>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader eyebrow="Vista anual" title="Evolucion mes a mes de una meta" description="Revisa como ha avanzado una meta concreta durante el año con las fotos mensuales guardadas." />
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista anual</p>
+                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion mes a mes de una meta</h2>
+                <p className="mt-2 text-sm text-slate-400">Historico anual disponible bajo demanda para no cargar la vista principal.</p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver historial</span>
+            </summary>
           {timelineGoalOptions.length === 0 ? (
             <div className="mt-6">
               <EmptyStateCard eyebrow="Sin metas" title="No hay metas activas para dibujar una vista anual" description="Crea una meta activa y guarda fotos mensuales para ver su evolucion." compact />
@@ -1238,6 +1249,7 @@ export default function GoalsPage() {
               </div>
             </>
           )}
+          </details>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
