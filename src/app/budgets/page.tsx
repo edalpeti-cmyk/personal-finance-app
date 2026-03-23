@@ -782,9 +782,11 @@ export default function BudgetsPage() {
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-6">
           <details className="group" open={comparisonOpen} onToggle={(event) => setComparisonOpen(event.currentTarget.open)}>
             <summary className="list-none cursor-pointer">
-              <div className="flex items-start justify-between gap-4">
-                <SectionHeader eyebrow="Resumen" title="Comparativa mensual" />
-                <div className="flex items-center gap-2">
+              <div className="accordion-summary">
+                <div className="accordion-summary-main">
+                  <SectionHeader eyebrow="Resumen" title="Comparativa mensual" />
+                </div>
+                <div className="accordion-summary-side">
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
                     Delta {formatCurrencyByPreference(incomeComparison.savingsDelta, currency)}
                   </span>
@@ -799,6 +801,7 @@ export default function BudgetsPage() {
                   >
                     Exportar CSV
                   </button>
+                  <span className="accordion-chevron" aria-hidden="true">v</span>
                 </div>
               </div>
             </summary>
@@ -905,9 +908,12 @@ export default function BudgetsPage() {
             <details className="group" open={categoryComparisonOpen} onToggle={(event) => setCategoryComparisonOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
-                <div className="mt-2 flex items-center justify-between gap-4">
-                  <h2 className="font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">{categoryComparison.length} categorias</span>
+                <div className="accordion-summary mt-2">
+                  <h2 className="accordion-summary-main font-[var(--font-heading)] text-2xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)} vs {formatMonthByPreference(getPreviousMonth(selectedMonth), dateFormat)}</h2>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{categoryComparison.length} categorias</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </div>
               </summary>
             <div className={`table-scroll mt-6 ${categoryComparison.length > 6 ? "max-h-[420px]" : ""}`}>
@@ -934,9 +940,12 @@ export default function BudgetsPage() {
             <details className="group" open={unbudgetedOpen} onToggle={(event) => setUnbudgetedOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto sin asignar</p>
-                <div className="mt-2 flex items-center justify-between gap-4">
-                  <h2 className="font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">{unbudgetedExpenses.length} pendientes</span>
+                <div className="accordion-summary mt-2">
+                  <h2 className="accordion-summary-main font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias no presupuestadas</h2>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{unbudgetedExpenses.length} pendientes</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </div>
               </summary>
               <ul className="mt-6 grid gap-3 text-sm text-slate-200 md:grid-cols-2 xl:grid-cols-3">

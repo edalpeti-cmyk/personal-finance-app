@@ -847,13 +847,15 @@ export default function ReviewPage() {
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
               <details className="group">
-                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
-                  <div>
+                <summary className="accordion-summary cursor-pointer list-none">
+                  <div className="accordion-summary-main">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Desviaciones</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Categorias a revisar</h2>
-                    <p className="mt-2 text-sm text-slate-400">Detalle del mes solo cuando quieras revisar excesos concretos.</p>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver detalle</span>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{reviewMetrics.overspent.length} alertas</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </summary>
               {reviewMetrics.overspent.length === 0 ? (
                 <div className="mt-6">
@@ -867,13 +869,15 @@ export default function ReviewPage() {
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
               <details className="group">
-                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
-                  <div>
+                <summary className="accordion-summary cursor-pointer list-none">
+                  <div className="accordion-summary-main">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivos activos</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Metas conectadas al plan</h2>
-                    <p className="mt-2 text-sm text-slate-400">Resumen de metas y seguimiento detallado solo cuando haga falta.</p>
                   </div>
-                  <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10">Abrir detalle</span>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{reviewMetrics.topGoals.length} metas</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </summary>
               {reviewMetrics.topGoals.length === 0 ? (
                 <div className="mt-6">
@@ -887,13 +891,15 @@ export default function ReviewPage() {
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
               <details className="group">
-                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
-                  <div>
+                <summary className="accordion-summary cursor-pointer list-none">
+                  <div className="accordion-summary-main">
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Avance de metas</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Que ha cambiado este mes en tus objetivos</h2>
-                    <p className="mt-2 text-sm text-slate-400">Comparativa mensual disponible solo cuando quieras revisar evolucion real.</p>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver avance</span>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{goalMonthlyAdvance.length} con avance</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </summary>
               {goalMonthlyAdvance.length === 0 ? (
                 <div className="mt-6">

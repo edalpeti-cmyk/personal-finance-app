@@ -807,11 +807,12 @@ export default function ExpensesPage() {
           <details className="group" open={quickAnalysisOpen} onToggle={(event) => setQuickAnalysisOpen(event.currentTarget.open)}>
             <summary className="list-none cursor-pointer">
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analisis mensual</p>
-              <div className="mt-2 flex items-center justify-between gap-4">
-                <h2 className="font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
-                  {monthlyAnalysis.recommendations.length} ideas
-                </span>
+              <div className="accordion-summary mt-2">
+                <h2 className="accordion-summary-main font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura rapida</h2>
+                <div className="accordion-summary-side">
+                  <span className="accordion-metric">{monthlyAnalysis.recommendations.length} ideas</span>
+                  <span className="accordion-chevron" aria-hidden="true">v</span>
+                </div>
               </div>
             </summary>
             <div className="mt-5 grid gap-3 text-sm text-slate-200 2xl:grid-cols-2">

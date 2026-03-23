@@ -1121,13 +1121,15 @@ export default function GoalsPage() {
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <details className="group">
-            <summary className="flex cursor-pointer list-none flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
+            <summary className="accordion-summary cursor-pointer list-none">
+              <div className="accordion-summary-main">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plan automatico</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Conectar metas con el ahorro del mes</h2>
-                <p className="mt-2 text-sm text-slate-400">Reparto automatico y fotos mensuales solo cuando necesites afinar el plan.</p>
               </div>
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver automatizacion</span>
+              <div className="accordion-summary-side">
+                <span className="accordion-metric">{activeGoals.length} activas</span>
+                <span className="accordion-chevron" aria-hidden="true">v</span>
+              </div>
             </summary>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
@@ -1200,13 +1202,15 @@ export default function GoalsPage() {
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <details className="group">
-            <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
-              <div>
+            <summary className="accordion-summary cursor-pointer list-none">
+              <div className="accordion-summary-main">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Vista anual</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Evolucion mes a mes de una meta</h2>
-                <p className="mt-2 text-sm text-slate-400">Historico anual disponible bajo demanda para no cargar la vista principal.</p>
               </div>
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Ver historial</span>
+              <div className="accordion-summary-side">
+                <span className="accordion-metric">{availableTimelineYears.length} anos</span>
+                <span className="accordion-chevron" aria-hidden="true">v</span>
+              </div>
             </summary>
           {timelineGoalOptions.length === 0 ? (
             <div className="mt-6">

@@ -415,11 +415,14 @@ export default function FirePage() {
           <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
             <details className="group" open={tableOpen} onToggle={(event) => setTableOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
-                <div className="flex items-center justify-between gap-4">
-                  <SectionHeader eyebrow="Tabla" title="Evolucion del patrimonio" />
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
-                    {Math.min(simulation.points.length, 31)} anos
-                  </span>
+                <div className="accordion-summary">
+                  <div className="accordion-summary-main">
+                    <SectionHeader eyebrow="Tabla" title="Evolucion del patrimonio" />
+                  </div>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{Math.min(simulation.points.length, 31)} anos</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </div>
               </summary>
               <div className="table-scroll mt-6">

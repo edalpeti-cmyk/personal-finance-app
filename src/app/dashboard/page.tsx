@@ -1460,12 +1460,13 @@ export default function DashboardPage() {
             <section key={widgetId} className={`rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] ${isCompact ? "p-5" : "p-6"} text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] ${widthClass}`}>
               <details className="group" open={alertsOpen} onToggle={(event) => setAlertsOpen(event.currentTarget.open)}>
                 <summary className="list-none cursor-pointer">
-                  <div className="flex items-start justify-between gap-4">
-                    <SectionHeader eyebrow="Alertas automaticas" title="Senales que conviene vigilar" />
-                    <div className="flex flex-wrap justify-end gap-2 pt-1 text-xs">
-                      <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-amber-200">{dashboardAlerts.length} activas</span>
-                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-200">{dashboardAlertGroups.resolved.length} resueltas</span>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">{dashboardAlertGroups.silenced.length} silenciadas</span>
+                  <div className="accordion-summary">
+                    <div className="accordion-summary-main">
+                      <SectionHeader eyebrow="Alertas automaticas" title="Senales que conviene vigilar" />
+                    </div>
+                    <div className="accordion-summary-side">
+                      <span className="accordion-metric">{dashboardAlerts.length} activas</span>
+                      <span className="accordion-chevron" aria-hidden="true">v</span>
                     </div>
                   </div>
                   <p className="mt-3 text-sm text-white/64">
@@ -1955,13 +1956,16 @@ export default function DashboardPage() {
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-6 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
               <details className="group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                <summary className="accordion-summary cursor-pointer list-none">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Widgets del dashboard</p>
                     <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Personalizacion avanzada</h2>
                     <p className="mt-2 text-sm text-white/72">Oculta, reordena y compacta widgets solo cuando lo necesites.</p>
                   </div>
-                  <span className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-white transition group-open:bg-white/10">Configurar</span>
+                  <div className="accordion-summary-side">
+                    <span className="accordion-metric">{visibleWidgetOrder.length} visibles</span>
+                    <span className="accordion-chevron" aria-hidden="true">v</span>
+                  </div>
                 </summary>
                 <div className="mt-6">
                   <div className="flex justify-end">
