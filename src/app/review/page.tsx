@@ -14,6 +14,7 @@ import { formatCurrencyByPreference, formatMonthByPreference } from "@/lib/prefe
 
 type IncomeRow = { amount: number; income_date: string };
 type ExpenseRow = { amount: number; category: string; expense_date: string };
+type DebtRow = { outstanding_balance: number; monthly_payment: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed" };
 type BudgetRow = { category: string; budget_amount: number; month: string };
 type SavingsTargetRow = { month: string; savings_target: number };
 type InvestmentRow = {
@@ -118,6 +119,7 @@ export default function ReviewPage() {
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
   const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
+  const [debtRows, setDebtRows] = useState<DebtRow[]>([]);
   const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
   const [goalRows, setGoalRows] = useState<GoalRow[]>([]);
   const [completedTaskKeys, setCompletedTaskKeys] = useState<string[]>([]);
@@ -133,12 +135,13 @@ export default function ReviewPage() {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
+      supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status").eq("user_id", uid),
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
       supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
@@ -146,7 +149,7 @@ export default function ReviewPage() {
       supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false })
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -158,6 +161,7 @@ export default function ReviewPage() {
     setBudgetRows((budgetResult.data as BudgetRow[]) ?? []);
     setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
     setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
+    setDebtRows((debtsResult.data as DebtRow[]) ?? []);
     setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
     setGoalRows((goalsResult.data as GoalRow[]) ?? []);
     setCompletedTaskKeys(
@@ -206,9 +210,15 @@ export default function ReviewPage() {
       const unit = Number(row.current_price ?? row.average_buy_price ?? 0);
       return sum + convertToEur(unit * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR);
     }, 0);
+    const debtTotal = debtRows
+      .filter((row) => row.status !== "closed")
+      .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const monthlyDebtPayment = debtRows
+      .filter((row) => row.status !== "closed")
+      .reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const pricesConnected = investmentRows.filter((row) => row.current_price !== null).length;
     const cashPosition = incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) - expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-    const totalNetWorth = cashPosition + investmentValue;
+    const totalNetWorth = cashPosition + investmentValue - debtTotal;
     const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
     const fireProgress = fireTarget > 0 ? (totalNetWorth / fireTarget) * 100 : 0;
 
@@ -232,6 +242,9 @@ export default function ReviewPage() {
       previousActualSavings,
       savingsDeltaVsTarget,
       overspent,
+      debtTotal,
+      monthlyDebtPayment,
+      debtPaymentRatio: currentIncome > 0 ? (monthlyDebtPayment / currentIncome) * 100 : null,
       pricesConnected,
       investmentCount: investmentRows.length,
       totalNetWorth,
@@ -240,7 +253,7 @@ export default function ReviewPage() {
       topGoals,
       activeGoalsCount: activeGoals.length
     };
-  }, [budgetRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
+  }, [budgetRows, debtRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
 
   const reviewActions = useMemo<Array<ReviewAction & { completed: boolean }>>(() => {
     const actions: ReviewAction[] = [];
@@ -250,6 +263,9 @@ export default function ReviewPage() {
     }
     if (reviewMetrics.currentSavingsTarget <= 0) {
       actions.push({ id: "missing-savings-target", title: "Ahorro objetivo pendiente", body: "Define una cifra objetivo para comparar el plan con el ahorro real del mes.", href: "/budgets", cta: "Definir ahorro objetivo", tone: "warning" });
+    }
+    if (reviewMetrics.debtTotal > 0 && (reviewMetrics.debtPaymentRatio ?? 0) >= 20) {
+      actions.push({ id: "high-debt-burden", title: "Carga de deuda elevada", body: `La cuota mensual de deuda ya consume ${reviewMetrics.debtPaymentRatio?.toFixed(1) ?? "0"}% de los ingresos del mes.`, href: "/debts", cta: "Revisar deuda", tone: "warning" });
     }
     if (reviewMetrics.investmentCount > reviewMetrics.pricesConnected) {
       actions.push({ id: "prices-pending", title: "Precios de cartera pendientes", body: `${reviewMetrics.investmentCount - reviewMetrics.pricesConnected} posiciones siguen sin precio actual.`, href: "/investments", cta: "Actualizar cartera", tone: "info" });
@@ -689,7 +705,8 @@ export default function ReviewPage() {
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Desviacion frente al objetivo</p><p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${reviewMetrics.savingsDeltaVsTarget >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.savingsDeltaVsTarget, currency)}</p><p className="mt-2 text-sm leading-6 text-slate-300">Diferencia entre ahorro real del mes y ahorro objetivo marcado.</p></article>
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"> <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mas tension</p>{reviewMetrics.overspent[0] ? (<><p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">{reviewMetrics.overspent[0].category}</p><p className="mt-2 text-sm leading-6 text-slate-300">Exceso de {formatCurrencyByPreference(reviewMetrics.overspent[0].delta, currency)} sobre presupuesto.</p></>) : (<p className="mt-3 text-sm leading-6 text-slate-300">No hay categorias por encima del presupuesto en este mes.</p>)}</article>
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Cobertura de cartera</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{reviewMetrics.investmentCount === 0 ? "Sin cartera" : `${reviewMetrics.pricesConnected}/${reviewMetrics.investmentCount}`}</p><p className="mt-2 text-sm leading-6 text-slate-300">Posiciones con precio actual guardado frente al total de activos.</p></article>
-                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Progreso FIRE</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{reviewMetrics.fireTarget > 0 ? `${reviewMetrics.fireProgress.toFixed(1)}%` : "Sin base"}</p><p className="mt-2 text-sm leading-6 text-slate-300">Patrimonio total frente al objetivo FIRE guardado.</p></article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Deuda total</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(reviewMetrics.debtTotal, currency)}</p><p className="mt-2 text-sm leading-6 text-slate-300">Saldo pendiente de deuda abierta en este momento.</p></article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Progreso FIRE</p><p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{reviewMetrics.fireTarget > 0 ? `${reviewMetrics.fireProgress.toFixed(1)}%` : "Sin base"}</p><p className="mt-2 text-sm leading-6 text-slate-300">Patrimonio neto frente al objetivo FIRE guardado.</p></article>
               </div>
             </section>
 

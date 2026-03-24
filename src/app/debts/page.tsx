@@ -1,0 +1,476 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
+import AuthLoadingState from "@/components/auth-loading-state";
+import EmptyStateCard from "@/components/empty-state-card";
+import SectionHeader from "@/components/section-header";
+import SideNav from "@/components/side-nav";
+import { useTheme } from "@/components/theme-provider";
+import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
+import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
+
+type DebtType = "credit_card" | "personal_loan" | "mortgage" | "credit_line" | "family_loan" | "auto_loan" | "other";
+type DebtStatus = "active" | "paused" | "closed";
+
+type DebtRow = {
+  id: string;
+  debt_name: string;
+  debt_type: DebtType;
+  lender: string | null;
+  currency: AssetCurrency;
+  original_amount: number;
+  outstanding_balance: number;
+  interest_rate: number;
+  monthly_payment: number;
+  start_date: string | null;
+  target_end_date: string | null;
+  status: DebtStatus;
+  notes: string | null;
+};
+
+type IncomeRow = {
+  amount: number;
+  income_date: string;
+};
+
+type ToastState = { type: "success" | "error"; text: string } | null;
+
+const DEBT_TYPES: Array<{ value: DebtType; label: string }> = [
+  { value: "credit_card", label: "Tarjeta de credito" },
+  { value: "personal_loan", label: "Prestamo personal" },
+  { value: "mortgage", label: "Hipoteca" },
+  { value: "credit_line", label: "Linea de credito" },
+  { value: "family_loan", label: "Prestamo familiar" },
+  { value: "auto_loan", label: "Financiacion coche" },
+  { value: "other", label: "Otra deuda" }
+];
+
+const DEBT_STATUSES: Array<{ value: DebtStatus; label: string }> = [
+  { value: "active", label: "Activa" },
+  { value: "paused", label: "Pausada" },
+  { value: "closed", label: "Cerrada" }
+];
+
+function inputClass() {
+  return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
+}
+
+function isCurrentMonth(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+export default function DebtsPage() {
+  const supabase = useMemo(() => createClient(), []);
+  const { userId, authLoading } = useAuthGuard();
+  const { currency, dateFormat } = useTheme();
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [debts, setDebts] = useState<DebtRow[]>([]);
+  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [debtName, setDebtName] = useState("");
+  const [debtType, setDebtType] = useState<DebtType>("credit_card");
+  const [lender, setLender] = useState("");
+  const [debtCurrency, setDebtCurrency] = useState<AssetCurrency>("EUR");
+  const [originalAmount, setOriginalAmount] = useState("");
+  const [outstandingBalance, setOutstandingBalance] = useState("");
+  const [interestRate, setInterestRate] = useState("");
+  const [monthlyPayment, setMonthlyPayment] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [targetEndDate, setTargetEndDate] = useState("");
+  const [status, setStatus] = useState<DebtStatus>("active");
+  const [notes, setNotes] = useState("");
+
+  const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
+    setToast(nextToast);
+    window.setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+
+    setLoading(true);
+    setMessage(null);
+
+    const [debtResult, incomeResult] = await Promise.all([
+      supabase.from("debts").select("*").eq("user_id", userId).order("status", { ascending: true }).order("debt_name", { ascending: true }),
+      supabase.from("income").select("amount, income_date").eq("user_id", userId)
+    ]);
+
+    if (debtResult.error || incomeResult.error) {
+      setMessage(debtResult.error?.message || incomeResult.error?.message || "No se pudo cargar la deuda.");
+      setLoading(false);
+      return;
+    }
+
+    setDebts((debtResult.data as DebtRow[] | null) ?? []);
+    setIncomeRows((incomeResult.data as IncomeRow[] | null) ?? []);
+    setLoading(false);
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    if (authLoading || !userId) return;
+    void loadData();
+  }, [authLoading, loadData, userId]);
+
+  const resetForm = useCallback(() => {
+    setEditingId(null);
+    setDebtName("");
+    setDebtType("credit_card");
+    setLender("");
+    setDebtCurrency("EUR");
+    setOriginalAmount("");
+    setOutstandingBalance("");
+    setInterestRate("");
+    setMonthlyPayment("");
+    setStartDate("");
+    setTargetEndDate("");
+    setStatus("active");
+    setNotes("");
+  }, []);
+
+  const debtMetrics = useMemo(() => {
+    const activeDebts = debts.filter((row) => row.status !== "closed");
+    const debtTotal = activeDebts.reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const monthlyBurden = activeDebts.reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const weightedInterestBase = activeDebts.reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const weightedInterest = activeDebts.reduce((sum, row) => {
+      const balanceEur = convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR);
+      return sum + balanceEur * Number(row.interest_rate || 0);
+    }, 0);
+    const currentMonthIncome = incomeRows.filter((row) => isCurrentMonth(row.income_date)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const paymentToIncomeRatio = currentMonthIncome > 0 ? (monthlyBurden / currentMonthIncome) * 100 : null;
+
+    return {
+      activeCount: activeDebts.length,
+      debtTotal,
+      monthlyBurden,
+      weightedInterest: weightedInterestBase > 0 ? weightedInterest / weightedInterestBase : 0,
+      paymentToIncomeRatio
+    };
+  }, [debts, incomeRows]);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!userId) return;
+
+    const parsedOriginal = Number(originalAmount || 0);
+    const parsedOutstanding = Number(outstandingBalance || 0);
+    const parsedInterest = Number(interestRate || 0);
+    const parsedMonthly = Number(monthlyPayment || 0);
+
+    if (!debtName.trim()) {
+      setMessage("Introduce un nombre para la deuda.");
+      return;
+    }
+
+    if (![parsedOriginal, parsedOutstanding, parsedInterest, parsedMonthly].every((value) => Number.isFinite(value) && value >= 0)) {
+      setMessage("Revisa importes, cuota e interes.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+
+    const payload = {
+      user_id: userId,
+      debt_name: debtName.trim(),
+      debt_type: debtType,
+      lender: lender.trim() || null,
+      currency: debtCurrency,
+      original_amount: parsedOriginal,
+      outstanding_balance: parsedOutstanding,
+      interest_rate: parsedInterest,
+      monthly_payment: parsedMonthly,
+      start_date: startDate || null,
+      target_end_date: targetEndDate || null,
+      status,
+      notes: notes.trim() || null
+    };
+
+    const result = editingId
+      ? await supabase.from("debts").update(payload).eq("id", editingId).eq("user_id", userId)
+      : await supabase.from("debts").insert(payload);
+
+    setSaving(false);
+
+    if (result.error) {
+      setMessage(result.error.message);
+      return;
+    }
+
+    showToast({
+      type: "success",
+      text: editingId ? "Deuda actualizada correctamente." : "Deuda registrada correctamente."
+    });
+    resetForm();
+    await loadData();
+  };
+
+  const handleEdit = (row: DebtRow) => {
+    setEditingId(row.id);
+    setDebtName(row.debt_name);
+    setDebtType(row.debt_type);
+    setLender(row.lender ?? "");
+    setDebtCurrency(row.currency);
+    setOriginalAmount(String(row.original_amount ?? ""));
+    setOutstandingBalance(String(row.outstanding_balance ?? ""));
+    setInterestRate(String(row.interest_rate ?? ""));
+    setMonthlyPayment(String(row.monthly_payment ?? ""));
+    setStartDate(row.start_date ?? "");
+    setTargetEndDate(row.target_end_date ?? "");
+    setStatus(row.status);
+    setNotes(row.notes ?? "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!userId || !window.confirm("Se eliminara esta deuda. Deseas continuar?")) return;
+    const { error } = await supabase.from("debts").delete().eq("id", id).eq("user_id", userId);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    showToast({ type: "success", text: "Deuda eliminada." });
+    if (editingId === id) resetForm();
+    await loadData();
+  };
+
+  if (authLoading || loading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-6xl p-6 md:pl-72">
+          <AuthLoadingState title="Preparando deuda" description="Estamos cargando tus prestamos, tarjetas e hipotecas." />
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SideNav />
+      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Deuda</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Controla lo que resta a tu patrimonio</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
+            Registra tarjetas, prestamos e hipotecas para que el patrimonio neto, FIRE y la revision mensual hablen con los datos reales.
+          </p>
+        </section>
+
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Resumen</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(debtMetrics.debtTotal, currency)}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Saldo pendiente total de tus deudas activas o pausadas, consolidado en EUR.</p>
+        </section>
+
+        {toast ? (
+          <section className={`rounded-[24px] p-4 text-sm md:col-span-2 xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>
+            {toast.text}
+          </section>
+        ) : null}
+
+        {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-2 xl:col-span-12">{message}</section> : null}
+
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar deuda" : "Nueva deuda"}</h2>
+          <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Nombre
+              <input className={inputClass()} value={debtName} onChange={(event) => setDebtName(event.target.value)} placeholder="Ej: Hipoteca BBVA, Tarjeta Visa" />
+            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200">
+                Tipo
+                <select className={inputClass()} value={debtType} onChange={(event) => setDebtType(event.target.value as DebtType)}>
+                  {DEBT_TYPES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm text-slate-200">
+                Estado
+                <select className={inputClass()} value={status} onChange={(event) => setStatus(event.target.value as DebtStatus)}>
+                  {DEBT_STATUSES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200">
+                Entidad o acreedor
+                <input className={inputClass()} value={lender} onChange={(event) => setLender(event.target.value)} placeholder="Ej: Santander, familiar" />
+              </label>
+              <label className="grid gap-2 text-sm text-slate-200">
+                Moneda
+                <select className={inputClass()} value={debtCurrency} onChange={(event) => setDebtCurrency(event.target.value as AssetCurrency)}>
+                  {["EUR", "USD", "GBP", "DKK"].map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200">
+                Importe original
+                <input className={inputClass()} type="number" min="0" step="0.01" value={originalAmount} onChange={(event) => setOriginalAmount(event.target.value)} />
+              </label>
+              <label className="grid gap-2 text-sm text-slate-200">
+                Saldo pendiente
+                <input className={inputClass()} type="number" min="0" step="0.01" value={outstandingBalance} onChange={(event) => setOutstandingBalance(event.target.value)} />
+              </label>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200">
+                Interes anual (%)
+                <input className={inputClass()} type="number" min="0" max="100" step="0.01" value={interestRate} onChange={(event) => setInterestRate(event.target.value)} />
+              </label>
+              <label className="grid gap-2 text-sm text-slate-200">
+                Cuota mensual
+                <input className={inputClass()} type="number" min="0" step="0.01" value={monthlyPayment} onChange={(event) => setMonthlyPayment(event.target.value)} />
+              </label>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm text-slate-200">
+                Fecha de inicio
+                <input className={inputClass()} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              </label>
+              <label className="grid gap-2 text-sm text-slate-200">
+                Fecha objetivo
+                <input className={inputClass()} type="date" value={targetEndDate} onChange={(event) => setTargetEndDate(event.target.value)} />
+              </label>
+            </div>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Notas
+              <textarea className={`${inputClass()} min-h-24 resize-y`} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Opcional" />
+            </label>
+            <div className="flex flex-wrap gap-3">
+              <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">
+                {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear deuda"}
+              </button>
+              {editingId ? (
+                <button type="button" onClick={resetForm} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 hover:bg-white/10">
+                  Cancelar edicion
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </section>
+
+        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
+          <article className="kpi-card rounded-[26px] p-6 text-white">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda total</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtMetrics.debtTotal, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Saldo pendiente consolidado de las deudas abiertas.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota mensual</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtMetrics.monthlyBurden, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Carga fija mensual actual de toda la deuda activa o pausada.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Interes medio</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{debtMetrics.weightedInterest.toFixed(2)}%</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Media ponderada segun el saldo pendiente de cada deuda.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota / ingresos</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
+              {debtMetrics.paymentToIncomeRatio === null ? "Sin base" : `${debtMetrics.paymentToIncomeRatio.toFixed(1)}%`}
+            </p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ratio entre cuota mensual total e ingresos del mes actual.</p>
+          </article>
+        </section>
+
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+          <SectionHeader eyebrow="Detalle" title="Tus deudas registradas" description="Aqui tienes el saldo pendiente, la cuota y el calendario estimado de cada posicion de deuda." />
+
+          {debts.length === 0 ? (
+            <div className="mt-5">
+              <EmptyStateCard
+                eyebrow="Sin deuda"
+                title="Todavia no has registrado prestamos ni tarjetas"
+                description="Cuando anadas deuda, el dashboard, FIRE y la revision mensual pasaran a usar patrimonio neto real."
+                actionLabel="Crear primera deuda"
+                actionHref="/debts"
+              />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-4">
+              {debts.map((row) => {
+                const outstandingEur = convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR);
+                const monthlyEur = convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR);
+                const progressPct = Number(row.original_amount || 0) > 0
+                  ? Math.max(0, Math.min(((Number(row.original_amount) - Number(row.outstanding_balance || 0)) / Number(row.original_amount)) * 100, 100))
+                  : 0;
+
+                return (
+                  <article key={row.id} className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">{DEBT_TYPES.find((item) => item.value === row.debt_type)?.label ?? row.debt_type}</p>
+                        <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{row.debt_name}</h3>
+                        <p className="mt-2 text-sm text-slate-300">
+                          {row.lender?.trim() || "Sin entidad"} · {row.status === "active" ? "Activa" : row.status === "paused" ? "Pausada" : "Cerrada"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">
+                          Editar
+                        </button>
+                        <button type="button" onClick={() => void handleDelete(row.id)} className="rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20">
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Saldo pendiente</p>
+                        <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(outstandingEur, currency)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{formatCurrencyByPreference(Number(row.outstanding_balance || 0), row.currency)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Cuota mensual</p>
+                        <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(monthlyEur, currency)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{row.interest_rate.toFixed(2)}% TIN</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Amortizado</p>
+                        <p className="mt-2 text-lg font-semibold text-white">{progressPct.toFixed(1)}%</p>
+                        <p className="mt-1 text-xs text-slate-500">Original: {formatCurrencyByPreference(Number(row.original_amount || 0), row.currency)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 text-sm text-slate-300 md:grid-cols-2">
+                      <p>Inicio: <span className="font-medium text-white">{row.start_date ? formatDateByPreference(row.start_date, dateFormat) : "Sin fecha"}</span></p>
+                      <p>Objetivo fin: <span className="font-medium text-white">{row.target_end_date ? formatDateByPreference(row.target_end_date, dateFormat) : "Sin fecha"}</span></p>
+                    </div>
+                    {row.notes ? <p className="mt-3 text-sm leading-6 text-slate-300">{row.notes}</p> : null}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+    </>
+  );
+}

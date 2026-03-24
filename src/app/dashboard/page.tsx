@@ -26,6 +26,12 @@ import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/curren
 
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
+type DebtRow = {
+  outstanding_balance: number;
+  monthly_payment: number;
+  currency: AssetCurrency | null;
+  status: "active" | "paused" | "closed";
+};
 type InvestmentRow = {
   asset_name: string;
   asset_type: string;
@@ -57,6 +63,9 @@ type DashboardMetrics = {
   annualSavings: number;
   cashPosition: number;
   investmentsValue: number;
+  debtTotal: number;
+  monthlyDebtPayment: number;
+  grossWorth: number;
 };
 type DashboardAlert = {
   id: DashboardAlertRuleKey | "stable_panel";
@@ -1082,6 +1091,8 @@ export default function DashboardPage() {
     const rows = [
       ["seccion", "metrica", "valor"],
       ["dashboard", "patrimonio_total", metrics.totalNetWorth.toFixed(2)],
+      ["dashboard", "deuda_total", metrics.debtTotal.toFixed(2)],
+      ["dashboard", "cuota_deuda_mensual", metrics.monthlyDebtPayment.toFixed(2)],
       ["dashboard", "tasa_ahorro_pct", metrics.savingsRate === null ? "" : metrics.savingsRate.toFixed(2)],
       ["dashboard", "ahorro_anual", metrics.annualSavings.toFixed(2)],
       ["dashboard", "objetivo_fire", metrics.fireTarget.toFixed(2)],
@@ -1159,8 +1170,10 @@ export default function DashboardPage() {
             <p class="muted">Generado el ${new Date().toLocaleDateString("es-ES")} · Resumen ejecutivo de dashboard, cartera y FIRE.</p>
           </div>
           <div class="grid">
-            <div class="card"><p class="metric-label">Patrimonio</p><p class="metric-value">${formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p></div>
+            <div class="card"><p class="metric-label">Patrimonio neto</p><p class="metric-value">${formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p></div>
+            <div class="card"><p class="metric-label">Deuda total</p><p class="metric-value">${formatCurrencyByPreference(metrics.debtTotal, currency)}</p></div>
             <div class="card"><p class="metric-label">Tasa ahorro</p><p class="metric-value">${metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}</p></div>
+            <div class="card"><p class="metric-label">Cuota deuda</p><p class="metric-value">${formatCurrencyByPreference(metrics.monthlyDebtPayment, currency)}</p></div>
             <div class="card"><p class="metric-label">Ahorro anual</p><p class="metric-value">${formatCurrencyByPreference(metrics.annualSavings, currency)}</p></div>
             <div class="card"><p class="metric-label">Objetivo FIRE</p><p class="metric-value">${formatCurrencyByPreference(metrics.fireTarget, currency)}</p></div>
           </div>
@@ -1705,18 +1718,20 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, savingsTargetsResult, fireSettingsResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
+        supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status").eq("user_id", userId),
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || savingsTargetsResult.error || fireSettingsResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
+            debtsResult.error?.message ||
             savingsTargetsResult.error?.message ||
             fireSettingsResult.error?.message ||
             investmentsResult.error?.message ||
@@ -1730,6 +1745,7 @@ export default function DashboardPage() {
       const nextExpenseRows = (expensesResult.data as ExpenseRow[]) ?? [];
       const nextIncomeRows = (incomeResult.data as IncomeRow[]) ?? [];
       const investmentRows = (investmentsResult.data as InvestmentRow[]) ?? [];
+      const debtRows = (debtsResult.data as DebtRow[]) ?? [];
       const savingsTargetRows = (savingsTargetsResult.data as SavingsTargetRow[]) ?? [];
       const fireSettings = (fireSettingsResult.data as FireSettingsRow | null) ?? null;
 
@@ -1747,7 +1763,14 @@ export default function DashboardPage() {
       const totalIncomeAllTime = nextIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const totalExpensesAllTime = nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const cashPosition = totalIncomeAllTime - totalExpensesAllTime;
-      const totalNetWorth = cashPosition + investmentsValue;
+      const debtTotal = debtRows
+        .filter((row) => row.status !== "closed")
+        .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
+      const monthlyDebtPayment = debtRows
+        .filter((row) => row.status !== "closed")
+        .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
+      const grossWorth = cashPosition + investmentsValue;
+      const totalNetWorth = grossWorth - debtTotal;
 
       const monthExpenses = nextExpenseRows.reduce(
         (acc, row) => (isSameMonth(row.expense_date, now) ? acc + Number(row.amount) : acc),
@@ -1793,7 +1816,10 @@ export default function DashboardPage() {
         annualExpenses,
         annualSavings,
         cashPosition,
-        investmentsValue
+        investmentsValue,
+        debtTotal,
+        monthlyDebtPayment,
+        grossWorth
       });
 
       await persistSnapshot(userId, totalNetWorth, cashPosition, investmentsValue);
@@ -1847,8 +1873,8 @@ export default function DashboardPage() {
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] md:col-span-2 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-white/76">Patrimonio total combinando caja acumulada e inversiones actuales registradas.</p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <p className="mt-2 max-w-sm text-sm text-white/76">Patrimonio neto combinando caja, inversiones y la deuda pendiente que ya has registrado.</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
@@ -1856,6 +1882,10 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>
               <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrencyByPreference(metrics.investmentsValue, currency) : "--"}</p>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Deuda</p>
+              <p className="mt-2 text-2xl font-semibold">{metrics ? formatCurrencyByPreference(metrics.debtTotal, currency) : "--"}</p>
             </div>
           </div>
         </section>
@@ -1887,9 +1917,9 @@ export default function DashboardPage() {
               ) : null}
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio total</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio neto</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalNetWorth, currency)}</p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Caja neta acumulada mas valor actual de inversiones.</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Caja neta acumulada mas inversiones menos deuda pendiente.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
@@ -1904,6 +1934,18 @@ export default function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
               <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los meses del año actual.</p>
+            </section>
+
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda total</p>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.debtTotal, currency)}</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Saldo pendiente consolidado de tarjetas, prestamos e hipotecas.</p>
+            </section>
+
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota deuda mensual</p>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.monthlyDebtPayment, currency)}</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Carga fija mensual de toda la deuda activa o pausada.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">

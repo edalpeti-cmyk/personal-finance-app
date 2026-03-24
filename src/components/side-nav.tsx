@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/budgets", label: "Presupuestos", hint: "Control mensual", icon: "budgets" },
   { href: "/expenses", label: "Gastos", hint: "Registro y analisis", icon: "expenses" },
   { href: "/investments", label: "Inversiones", hint: "Portfolio tracker", icon: "investments" },
+  { href: "/debts", label: "Deuda", hint: "Prestamos y tarjetas", icon: "debts" },
   { href: "/fire", label: "FIRE", hint: "Independencia financiera", icon: "fire" },
   { href: "/goals", label: "Objetivos", hint: "Metas y progreso", icon: "goals" },
   { href: "/protected", label: "Inicio", hint: "Area privada", icon: "home" }
@@ -24,6 +25,7 @@ function NavIcon({ icon }: { icon: string }) {
   if (icon === "budgets") return <svg {...common}><path d="M12 1v22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6" /></svg>;
   if (icon === "expenses") return <svg {...common}><path d="m7 3-4 4 4 4" /><path d="M3 7h10a4 4 0 0 1 4 4v10" /><path d="m17 21 4-4-4-4" /><path d="M21 17H11a4 4 0 0 1-4-4V3" /></svg>;
   if (icon === "investments") return <svg {...common}><path d="M4 19 10 13 13 16 20 9" /><path d="m14 9 6 0 0 6" /></svg>;
+  if (icon === "debts") return <svg {...common}><path d="M5 7h14" /><path d="M5 12h14" /><path d="M5 17h8" /><path d="M18 17h1" /><path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" /></svg>;
   if (icon === "fire") return <svg {...common}><path d="M12 3s4 3 4 7a4 4 0 1 1-8 0c0-2 1-3 2-5" /><path d="M10 14c0 1.5 1 3 2 4 1-1 2-2.5 2-4 0-1.4-.7-2.4-2-3-1.3.6-2 1.6-2 3Z" /></svg>;
   if (icon === "goals") return <svg {...common}><path d="M12 3 4 7v5c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V7l-8-4Z" /><path d="m9 12 2 2 4-4" /></svg>;
   if (icon === "home") return <svg {...common}><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></svg>;

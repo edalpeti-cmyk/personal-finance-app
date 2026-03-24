@@ -8,6 +8,7 @@ export type FinancialSnapshot = {
   savingsRate: number | null;
   hasAnyIncome: boolean;
   hasCurrentMonthIncome: boolean;
+  debtTotal: number;
   netWorth: number;
   fireTarget: number;
   fireProgress: number;
