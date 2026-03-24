@@ -2663,14 +2663,14 @@ export default function InvestmentsPage() {
             open={investmentFormOpen}
             onToggle={(event) => setInvestmentFormOpen(event.currentTarget.open)}
           >
-            <summary className="accordion-summary cursor-pointer list-none">
-              <div className="accordion-summary-main">
+            <summary className="accordion-summary cursor-pointer list-none !flex-col !items-start !gap-3">
+              <div className="accordion-summary-main w-full min-w-0">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
                   {editingId ? "Editar posicion" : "Nueva posicion"}
                 </h2>
               </div>
-              <div className="accordion-summary-side">
+              <div className="accordion-summary-side !w-full !justify-between">
                 <span className="accordion-metric">
                   {editingId ? "Edicion" : transactionMode === "sell" ? "Venta" : "Compra"}
                 </span>
