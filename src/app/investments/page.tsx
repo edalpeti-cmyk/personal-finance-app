@@ -2683,10 +2683,7 @@ export default function InvestmentsPage() {
 
             <div className="accordion-content">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
-                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar posicion" : "Nueva posicion"}</h2>
-                </div>
+                <div />
                 {editingId ? (
                   <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
                     Cancelar edicion
