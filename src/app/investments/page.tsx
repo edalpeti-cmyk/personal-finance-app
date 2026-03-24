@@ -2657,7 +2657,7 @@ export default function InvestmentsPage() {
 
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section> : null}
 
-        <section ref={formRef} className={`panel rounded-[28px] p-5 text-white xl:col-span-7 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
+        <section ref={formRef} className={`panel self-start rounded-[28px] p-5 text-white xl:col-span-7 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
           <details
             className="group"
             open={investmentFormOpen}
