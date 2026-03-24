@@ -175,6 +175,7 @@ const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
 const INVESTMENT_VIEWS_KEY = "investment-saved-views";
 const INVESTMENT_VIEW_SCOPE = "investments";
 const INVESTMENT_COMPARISON_MODE_KEY = "investment-comparison-mode";
+const INVESTMENT_FORM_OPEN_KEY = "investment-form-open";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -668,6 +669,7 @@ export default function InvestmentsPage() {
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
+  const [investmentFormOpen, setInvestmentFormOpen] = useState(true);
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const backfillingTransactionsRef = useRef(false);
@@ -738,11 +740,19 @@ export default function InvestmentsPage() {
     if (storedMode === "weight" || storedMode === "profitability") {
       setComparisonMode(storedMode);
     }
+    const storedFormOpen = window.localStorage.getItem(INVESTMENT_FORM_OPEN_KEY);
+    if (storedFormOpen === "true" || storedFormOpen === "false") {
+      setInvestmentFormOpen(storedFormOpen === "true");
+    }
   }, []);
 
   useEffect(() => {
     window.localStorage.setItem(INVESTMENT_COMPARISON_MODE_KEY, comparisonMode);
   }, [comparisonMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(INVESTMENT_FORM_OPEN_KEY, String(investmentFormOpen));
+  }, [investmentFormOpen]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -2648,19 +2658,42 @@ export default function InvestmentsPage() {
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section> : null}
 
         <section ref={formRef} className={`panel rounded-[28px] p-5 text-white xl:col-span-7 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
-              <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar posicion" : "Nueva posicion"}</h2>
-            </div>
-            {editingId ? (
-              <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
-                Cancelar edicion
-              </button>
-            ) : null}
-          </div>
+          <details
+            className="group"
+            open={investmentFormOpen}
+            onToggle={(event) => setInvestmentFormOpen(event.currentTarget.open)}
+          >
+            <summary className="accordion-summary cursor-pointer list-none">
+              <div className="accordion-summary-main">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
+                  {editingId ? "Editar posicion" : "Nueva posicion"}
+                </h2>
+              </div>
+              <div className="accordion-summary-side">
+                <span className="accordion-metric">
+                  {editingId ? "Edicion" : transactionMode === "sell" ? "Venta" : "Compra"}
+                </span>
+                <span className="accordion-chevron" aria-hidden="true">
+                  v
+                </span>
+              </div>
+            </summary>
 
-          <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
+            <div className="accordion-content">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+                  <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar posicion" : "Nueva posicion"}</h2>
+                </div>
+                {editingId ? (
+                  <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
+                    Cancelar edicion
+                  </button>
+                ) : null}
+              </div>
+
+              <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
             {!editingId ? (
               <div className="grid gap-3">
                 <span className="text-sm text-slate-200">Operacion</span>
@@ -2871,7 +2904,9 @@ export default function InvestmentsPage() {
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingId ? "Guardar cambios" : transactionMode === "sell" ? "Registrar venta" : "Anadir activo"}
             </button>
-          </form>
+              </form>
+            </div>
+          </details>
         </section>
 
         <section className="grid gap-3 xl:col-span-5 md:grid-cols-2">
