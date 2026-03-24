@@ -2418,6 +2418,7 @@ export default function InvestmentsPage() {
   };
 
   const handleEdit = (row: InvestmentRow) => {
+    setInvestmentFormOpen(true);
     setEditingId(row.id);
     setAssetName(row.asset_name);
     setAssetSymbol(row.asset_symbol ?? "");
