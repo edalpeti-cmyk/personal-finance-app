@@ -27,6 +27,7 @@ type DebtRow = {
   start_date: string | null;
   target_end_date: string | null;
   status: DebtStatus;
+  include_in_net_worth: boolean;
   notes: string | null;
 };
 
@@ -138,7 +139,7 @@ export default function DebtsPage() {
   }, []);
 
   const debtMetrics = useMemo(() => {
-    const activeDebts = debts.filter((row) => row.status !== "closed");
+    const activeDebts = debts.filter((row) => row.status !== "closed" && row.include_in_net_worth);
     const debtTotal = activeDebts.reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const monthlyBurden = activeDebts.reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const weightedInterestBase = activeDebts.reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
@@ -193,7 +194,8 @@ export default function DebtsPage() {
       start_date: startDate || null,
       target_end_date: targetEndDate || null,
       status,
-      notes: notes.trim() || null
+      notes: notes.trim() || null,
+      include_in_net_worth: editingId ? debts.find((row) => row.id === editingId)?.include_in_net_worth ?? true : true
     };
 
     const result = editingId
@@ -244,6 +246,29 @@ export default function DebtsPage() {
     await loadData();
   };
 
+  const handleToggleNetWorthConnection = async (row: DebtRow) => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("debts")
+      .update({ include_in_net_worth: !row.include_in_net_worth })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    showToast({
+      type: "success",
+      text: !row.include_in_net_worth
+        ? "La deuda vuelve a contar en el patrimonio neto."
+        : "La deuda deja de descontar patrimonio neto."
+    });
+    await loadData();
+  };
+
   if (authLoading || loading) {
     return (
       <>
@@ -270,7 +295,7 @@ export default function DebtsPage() {
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Resumen</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(debtMetrics.debtTotal, currency)}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-200">Saldo pendiente total de tus deudas activas o pausadas, consolidado en EUR.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Saldo pendiente total de tus deudas activas o pausadas conectadas al patrimonio neto.</p>
         </section>
 
         {toast ? (
@@ -432,6 +457,17 @@ export default function DebtsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleNetWorthConnection(row)}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                            row.include_in_net_worth
+                              ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+                              : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                          }`}
+                        >
+                          {row.include_in_net_worth ? "Conectada al patrimonio" : "No conectada al patrimonio"}
+                        </button>
                         <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">
                           Editar
                         </button>
@@ -462,6 +498,7 @@ export default function DebtsPage() {
                     <div className="mt-4 grid gap-2 text-sm text-slate-300 md:grid-cols-2">
                       <p>Inicio: <span className="font-medium text-white">{row.start_date ? formatDateByPreference(row.start_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Objetivo fin: <span className="font-medium text-white">{row.target_end_date ? formatDateByPreference(row.target_end_date, dateFormat) : "Sin fecha"}</span></p>
+                      <p>Patrimonio neto: <span className="font-medium text-white">{row.include_in_net_worth ? "Conectada" : "Ignorada"}</span></p>
                     </div>
                     {row.notes ? <p className="mt-3 text-sm leading-6 text-slate-300">{row.notes}</p> : null}
                   </article>

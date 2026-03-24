@@ -4,7 +4,7 @@ import { convertToEur, fetchRatesToEur, type AssetCurrency } from "@/lib/currenc
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
 type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
-type DebtRow = { outstanding_balance: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed" };
+type DebtRow = { outstanding_balance: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
 type SavingsTargetRow = { savings_target: number; month: string };
 type FireSettingsRow = {
   annual_expenses: number;
@@ -54,7 +54,7 @@ export async function buildSnapshotMetrics(supabase: SupabaseClient, userId: str
     supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
     supabase.from("income").select("amount, income_date").eq("user_id", userId),
     supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
-    supabase.from("debts").select("outstanding_balance, currency, status").eq("user_id", userId),
+    supabase.from("debts").select("outstanding_balance, currency, status, include_in_net_worth").eq("user_id", userId),
     supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
     supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
   ]);
@@ -89,7 +89,7 @@ export async function buildSnapshotMetrics(supabase: SupabaseClient, userId: str
   const totalExpensesAllTime = expenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
   const cashPosition = totalIncomeAllTime - totalExpensesAllTime;
   const debtTotal = debtRows
-    .filter((row) => row.status !== "closed")
+    .filter((row) => row.status !== "closed" && row.include_in_net_worth)
     .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
   const totalNetWorth = cashPosition + investmentsValue - debtTotal;
 

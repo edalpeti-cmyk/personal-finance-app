@@ -31,6 +31,7 @@ type DebtRow = {
   monthly_payment: number;
   currency: AssetCurrency | null;
   status: "active" | "paused" | "closed";
+  include_in_net_worth: boolean;
 };
 type InvestmentRow = {
   asset_name: string;
@@ -1722,7 +1723,7 @@ export default function DashboardPage() {
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
-        supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status").eq("user_id", userId),
+        supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", userId),
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
       ]);
@@ -1764,10 +1765,10 @@ export default function DashboardPage() {
       const totalExpensesAllTime = nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const cashPosition = totalIncomeAllTime - totalExpensesAllTime;
       const debtTotal = debtRows
-        .filter((row) => row.status !== "closed")
+        .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
       const monthlyDebtPayment = debtRows
-        .filter((row) => row.status !== "closed")
+        .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
       const grossWorth = cashPosition + investmentsValue;
       const totalNetWorth = grossWorth - debtTotal;

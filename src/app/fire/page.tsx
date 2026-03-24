@@ -58,6 +58,7 @@ type DebtRow = {
   outstanding_balance: number;
   currency: AssetCurrency | null;
   status: "active" | "paused" | "closed";
+  include_in_net_worth: boolean;
 };
 
 const MAX_YEARS = 60;
@@ -109,14 +110,14 @@ export default function FirePage() {
           .select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("debts").select("outstanding_balance, currency, status").eq("user_id", userId)
+        supabase.from("debts").select("outstanding_balance, currency, status, include_in_net_worth").eq("user_id", userId)
       ]);
 
       const data = settingsResult.data;
       const error = settingsResult.error;
       const debtRows = (debtsResult.data as DebtRow[] | null) ?? [];
       const registeredDebt = debtRows
-        .filter((row) => row.status !== "closed")
+        .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
       setDebtTotal(registeredDebt);
 

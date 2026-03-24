@@ -29,6 +29,7 @@ type GoalRow = {
   linked_account: string | null;
   linked_investment_id: string | null;
   linked_asset_type: AssetType | null;
+  linked_debt_id: string | null;
 };
 type SavingsTargetRow = {
   month: string;
@@ -68,6 +69,13 @@ type GoalAssetTypeLinkRow = {
   goal_id: string;
   asset_type: AssetType;
   allocation_pct: number;
+};
+type DebtLinkRow = {
+  id: string;
+  debt_name: string;
+  outstanding_balance: number;
+  currency: AssetCurrency;
+  status: "active" | "paused" | "closed";
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
@@ -118,6 +126,7 @@ export default function GoalsPage() {
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [investmentLinks, setInvestmentLinks] = useState<InvestmentLinkRow[]>([]);
+  const [debtLinks, setDebtLinks] = useState<DebtLinkRow[]>([]);
   const [goalInvestmentLinks, setGoalInvestmentLinks] = useState<GoalInvestmentLinkRow[]>([]);
   const [goalAssetTypeLinks, setGoalAssetTypeLinks] = useState<GoalAssetTypeLinkRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -133,6 +142,7 @@ export default function GoalsPage() {
   const [linkedCategory, setLinkedCategory] = useState("");
   const [linkedAccount, setLinkedAccount] = useState("");
   const [linkedInvestmentId, setLinkedInvestmentId] = useState("");
+  const [linkedDebtId, setLinkedDebtId] = useState("");
   const [selectedLinkedAssetTypes, setSelectedLinkedAssetTypes] = useState<AssetType[]>([]);
   const [selectedLinkedAssetTypeAllocations, setSelectedLinkedAssetTypeAllocations] = useState<Record<AssetType, string>>({} as Record<AssetType, string>);
   const [selectedLinkedInvestmentIds, setSelectedLinkedInvestmentIds] = useState<string[]>([]);
@@ -167,6 +177,7 @@ export default function GoalsPage() {
     setLinkedCategory("");
     setLinkedAccount("");
     setLinkedInvestmentId("");
+    setLinkedDebtId("");
     setSelectedLinkedAssetTypes([]);
     setSelectedLinkedAssetTypeAllocations({} as Record<AssetType, string>);
     setSelectedLinkedInvestmentIds([]);
@@ -179,10 +190,10 @@ export default function GoalsPage() {
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, investmentsResult, linksResult, assetTypeLinksResult] = await Promise.all([
+    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, investmentsResult, debtsResult, linksResult, assetTypeLinksResult] = await Promise.all([
       supabase
         .from("financial_goals")
-        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id, linked_asset_type")
+        .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id, linked_asset_type, linked_debt_id")
         .eq("user_id", uid)
         .order("priority", { ascending: true })
         .order("created_at", { ascending: false }),
@@ -191,11 +202,12 @@ export default function GoalsPage() {
       supabase.from("income").select("amount, income_date").eq("user_id", uid),
       supabase.from("expenses").select("amount, expense_date").eq("user_id", uid),
       supabase.from("investments").select("id, asset_name, asset_symbol, asset_type, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true }),
+      supabase.from("debts").select("id, debt_name, outstanding_balance, currency, status").eq("user_id", uid).order("debt_name", { ascending: true }),
       supabase.from("goal_investment_links").select("goal_id, investment_id, allocation_pct").eq("user_id", uid),
       supabase.from("goal_asset_type_links").select("goal_id, asset_type, allocation_pct").eq("user_id", uid)
     ]);
 
-    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error ?? linksResult.error ?? assetTypeLinksResult.error;
+    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error ?? debtsResult.error ?? linksResult.error ?? assetTypeLinksResult.error;
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -208,6 +220,7 @@ export default function GoalsPage() {
     setIncomeRows((incomeResult.data as IncomeRow[]) ?? []);
     setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
     setInvestmentLinks((investmentsResult.data as InvestmentLinkRow[]) ?? []);
+    setDebtLinks((debtsResult.data as DebtLinkRow[]) ?? []);
     setGoalInvestmentLinks((linksResult.data as GoalInvestmentLinkRow[]) ?? []);
     setGoalAssetTypeLinks((assetTypeLinksResult.data as GoalAssetTypeLinkRow[]) ?? []);
     setLoading(false);
@@ -444,6 +457,7 @@ export default function GoalsPage() {
       return haystack.includes(query);
     });
   }, [investmentLinks, investmentSearch]);
+  const debtLinkById = useMemo(() => new Map(debtLinks.map((row) => [row.id, row])), [debtLinks]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -509,6 +523,7 @@ export default function GoalsPage() {
       status,
       linked_category: linkedCategory.trim() || null,
       linked_account: linkedAccount.trim() || null,
+      linked_debt_id: linkedDebtId || null,
       linked_investment_id: selectedLinkedInvestmentIds[0] || linkedInvestmentId || null,
       linked_asset_type: selectedLinkedAssetTypes[0] || null
     };
@@ -581,6 +596,7 @@ export default function GoalsPage() {
     setStatus(goal.status);
     setLinkedCategory(goal.linked_category ?? "");
     setLinkedAccount(goal.linked_account ?? "");
+    setLinkedDebtId(goal.linked_debt_id ?? "");
     setLinkedInvestmentId(goal.linked_investment_id ?? "");
     const linkedAssetTypeConfigs = linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : []);
     setSelectedLinkedAssetTypes(linkedAssetTypeConfigs.map((item) => item.asset_type));
@@ -832,6 +848,20 @@ export default function GoalsPage() {
               <label className="grid gap-2 text-sm text-slate-200"><span>Categoria conectada</span><input className={inputClass()} value={linkedCategory} onChange={(event) => setLinkedCategory(event.target.value)} placeholder="Ej: Vivienda, Inversiones, Viajes" /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
             </div>
+            <label className="grid gap-2 text-sm text-slate-200">
+              <span>Deuda conectada</span>
+              <select className={inputClass()} value={linkedDebtId} onChange={(event) => setLinkedDebtId(event.target.value)}>
+                <option value="">Sin deuda conectada</option>
+                {debtLinks
+                  .filter((row) => row.status !== "closed")
+                  .map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.debt_name} · {formatCurrencyByPreference(Number(row.outstanding_balance || 0), row.currency)}
+                    </option>
+                  ))}
+              </select>
+              <span className="text-xs text-slate-400">Util para metas tipo `Pagar deuda` conectadas a una tarjeta, prestamo o hipoteca concreta.</span>
+            </label>
             <div className="grid gap-4">
               <div ref={assetTypesDropdownRef} className="relative grid gap-2 text-sm text-slate-200">
                 <span>Tipo de activo conectado</span>
@@ -1292,6 +1322,7 @@ export default function GoalsPage() {
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
+                      <p>Deuda: <span className="font-medium text-white">{goal.linked_debt_id ? debtLinkById.get(goal.linked_debt_id)?.debt_name ?? "Conectada" : "Sin conectar"}</span></p>
                       <p>Tipos vinculados: <span className="font-medium text-white">{(linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : [])).length > 0 ? (linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : [])).map((item) => `${ASSET_TYPE_OPTIONS.find((option) => option.value === item.asset_type)?.label ?? item.asset_type} (${Number(item.allocation_pct ?? 100).toFixed(0)}%)`).join(", ") : "Sin tipo"}</span></p>
                       <p>Posiciones vinculadas: <span className="font-medium text-white">{linkedConfigs.length > 0 ? linkedConfigs.map((item) => `${investmentLinks.find((investment) => investment.id === item.investment_id)?.asset_name ?? "Posicion"} (${Number(item.allocation_pct ?? 100).toFixed(0)}%)`).join(", ") : "Sin posiciones"}</span></p>
                     </div>

@@ -14,7 +14,7 @@ import { formatCurrencyByPreference, formatMonthByPreference } from "@/lib/prefe
 
 type IncomeRow = { amount: number; income_date: string };
 type ExpenseRow = { amount: number; category: string; expense_date: string };
-type DebtRow = { outstanding_balance: number; monthly_payment: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed" };
+type DebtRow = { outstanding_balance: number; monthly_payment: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
 type BudgetRow = { category: string; budget_amount: number; month: string };
 type SavingsTargetRow = { month: string; savings_target: number };
 type InvestmentRow = {
@@ -141,7 +141,7 @@ export default function ReviewPage() {
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
-      supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status").eq("user_id", uid),
+      supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", uid),
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
       supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
@@ -211,10 +211,10 @@ export default function ReviewPage() {
       return sum + convertToEur(unit * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR);
     }, 0);
     const debtTotal = debtRows
-      .filter((row) => row.status !== "closed")
+      .filter((row) => row.status !== "closed" && row.include_in_net_worth)
       .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const monthlyDebtPayment = debtRows
-      .filter((row) => row.status !== "closed")
+      .filter((row) => row.status !== "closed" && row.include_in_net_worth)
       .reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const pricesConnected = investmentRows.filter((row) => row.current_price !== null).length;
     const cashPosition = incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) - expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
