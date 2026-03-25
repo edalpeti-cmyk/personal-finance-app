@@ -763,9 +763,40 @@ export default function GoalsPage() {
       { onConflict: "goal_id,snapshot_month" }
     );
 
+    let debtUpdated = false;
+    if (goal.linked_debt_id) {
+      const linkedDebt = debtLinkById.get(goal.linked_debt_id);
+      if (linkedDebt && linkedDebt.status !== "closed") {
+        const confirmed = window.confirm(
+          `Esta meta esta conectada a la deuda "${linkedDebt.debt_name}". Quieres descontar tambien ${formatCurrencyByPreference(amount, currency)} del saldo pendiente?`
+        );
+
+        if (confirmed) {
+          const nextOutstanding = Math.max(Number(linkedDebt.outstanding_balance || 0) - amount, 0);
+          const { error: debtError } = await supabase
+            .from("debts")
+            .update({ outstanding_balance: Number(nextOutstanding.toFixed(2)) })
+            .eq("id", goal.linked_debt_id)
+            .eq("user_id", userId);
+
+          if (debtError) {
+            setMessage(debtError.message);
+            showToast({ type: "error", text: "La aportacion se guardo, pero no se pudo actualizar la deuda conectada." });
+            setContributingGoalId(null);
+            return;
+          }
+
+          debtUpdated = true;
+        }
+      }
+    }
+
     setContributionDrafts((current) => ({ ...current, [goal.id]: "" }));
     await loadGoals(userId);
-    showToast({ type: "success", text: "Aportacion registrada en el objetivo." });
+    showToast({
+      type: "success",
+      text: debtUpdated ? "Aportacion registrada y deuda conectada actualizada." : "Aportacion registrada en el objetivo."
+    });
     setContributingGoalId(null);
   };
 
