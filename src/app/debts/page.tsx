@@ -44,6 +44,11 @@ type DebtBudgetCategoryLinkRow = {
   debt_id: string;
   category: string;
 };
+type DebtBudgetApplicationRow = {
+  debt_id: string;
+  application_month: string;
+  applied_amount: number;
+};
 
 type ToastState = { type: "success" | "error"; text: string } | null;
 
@@ -86,6 +91,7 @@ export default function DebtsPage() {
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
   const [debtBudgetCategoryLinks, setDebtBudgetCategoryLinks] = useState<DebtBudgetCategoryLinkRow[]>([]);
+  const [debtBudgetApplications, setDebtBudgetApplications] = useState<DebtBudgetApplicationRow[]>([]);
   const [budgetCategories, setBudgetCategories] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -104,6 +110,7 @@ export default function DebtsPage() {
   const [selectedLinkedBudgetCategories, setSelectedLinkedBudgetCategories] = useState<string[]>([]);
   const [budgetCategoriesDropdownOpen, setBudgetCategoriesDropdownOpen] = useState(false);
   const [budgetCategorySearch, setBudgetCategorySearch] = useState("");
+  const [applyingBudgetDebtId, setApplyingBudgetDebtId] = useState<string | null>(null);
   const budgetCategoriesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -117,15 +124,16 @@ export default function DebtsPage() {
     setLoading(true);
     setMessage(null);
 
-    const [debtResult, incomeResult, budgetsResult, debtBudgetLinksResult] = await Promise.all([
+    const [debtResult, incomeResult, budgetsResult, debtBudgetLinksResult, debtBudgetApplicationsResult] = await Promise.all([
       supabase.from("debts").select("*").eq("user_id", userId).order("status", { ascending: true }).order("debt_name", { ascending: true }),
       supabase.from("income").select("amount, income_date").eq("user_id", userId),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", userId),
-      supabase.from("debt_budget_category_links").select("debt_id, category").eq("user_id", userId)
+      supabase.from("debt_budget_category_links").select("debt_id, category").eq("user_id", userId),
+      supabase.from("debt_budget_applications").select("debt_id, application_month, applied_amount").eq("user_id", userId)
     ]);
 
-    if (debtResult.error || incomeResult.error || budgetsResult.error || debtBudgetLinksResult.error) {
-      setMessage(debtResult.error?.message || incomeResult.error?.message || budgetsResult.error?.message || debtBudgetLinksResult.error?.message || "No se pudo cargar la deuda.");
+    if (debtResult.error || incomeResult.error || budgetsResult.error || debtBudgetLinksResult.error || debtBudgetApplicationsResult.error) {
+      setMessage(debtResult.error?.message || incomeResult.error?.message || budgetsResult.error?.message || debtBudgetLinksResult.error?.message || debtBudgetApplicationsResult.error?.message || "No se pudo cargar la deuda.");
       setLoading(false);
       return;
     }
@@ -137,6 +145,7 @@ export default function DebtsPage() {
       Array.from(new Set((((budgetsResult.data as BudgetRow[] | null) ?? []).map((row) => row.category.trim()).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "es"))
     );
     setDebtBudgetCategoryLinks((debtBudgetLinksResult.data as DebtBudgetCategoryLinkRow[] | null) ?? []);
+    setDebtBudgetApplications((debtBudgetApplicationsResult.data as DebtBudgetApplicationRow[] | null) ?? []);
     setLoading(false);
   }, [supabase, userId]);
 
@@ -191,6 +200,7 @@ export default function DebtsPage() {
     };
   }, [debts, incomeRows]);
   const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const currentApplicationMonth = useMemo(() => `${currentMonth}-01`, [currentMonth]);
   const currentMonthBudgetByCategory = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of budgetRows) {
@@ -219,6 +229,14 @@ export default function DebtsPage() {
     }
     return map;
   }, [currentMonthBudgetByCategory, debts, linkedBudgetCategoriesByDebt]);
+  const currentMonthDebtBudgetApplications = useMemo(() => {
+    const map = new Map<string, DebtBudgetApplicationRow>();
+    for (const row of debtBudgetApplications) {
+      if (row.application_month.slice(0, 7) !== currentMonth) continue;
+      map.set(row.debt_id, row);
+    }
+    return map;
+  }, [currentMonth, debtBudgetApplications]);
   const selectedBudgetCategoriesLabel = useMemo(() => {
     if (selectedLinkedBudgetCategories.length === 0) return "Sin partidas conectadas";
     if (selectedLinkedBudgetCategories.length <= 2) return selectedLinkedBudgetCategories.join(", ");
@@ -372,6 +390,65 @@ export default function DebtsPage() {
         : "La deuda deja de descontar patrimonio neto."
     });
     await loadData();
+  };
+  const handleApplyPlannedContribution = async (row: DebtRow) => {
+    if (!userId) return;
+
+    const plannedContribution = Number(linkedBudgetAmountByDebt.get(row.id) ?? 0);
+    const existingApplication = currentMonthDebtBudgetApplications.get(row.id);
+    if (plannedContribution <= 0) {
+      showToast({ type: "error", text: "No hay aportacion planificada este mes para esta deuda." });
+      return;
+    }
+    if (existingApplication) {
+      showToast({ type: "error", text: "Esta aportacion planificada ya se aplico este mes." });
+      return;
+    }
+
+    setApplyingBudgetDebtId(row.id);
+    setMessage(null);
+
+    const appliedAmount = Math.min(plannedContribution, Number(row.outstanding_balance || 0));
+    const nextOutstanding = Math.max(Number(row.outstanding_balance || 0) - appliedAmount, 0);
+
+    const { error: updateDebtError } = await supabase
+      .from("debts")
+      .update({ outstanding_balance: Number(nextOutstanding.toFixed(2)) })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (updateDebtError) {
+      setMessage(updateDebtError.message);
+      setApplyingBudgetDebtId(null);
+      return;
+    }
+
+    const { error: applicationError } = await supabase
+      .from("debt_budget_applications")
+      .upsert(
+        {
+          debt_id: row.id,
+          user_id: userId,
+          application_month: currentApplicationMonth,
+          applied_amount: Number(appliedAmount.toFixed(2))
+        },
+        { onConflict: "debt_id,application_month" }
+      );
+
+    if (applicationError) {
+      setMessage(applicationError.message);
+      setApplyingBudgetDebtId(null);
+      return;
+    }
+
+    showToast({
+      type: "success",
+      text: appliedAmount < plannedContribution
+        ? "Aportacion aplicada. La deuda ha llegado a 0 y el resto queda sin usar."
+        : "Aportacion planificada aplicada a la deuda."
+    });
+    await loadData();
+    setApplyingBudgetDebtId(null);
   };
 
   if (authLoading || loading) {
@@ -656,6 +733,8 @@ export default function DebtsPage() {
                 const monthlyEur = convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR);
                 const plannedContribution = Number(linkedBudgetAmountByDebt.get(row.id) ?? 0);
                 const linkedBudgetCategories = linkedBudgetCategoriesByDebt.get(row.id) ?? [];
+                const appliedBudgetContribution = Number(currentMonthDebtBudgetApplications.get(row.id)?.applied_amount ?? 0);
+                const plannedAlreadyApplied = currentMonthDebtBudgetApplications.has(row.id);
                 const progressPct = Number(row.original_amount || 0) > 0
                   ? Math.max(0, Math.min(((Number(row.original_amount) - Number(row.outstanding_balance || 0)) / Number(row.original_amount)) * 100, 100))
                   : 0;
@@ -671,6 +750,14 @@ export default function DebtsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleApplyPlannedContribution(row)}
+                          disabled={applyingBudgetDebtId === row.id || plannedContribution <= 0 || plannedAlreadyApplied || row.status === "closed"}
+                          className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {applyingBudgetDebtId === row.id ? "Aplicando..." : plannedAlreadyApplied ? "Aplicada este mes" : "Aplicar aportacion planificada"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => void handleToggleNetWorthConnection(row)}
@@ -714,6 +801,7 @@ export default function DebtsPage() {
                       <p>Objetivo fin: <span className="font-medium text-white">{row.target_end_date ? formatDateByPreference(row.target_end_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Patrimonio neto: <span className="font-medium text-white">{row.include_in_net_worth ? "Conectada" : "Ignorada"}</span></p>
                       <p>Aportacion planificada: <span className="font-medium text-white">{formatCurrencyByPreference(plannedContribution, currency)}</span></p>
+                      <p>Aportacion aplicada este mes: <span className="font-medium text-white">{formatCurrencyByPreference(appliedBudgetContribution, currency)}</span></p>
                       <p>Partidas presupuesto: <span className="font-medium text-white">{linkedBudgetCategories.length > 0 ? linkedBudgetCategories.join(", ") : "Sin partidas"}</span></p>
                     </div>
                     {row.notes ? <p className="mt-3 text-sm leading-6 text-slate-300">{row.notes}</p> : null}
