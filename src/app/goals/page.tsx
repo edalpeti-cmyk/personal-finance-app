@@ -70,6 +70,10 @@ type GoalAssetTypeLinkRow = {
   asset_type: AssetType;
   allocation_pct: number;
 };
+type GoalBudgetCategoryLinkRow = {
+  goal_id: string;
+  category: string;
+};
 type DebtLinkRow = {
   id: string;
   debt_name: string;
@@ -129,6 +133,8 @@ export default function GoalsPage() {
   const [debtLinks, setDebtLinks] = useState<DebtLinkRow[]>([]);
   const [goalInvestmentLinks, setGoalInvestmentLinks] = useState<GoalInvestmentLinkRow[]>([]);
   const [goalAssetTypeLinks, setGoalAssetTypeLinks] = useState<GoalAssetTypeLinkRow[]>([]);
+  const [goalBudgetCategoryLinks, setGoalBudgetCategoryLinks] = useState<GoalBudgetCategoryLinkRow[]>([]);
+  const [budgetCategories, setBudgetCategories] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [goalName, setGoalName] = useState("");
@@ -147,10 +153,13 @@ export default function GoalsPage() {
   const [selectedLinkedAssetTypeAllocations, setSelectedLinkedAssetTypeAllocations] = useState<Record<AssetType, string>>({} as Record<AssetType, string>);
   const [selectedLinkedInvestmentIds, setSelectedLinkedInvestmentIds] = useState<string[]>([]);
   const [selectedLinkedInvestmentAllocations, setSelectedLinkedInvestmentAllocations] = useState<Record<string, string>>({});
+  const [selectedLinkedBudgetCategories, setSelectedLinkedBudgetCategories] = useState<string[]>([]);
   const [assetTypesDropdownOpen, setAssetTypesDropdownOpen] = useState(false);
   const [investmentsDropdownOpen, setInvestmentsDropdownOpen] = useState(false);
+  const [budgetCategoriesDropdownOpen, setBudgetCategoriesDropdownOpen] = useState(false);
   const [assetTypeSearch, setAssetTypeSearch] = useState("");
   const [investmentSearch, setInvestmentSearch] = useState("");
+  const [budgetCategorySearch, setBudgetCategorySearch] = useState("");
   const [snapshottingProgress, setSnapshottingProgress] = useState(false);
   const [selectedTimelineGoalId, setSelectedTimelineGoalId] = useState("");
   const [selectedTimelineYear, setSelectedTimelineYear] = useState(String(new Date().getFullYear()));
@@ -158,6 +167,7 @@ export default function GoalsPage() {
   const [contributingGoalId, setContributingGoalId] = useState<string | null>(null);
   const assetTypesDropdownRef = useRef<HTMLDivElement | null>(null);
   const investmentsDropdownRef = useRef<HTMLDivElement | null>(null);
+  const budgetCategoriesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -182,15 +192,18 @@ export default function GoalsPage() {
     setSelectedLinkedAssetTypeAllocations({} as Record<AssetType, string>);
     setSelectedLinkedInvestmentIds([]);
     setSelectedLinkedInvestmentAllocations({});
+    setSelectedLinkedBudgetCategories([]);
     setAssetTypesDropdownOpen(false);
     setInvestmentsDropdownOpen(false);
+    setBudgetCategoriesDropdownOpen(false);
     setAssetTypeSearch("");
     setInvestmentSearch("");
+    setBudgetCategorySearch("");
   }, []);
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, investmentsResult, debtsResult, linksResult, assetTypeLinksResult] = await Promise.all([
+    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, budgetsResult, investmentsResult, debtsResult, linksResult, assetTypeLinksResult, budgetCategoryLinksResult] = await Promise.all([
       supabase
         .from("financial_goals")
         .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id, linked_asset_type, linked_debt_id")
@@ -201,13 +214,15 @@ export default function GoalsPage() {
       supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false }),
       supabase.from("income").select("amount, income_date").eq("user_id", uid),
       supabase.from("expenses").select("amount, expense_date").eq("user_id", uid),
+      supabase.from("monthly_budgets").select("category").eq("user_id", uid),
       supabase.from("investments").select("id, asset_name, asset_symbol, asset_type, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true }),
       supabase.from("debts").select("id, debt_name, outstanding_balance, currency, status").eq("user_id", uid).order("debt_name", { ascending: true }),
       supabase.from("goal_investment_links").select("goal_id, investment_id, allocation_pct").eq("user_id", uid),
-      supabase.from("goal_asset_type_links").select("goal_id, asset_type, allocation_pct").eq("user_id", uid)
+      supabase.from("goal_asset_type_links").select("goal_id, asset_type, allocation_pct").eq("user_id", uid),
+      supabase.from("goal_budget_category_links").select("goal_id, category").eq("user_id", uid)
     ]);
 
-    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? investmentsResult.error ?? debtsResult.error ?? linksResult.error ?? assetTypeLinksResult.error;
+    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? budgetsResult.error ?? investmentsResult.error ?? debtsResult.error ?? linksResult.error ?? assetTypeLinksResult.error ?? budgetCategoryLinksResult.error;
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -219,10 +234,14 @@ export default function GoalsPage() {
     setProgressHistory((historyResult.data as GoalProgressHistoryRow[]) ?? []);
     setIncomeRows((incomeResult.data as IncomeRow[]) ?? []);
     setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
+    setBudgetCategories(
+      Array.from(new Set((((budgetsResult.data as Array<{ category: string }> | null) ?? []).map((row) => row.category.trim()).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "es"))
+    );
     setInvestmentLinks((investmentsResult.data as InvestmentLinkRow[]) ?? []);
     setDebtLinks((debtsResult.data as DebtLinkRow[]) ?? []);
     setGoalInvestmentLinks((linksResult.data as GoalInvestmentLinkRow[]) ?? []);
     setGoalAssetTypeLinks((assetTypeLinksResult.data as GoalAssetTypeLinkRow[]) ?? []);
+    setGoalBudgetCategoryLinks((budgetCategoryLinksResult.data as GoalBudgetCategoryLinkRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
@@ -436,6 +455,11 @@ export default function GoalsPage() {
     }
     return `${selectedLinkedAssetTypes.length} tipos seleccionados`;
   }, [selectedLinkedAssetTypes]);
+  const selectedBudgetCategoriesLabel = useMemo(() => {
+    if (selectedLinkedBudgetCategories.length === 0) return "Sin partidas conectadas";
+    if (selectedLinkedBudgetCategories.length <= 2) return selectedLinkedBudgetCategories.join(", ");
+    return `${selectedLinkedBudgetCategories.length} partidas seleccionadas`;
+  }, [selectedLinkedBudgetCategories]);
   const selectedInvestmentsLabel = useMemo(() => {
     if (selectedLinkedInvestmentIds.length === 0) return "Sin posiciones vinculadas";
     if (selectedLinkedInvestmentIds.length === 1) {
@@ -449,6 +473,11 @@ export default function GoalsPage() {
     if (!query) return ASSET_TYPE_OPTIONS;
     return ASSET_TYPE_OPTIONS.filter((option) => option.label.toLowerCase().includes(query));
   }, [assetTypeSearch]);
+  const filteredBudgetCategories = useMemo(() => {
+    const query = budgetCategorySearch.trim().toLowerCase();
+    if (!query) return budgetCategories;
+    return budgetCategories.filter((categoryName) => categoryName.toLowerCase().includes(query));
+  }, [budgetCategories, budgetCategorySearch]);
   const filteredInvestmentLinks = useMemo(() => {
     const query = investmentSearch.trim().toLowerCase();
     if (!query) return investmentLinks;
@@ -457,6 +486,26 @@ export default function GoalsPage() {
       return haystack.includes(query);
     });
   }, [investmentLinks, investmentSearch]);
+  const linkedBudgetCategoriesByGoal = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const row of goalBudgetCategoryLinks) {
+      const current = map.get(row.goal_id) ?? [];
+      if (!current.includes(row.category)) {
+        current.push(row.category);
+      }
+      map.set(row.goal_id, current);
+    }
+    for (const goal of goals) {
+      if (goal.linked_category?.trim()) {
+        const current = map.get(goal.id) ?? [];
+        if (!current.includes(goal.linked_category.trim())) {
+          current.push(goal.linked_category.trim());
+        }
+        map.set(goal.id, current);
+      }
+    }
+    return map;
+  }, [goalBudgetCategoryLinks, goals]);
   const debtLinkById = useMemo(() => new Map(debtLinks.map((row) => [row.id, row])), [debtLinks]);
   const debtProgressByGoal = useMemo(() => {
     const map = new Map<
@@ -497,6 +546,9 @@ export default function GoalsPage() {
       }
       if (investmentsDropdownRef.current && target && !investmentsDropdownRef.current.contains(target)) {
         setInvestmentsDropdownOpen(false);
+      }
+      if (budgetCategoriesDropdownRef.current && target && !budgetCategoriesDropdownRef.current.contains(target)) {
+        setBudgetCategoriesDropdownOpen(false);
       }
     };
 
@@ -574,6 +626,7 @@ export default function GoalsPage() {
     if (goalId) {
       await supabase.from("goal_investment_links").delete().eq("goal_id", goalId).eq("user_id", userId);
       await supabase.from("goal_asset_type_links").delete().eq("goal_id", goalId).eq("user_id", userId);
+      await supabase.from("goal_budget_category_links").delete().eq("goal_id", goalId).eq("user_id", userId);
       if (selectedLinkedInvestmentIds.length > 0) {
         const { error: linksError } = await supabase.from("goal_investment_links").insert(
           selectedLinkedInvestmentIds.map((investmentId) => ({
@@ -606,6 +659,21 @@ export default function GoalsPage() {
           return;
         }
       }
+      if (selectedLinkedBudgetCategories.length > 0) {
+        const { error: budgetCategoryLinksError } = await supabase.from("goal_budget_category_links").insert(
+          selectedLinkedBudgetCategories.map((budgetCategory) => ({
+            goal_id: goalId,
+            category: budgetCategory,
+            user_id: userId
+          }))
+        );
+        if (budgetCategoryLinksError) {
+          setMessage(budgetCategoryLinksError.message);
+          showToast({ type: "error", text: "El objetivo se guardo, pero fallo la vinculacion con partidas del presupuesto." });
+          setSaving(false);
+          return;
+        }
+      }
     }
 
     resetForm();
@@ -628,6 +696,7 @@ export default function GoalsPage() {
     setLinkedAccount(goal.linked_account ?? "");
     setLinkedDebtId(goal.linked_debt_id ?? "");
     setLinkedInvestmentId(goal.linked_investment_id ?? "");
+    setSelectedLinkedBudgetCategories(linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : []));
     const linkedAssetTypeConfigs = linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : []);
     setSelectedLinkedAssetTypes(linkedAssetTypeConfigs.map((item) => item.asset_type));
     setSelectedLinkedAssetTypeAllocations(
@@ -908,6 +977,92 @@ export default function GoalsPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm text-slate-200"><span>Categoria conectada</span><input className={inputClass()} value={linkedCategory} onChange={(event) => setLinkedCategory(event.target.value)} placeholder="Ej: Vivienda, Inversiones, Viajes" /></label>
               <label className="grid gap-2 text-sm text-slate-200"><span>Cuenta o espacio</span><input className={inputClass()} value={linkedAccount} onChange={(event) => setLinkedAccount(event.target.value)} placeholder="Ej: Cuenta ahorro, Broker principal" /></label>
+            </div>
+            <div ref={budgetCategoriesDropdownRef} className="relative grid gap-2 text-sm text-slate-200">
+              <span>Partidas de presupuesto conectadas</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setBudgetCategoriesDropdownOpen((current) => !current);
+                  setAssetTypesDropdownOpen(false);
+                  setInvestmentsDropdownOpen(false);
+                }}
+                className={`${inputClass()} flex min-w-0 items-center justify-between text-left`}
+              >
+                <span className="min-w-0 truncate">{selectedBudgetCategoriesLabel}</span>
+                <span className="text-slate-400">{budgetCategoriesDropdownOpen ? "▲" : "▼"}</span>
+              </button>
+              {budgetCategoriesDropdownOpen ? (
+                <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                  <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLinkedBudgetCategories(filteredBudgetCategories)}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                      >
+                        Seleccionar todo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLinkedBudgetCategories([]);
+                          setBudgetCategorySearch("");
+                        }}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+                    <input
+                      className={inputClass()}
+                      value={budgetCategorySearch}
+                      onChange={(event) => setBudgetCategorySearch(event.target.value)}
+                      placeholder="Buscar partida del presupuesto"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    {filteredBudgetCategories.map((budgetCategory) => {
+                      const selected = selectedLinkedBudgetCategories.includes(budgetCategory);
+                      return (
+                        <button
+                          key={budgetCategory}
+                          type="button"
+                          onClick={() =>
+                            setSelectedLinkedBudgetCategories((current) =>
+                              current.includes(budgetCategory)
+                                ? current.filter((item) => item !== budgetCategory)
+                                : [...current, budgetCategory]
+                            )
+                          }
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/5"
+                        >
+                          <span className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? "border-emerald-300 bg-emerald-400/15 text-emerald-200" : "border-white/20 text-transparent"}`}>
+                            ✓
+                          </span>
+                          <span>{budgetCategory}</span>
+                        </button>
+                      );
+                    })}
+                    {filteredBudgetCategories.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-slate-400">No hay partidas que coincidan con la busqueda.</div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              <span className="text-xs text-slate-400">Abre el desplegable y marca las partidas del presupuesto que quieres conectar con esta meta.</span>
+              {selectedLinkedBudgetCategories.length > 0 ? (
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  {selectedLinkedBudgetCategories.map((budgetCategory) => (
+                    <span
+                      key={`budget-category-chip-${budgetCategory}`}
+                      className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100"
+                    >
+                      {budgetCategory}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <label className="grid gap-2 text-sm text-slate-200">
               <span>Deuda conectada</span>
@@ -1383,6 +1538,7 @@ export default function GoalsPage() {
                       <p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p>
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
+                      <p>Partidas presupuesto: <span className="font-medium text-white">{(linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])).length > 0 ? (linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])).join(", ") : "Sin partidas"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
                       <p>Deuda: <span className="font-medium text-white">{goal.linked_debt_id ? debtLinkById.get(goal.linked_debt_id)?.debt_name ?? "Conectada" : "Sin conectar"}</span></p>
                       {linkedDebtProgress ? (
