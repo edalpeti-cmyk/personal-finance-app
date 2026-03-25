@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
@@ -34,6 +34,15 @@ type DebtRow = {
 type IncomeRow = {
   amount: number;
   income_date: string;
+};
+type BudgetRow = {
+  category: string;
+  budget_amount: number;
+  month: string;
+};
+type DebtBudgetCategoryLinkRow = {
+  debt_id: string;
+  category: string;
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
@@ -75,6 +84,9 @@ export default function DebtsPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [debts, setDebts] = useState<DebtRow[]>([]);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
+  const [debtBudgetCategoryLinks, setDebtBudgetCategoryLinks] = useState<DebtBudgetCategoryLinkRow[]>([]);
+  const [budgetCategories, setBudgetCategories] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [debtName, setDebtName] = useState("");
@@ -89,6 +101,10 @@ export default function DebtsPage() {
   const [targetEndDate, setTargetEndDate] = useState("");
   const [status, setStatus] = useState<DebtStatus>("active");
   const [notes, setNotes] = useState("");
+  const [selectedLinkedBudgetCategories, setSelectedLinkedBudgetCategories] = useState<string[]>([]);
+  const [budgetCategoriesDropdownOpen, setBudgetCategoriesDropdownOpen] = useState(false);
+  const [budgetCategorySearch, setBudgetCategorySearch] = useState("");
+  const budgetCategoriesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
     setToast(nextToast);
@@ -101,19 +117,26 @@ export default function DebtsPage() {
     setLoading(true);
     setMessage(null);
 
-    const [debtResult, incomeResult] = await Promise.all([
+    const [debtResult, incomeResult, budgetsResult, debtBudgetLinksResult] = await Promise.all([
       supabase.from("debts").select("*").eq("user_id", userId).order("status", { ascending: true }).order("debt_name", { ascending: true }),
-      supabase.from("income").select("amount, income_date").eq("user_id", userId)
+      supabase.from("income").select("amount, income_date").eq("user_id", userId),
+      supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", userId),
+      supabase.from("debt_budget_category_links").select("debt_id, category").eq("user_id", userId)
     ]);
 
-    if (debtResult.error || incomeResult.error) {
-      setMessage(debtResult.error?.message || incomeResult.error?.message || "No se pudo cargar la deuda.");
+    if (debtResult.error || incomeResult.error || budgetsResult.error || debtBudgetLinksResult.error) {
+      setMessage(debtResult.error?.message || incomeResult.error?.message || budgetsResult.error?.message || debtBudgetLinksResult.error?.message || "No se pudo cargar la deuda.");
       setLoading(false);
       return;
     }
 
     setDebts((debtResult.data as DebtRow[] | null) ?? []);
     setIncomeRows((incomeResult.data as IncomeRow[] | null) ?? []);
+    setBudgetRows((budgetsResult.data as BudgetRow[] | null) ?? []);
+    setBudgetCategories(
+      Array.from(new Set((((budgetsResult.data as BudgetRow[] | null) ?? []).map((row) => row.category.trim()).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "es"))
+    );
+    setDebtBudgetCategoryLinks((debtBudgetLinksResult.data as DebtBudgetCategoryLinkRow[] | null) ?? []);
     setLoading(false);
   }, [supabase, userId]);
 
@@ -136,6 +159,9 @@ export default function DebtsPage() {
     setTargetEndDate("");
     setStatus("active");
     setNotes("");
+    setSelectedLinkedBudgetCategories([]);
+    setBudgetCategoriesDropdownOpen(false);
+    setBudgetCategorySearch("");
   }, []);
 
   const debtMetrics = useMemo(() => {
@@ -164,6 +190,57 @@ export default function DebtsPage() {
       paymentToIncomeRatio
     };
   }, [debts, incomeRows]);
+  const currentMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const currentMonthBudgetByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of budgetRows) {
+      if (row.month.slice(0, 7) !== currentMonth) continue;
+      const category = row.category.trim();
+      if (!category) continue;
+      map.set(category, (map.get(category) ?? 0) + Number(row.budget_amount || 0));
+    }
+    return map;
+  }, [budgetRows, currentMonth]);
+  const linkedBudgetCategoriesByDebt = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const row of debtBudgetCategoryLinks) {
+      const current = map.get(row.debt_id) ?? [];
+      if (!current.includes(row.category)) current.push(row.category);
+      map.set(row.debt_id, current);
+    }
+    return map;
+  }, [debtBudgetCategoryLinks]);
+  const linkedBudgetAmountByDebt = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of debts) {
+      const categories = linkedBudgetCategoriesByDebt.get(row.id) ?? [];
+      const total = categories.reduce((sum, category) => sum + Number(currentMonthBudgetByCategory.get(category) ?? 0), 0);
+      map.set(row.id, total);
+    }
+    return map;
+  }, [currentMonthBudgetByCategory, debts, linkedBudgetCategoriesByDebt]);
+  const selectedBudgetCategoriesLabel = useMemo(() => {
+    if (selectedLinkedBudgetCategories.length === 0) return "Sin partidas conectadas";
+    if (selectedLinkedBudgetCategories.length <= 2) return selectedLinkedBudgetCategories.join(", ");
+    return `${selectedLinkedBudgetCategories.length} partidas seleccionadas`;
+  }, [selectedLinkedBudgetCategories]);
+  const filteredBudgetCategories = useMemo(() => {
+    const query = budgetCategorySearch.trim().toLowerCase();
+    if (!query) return budgetCategories;
+    return budgetCategories.filter((category) => category.toLowerCase().includes(query));
+  }, [budgetCategories, budgetCategorySearch]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (budgetCategoriesDropdownRef.current && target && !budgetCategoriesDropdownRef.current.contains(target)) {
+        setBudgetCategoriesDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -205,14 +282,33 @@ export default function DebtsPage() {
     };
 
     const result = editingId
-      ? await supabase.from("debts").update(payload).eq("id", editingId).eq("user_id", userId)
-      : await supabase.from("debts").insert(payload);
+      ? await supabase.from("debts").update(payload).eq("id", editingId).eq("user_id", userId).select("id")
+      : await supabase.from("debts").insert(payload).select("id");
 
     setSaving(false);
 
     if (result.error) {
       setMessage(result.error.message);
       return;
+    }
+
+    const debtId = editingId ?? (Array.isArray(result.data) ? result.data[0]?.id : undefined);
+    if (debtId) {
+      await supabase.from("debt_budget_category_links").delete().eq("debt_id", debtId).eq("user_id", userId);
+      if (selectedLinkedBudgetCategories.length > 0) {
+        const { error: debtBudgetLinksError } = await supabase.from("debt_budget_category_links").insert(
+          selectedLinkedBudgetCategories.map((category) => ({
+            debt_id: debtId,
+            category,
+            user_id: userId
+          }))
+        );
+        if (debtBudgetLinksError) {
+          setMessage(debtBudgetLinksError.message);
+          showToast({ type: "error", text: "La deuda se guardo, pero fallo la vinculacion con partidas del presupuesto." });
+          return;
+        }
+      }
     }
 
     showToast({
@@ -237,6 +333,9 @@ export default function DebtsPage() {
     setTargetEndDate(row.target_end_date ?? "");
     setStatus(row.status);
     setNotes(row.notes ?? "");
+    setSelectedLinkedBudgetCategories(linkedBudgetCategoriesByDebt.get(row.id) ?? []);
+    setBudgetCategoriesDropdownOpen(false);
+    setBudgetCategorySearch("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -392,6 +491,83 @@ export default function DebtsPage() {
               Notas
               <textarea className={`${inputClass()} min-h-24 resize-y`} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Opcional" />
             </label>
+            <div ref={budgetCategoriesDropdownRef} className="relative grid gap-2 text-sm text-slate-200">
+              <span>Partidas del presupuesto conectadas</span>
+              <button
+                type="button"
+                onClick={() => setBudgetCategoriesDropdownOpen((current) => !current)}
+                className={`${inputClass()} flex min-w-0 items-center justify-between text-left`}
+              >
+                <span className="min-w-0 truncate">{selectedBudgetCategoriesLabel}</span>
+                <span className="text-slate-400">{budgetCategoriesDropdownOpen ? "▲" : "▼"}</span>
+              </button>
+              {budgetCategoriesDropdownOpen ? (
+                <div className="mt-2 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-2xl shadow-slate-950/50">
+                  <div className="sticky top-0 z-10 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLinkedBudgetCategories(filteredBudgetCategories)}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                      >
+                        Seleccionar todo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLinkedBudgetCategories([]);
+                          setBudgetCategorySearch("");
+                        }}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+                    <input
+                      className={inputClass()}
+                      value={budgetCategorySearch}
+                      onChange={(event) => setBudgetCategorySearch(event.target.value)}
+                      placeholder="Buscar partida del presupuesto"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    {filteredBudgetCategories.map((budgetCategory) => {
+                      const selected = selectedLinkedBudgetCategories.includes(budgetCategory);
+                      return (
+                        <button
+                          key={budgetCategory}
+                          type="button"
+                          onClick={() =>
+                            setSelectedLinkedBudgetCategories((current) =>
+                              current.includes(budgetCategory)
+                                ? current.filter((item) => item !== budgetCategory)
+                                : [...current, budgetCategory]
+                            )
+                          }
+                          className="flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/5"
+                        >
+                          <span className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selected ? "border-emerald-300 bg-emerald-400/15 text-emerald-200" : "border-white/20 text-transparent"}`}>
+                            ✓
+                          </span>
+                          <span>{budgetCategory}</span>
+                        </button>
+                      );
+                    })}
+                    {filteredBudgetCategories.length === 0 ? <div className="px-3 py-2 text-sm text-slate-400">No hay partidas que coincidan con la busqueda.</div> : null}
+                  </div>
+                </div>
+              ) : null}
+              <span className="text-xs text-slate-400">Estas partidas se trataran como aportacion planificada mensual a la deuda y tambien se heredaran en metas conectadas a ella.</span>
+              {selectedLinkedBudgetCategories.length > 0 ? (
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  {selectedLinkedBudgetCategories.map((budgetCategory) => (
+                    <span key={`debt-budget-category-chip-${budgetCategory}`} className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+                      {budgetCategory}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-3">
               <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving} type="submit">
                 {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear deuda"}
@@ -415,6 +591,18 @@ export default function DebtsPage() {
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota mensual</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtMetrics.monthlyBurden, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Carga fija mensual actual de toda la deuda activa o pausada.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Aporte planificado</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
+              {formatCurrencyByPreference(
+                debts
+                  .filter((row) => row.status !== "closed")
+                  .reduce((sum, row) => sum + Number(linkedBudgetAmountByDebt.get(row.id) ?? 0), 0),
+                currency
+              )}
+            </p>
+            <p className="mt-4 max-w-[28ch] text-sm leading-6 text-slate-300">Suma de partidas del presupuesto conectadas directamente a deudas este mes.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Conectadas y no conectadas</p>
@@ -466,6 +654,8 @@ export default function DebtsPage() {
               {debts.map((row) => {
                 const outstandingEur = convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR);
                 const monthlyEur = convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR);
+                const plannedContribution = Number(linkedBudgetAmountByDebt.get(row.id) ?? 0);
+                const linkedBudgetCategories = linkedBudgetCategoriesByDebt.get(row.id) ?? [];
                 const progressPct = Number(row.original_amount || 0) > 0
                   ? Math.max(0, Math.min(((Number(row.original_amount) - Number(row.outstanding_balance || 0)) / Number(row.original_amount)) * 100, 100))
                   : 0;
@@ -523,6 +713,8 @@ export default function DebtsPage() {
                       <p>Inicio: <span className="font-medium text-white">{row.start_date ? formatDateByPreference(row.start_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Objetivo fin: <span className="font-medium text-white">{row.target_end_date ? formatDateByPreference(row.target_end_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Patrimonio neto: <span className="font-medium text-white">{row.include_in_net_worth ? "Conectada" : "Ignorada"}</span></p>
+                      <p>Aportacion planificada: <span className="font-medium text-white">{formatCurrencyByPreference(plannedContribution, currency)}</span></p>
+                      <p>Partidas presupuesto: <span className="font-medium text-white">{linkedBudgetCategories.length > 0 ? linkedBudgetCategories.join(", ") : "Sin partidas"}</span></p>
                     </div>
                     {row.notes ? <p className="mt-3 text-sm leading-6 text-slate-300">{row.notes}</p> : null}
                   </article>

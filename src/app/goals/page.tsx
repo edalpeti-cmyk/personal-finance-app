@@ -79,6 +79,10 @@ type GoalBudgetCategoryLinkRow = {
   goal_id: string;
   category: string;
 };
+type DebtBudgetCategoryLinkRow = {
+  debt_id: string;
+  category: string;
+};
 type DebtLinkRow = {
   id: string;
   debt_name: string;
@@ -140,6 +144,7 @@ export default function GoalsPage() {
   const [goalInvestmentLinks, setGoalInvestmentLinks] = useState<GoalInvestmentLinkRow[]>([]);
   const [goalAssetTypeLinks, setGoalAssetTypeLinks] = useState<GoalAssetTypeLinkRow[]>([]);
   const [goalBudgetCategoryLinks, setGoalBudgetCategoryLinks] = useState<GoalBudgetCategoryLinkRow[]>([]);
+  const [debtBudgetCategoryLinks, setDebtBudgetCategoryLinks] = useState<DebtBudgetCategoryLinkRow[]>([]);
   const [budgetCategories, setBudgetCategories] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -209,7 +214,7 @@ export default function GoalsPage() {
 
   const loadGoals = useCallback(async (uid: string) => {
     setLoading(true);
-    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, budgetsResult, investmentsResult, debtsResult, linksResult, assetTypeLinksResult, budgetCategoryLinksResult] = await Promise.all([
+    const [goalsResult, savingsResult, historyResult, incomeResult, expenseResult, budgetsResult, investmentsResult, debtsResult, linksResult, assetTypeLinksResult, budgetCategoryLinksResult, debtBudgetCategoryLinksResult] = await Promise.all([
       supabase
         .from("financial_goals")
         .select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, target_date, priority, status, linked_category, linked_account, linked_investment_id, linked_asset_type, linked_debt_id")
@@ -225,10 +230,11 @@ export default function GoalsPage() {
       supabase.from("debts").select("id, debt_name, outstanding_balance, currency, status").eq("user_id", uid).order("debt_name", { ascending: true }),
       supabase.from("goal_investment_links").select("goal_id, investment_id, allocation_pct").eq("user_id", uid),
       supabase.from("goal_asset_type_links").select("goal_id, asset_type, allocation_pct").eq("user_id", uid),
-      supabase.from("goal_budget_category_links").select("goal_id, category").eq("user_id", uid)
+      supabase.from("goal_budget_category_links").select("goal_id, category").eq("user_id", uid),
+      supabase.from("debt_budget_category_links").select("debt_id, category").eq("user_id", uid)
     ]);
 
-    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? budgetsResult.error ?? investmentsResult.error ?? debtsResult.error ?? linksResult.error ?? assetTypeLinksResult.error ?? budgetCategoryLinksResult.error;
+    const firstError = goalsResult.error ?? savingsResult.error ?? historyResult.error ?? incomeResult.error ?? expenseResult.error ?? budgetsResult.error ?? investmentsResult.error ?? debtsResult.error ?? linksResult.error ?? assetTypeLinksResult.error ?? budgetCategoryLinksResult.error ?? debtBudgetCategoryLinksResult.error;
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -249,6 +255,7 @@ export default function GoalsPage() {
     setGoalInvestmentLinks((linksResult.data as GoalInvestmentLinkRow[]) ?? []);
     setGoalAssetTypeLinks((assetTypeLinksResult.data as GoalAssetTypeLinkRow[]) ?? []);
     setGoalBudgetCategoryLinks((budgetCategoryLinksResult.data as GoalBudgetCategoryLinkRow[]) ?? []);
+    setDebtBudgetCategoryLinks((debtBudgetCategoryLinksResult.data as DebtBudgetCategoryLinkRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
@@ -376,7 +383,7 @@ export default function GoalsPage() {
     () =>
       goals.map((goal) => {
         const current = combinedCurrentByGoal.get(goal.id) ?? { manual: Number(goal.current_amount || 0), linked: 0, total: Number(goal.current_amount || 0) };
-        const linkedBudgetCategories = Array.from(
+        const directBudgetCategories = Array.from(
           new Set(
             goalBudgetCategoryLinks
               .filter((row) => row.goal_id === goal.id)
@@ -384,6 +391,16 @@ export default function GoalsPage() {
               .concat(goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])
           )
         );
+        const debtBudgetCategories = goal.linked_debt_id
+          ? Array.from(
+              new Set(
+                debtBudgetCategoryLinks
+                  .filter((row) => row.debt_id === goal.linked_debt_id)
+                  .map((row) => row.category)
+              )
+            )
+          : [];
+        const linkedBudgetCategories = Array.from(new Set([...directBudgetCategories, ...debtBudgetCategories]));
         const linkedBudgetContribution = linkedBudgetCategories.reduce((sum, category) => sum + Number(currentMonthBudgetByCategory.get(category) ?? 0), 0);
         const manualMonthlyContribution = Number(goal.monthly_contribution ?? 0);
         const totalMonthlyContribution = manualMonthlyContribution + linkedBudgetContribution;
@@ -394,11 +411,12 @@ export default function GoalsPage() {
           computedLinkedCurrent: current.linked,
           computedCurrentTotal: current.total,
           computedLinkedBudgetContribution: linkedBudgetContribution,
+          computedBudgetCategories: linkedBudgetCategories,
           computedMonthlyContributionTotal: totalMonthlyContribution,
           computedProgressPct: progressPct
         };
       }),
-    [combinedCurrentByGoal, currentMonthBudgetByCategory, goalBudgetCategoryLinks, goals]
+    [combinedCurrentByGoal, currentMonthBudgetByCategory, debtBudgetCategoryLinks, goalBudgetCategoryLinks, goals]
   );
   const activeGoals = useMemo(() => goalsWithComputedProgress.filter((goal) => goal.status === "active"), [goalsWithComputedProgress]);
   const completedGoals = useMemo(() => goalsWithComputedProgress.filter((goal) => goal.status === "completed"), [goalsWithComputedProgress]);
@@ -542,6 +560,17 @@ export default function GoalsPage() {
     }
     return map;
   }, [goalBudgetCategoryLinks, goals]);
+  const linkedBudgetCategoriesByDebt = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const row of debtBudgetCategoryLinks) {
+      const current = map.get(row.debt_id) ?? [];
+      if (!current.includes(row.category)) {
+        current.push(row.category);
+      }
+      map.set(row.debt_id, current);
+    }
+    return map;
+  }, [debtBudgetCategoryLinks]);
   const debtLinkById = useMemo(() => new Map(debtLinks.map((row) => [row.id, row])), [debtLinks]);
   const debtProgressByGoal = useMemo(() => {
     const map = new Map<
@@ -1576,7 +1605,7 @@ export default function GoalsPage() {
                       <p>Aporte desde presupuesto: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedLinkedBudgetContribution ?? 0, currency)}</span></p>
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
-                      <p>Partidas presupuesto: <span className="font-medium text-white">{(linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])).length > 0 ? (linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])).join(", ") : "Sin partidas"}</span></p>
+                      <p>Partidas presupuesto: <span className="font-medium text-white">{goal.computedBudgetCategories.length > 0 ? goal.computedBudgetCategories.join(", ") : "Sin partidas"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
                       <p>Deuda: <span className="font-medium text-white">{goal.linked_debt_id ? debtLinkById.get(goal.linked_debt_id)?.debt_name ?? "Conectada" : "Sin conectar"}</span></p>
                       {linkedDebtProgress ? (
