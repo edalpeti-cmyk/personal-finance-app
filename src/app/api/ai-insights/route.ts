@@ -6,8 +6,8 @@ import { type AssetCurrency, convertToEur, fetchRatesToEur } from "@/lib/currenc
 
 type ExpenseRow = { amount: number; expense_date: string; category: string };
 type IncomeRow = { amount: number; income_date: string };
-type InvestmentRow = { quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
-type DebtRow = { outstanding_balance: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
+type InvestmentRow = { asset_name: string; quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
+type DebtRow = { outstanding_balance: number; monthly_payment: number | null; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
 type SavingsTargetRow = { savings_target: number; month: string };
 type FireSettingsRow = {
   annual_expenses: number;
@@ -27,7 +27,16 @@ type AiInsightDebug = {
   hasAnyIncome: boolean;
   hasCurrentMonthIncome: boolean;
   debtTotal: number;
+  monthlyDebtPayment: number;
+  debtToIncomeRatio: number | null;
   netWorth: number;
+  investmentsValue: number;
+  investmentCount: number;
+  pricedInvestmentCount: number;
+  priceCoveragePct: number;
+  topInvestmentName: string | null;
+  topInvestmentWeight: number;
+  nonEurExposurePct: number;
   fireTarget: number;
   fireProgress: number;
 };
@@ -75,8 +84,8 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   const [{ data: expenses }, { data: income }, { data: investments }, { data: debts }, { data: savingsTargets }, { data: fireSettings }] = await Promise.all([
     supabase.from("expenses").select("amount, expense_date, category").eq("user_id", userId),
     supabase.from("income").select("amount, income_date").eq("user_id", userId),
-    supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
-    supabase.from("debts").select("outstanding_balance, currency, status, include_in_net_worth").eq("user_id", userId),
+    supabase.from("investments").select("asset_name, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
+    supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", userId),
     supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
     supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
   ]);
@@ -118,6 +127,10 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
     const price = Number(row.current_price ?? row.average_buy_price) || 0;
     return acc + convertToEur(qty * price, row.asset_currency, ratesToEur);
   }, 0);
+  const monthlyDebtPayment = debtRows
+    .filter((row) => row.status !== "closed" && row.include_in_net_worth)
+    .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
+  const debtToIncomeRatio = monthlyIncome > 0 ? (monthlyDebtPayment / monthlyIncome) * 100 : null;
 
   const totalIncomeAllTime = incomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
   const totalExpensesAllTime = expenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
@@ -134,6 +147,26 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
 
   const fireTarget = fireAnnualExpenses > 0 ? fireAnnualExpenses / 0.04 : 0;
   const fireProgress = fireTarget > 0 ? Math.min((fireNetWorth / fireTarget) * 100, 100) : 0;
+  const investmentValues = investmentRows.map((row) => {
+    const qty = Number(row.quantity) || 0;
+    const price = Number(row.current_price ?? row.average_buy_price) || 0;
+    const valueEur = convertToEur(qty * price, row.asset_currency, ratesToEur);
+    return {
+      name: row.asset_name,
+      hasCurrentPrice: row.current_price !== null && Number.isFinite(Number(row.current_price)),
+      valueEur,
+      currency: row.asset_currency
+    };
+  });
+  const investmentCount = investmentValues.length;
+  const pricedInvestmentCount = investmentValues.filter((row) => row.hasCurrentPrice).length;
+  const priceCoveragePct = investmentCount > 0 ? (pricedInvestmentCount / investmentCount) * 100 : 100;
+  const topInvestment = [...investmentValues].sort((a, b) => b.valueEur - a.valueEur)[0] ?? null;
+  const topInvestmentWeight = investmentsValue > 0 && topInvestment ? (topInvestment.valueEur / investmentsValue) * 100 : 0;
+  const nonEurExposurePct =
+    investmentsValue > 0
+      ? (investmentValues.filter((row) => row.currency && row.currency !== "EUR").reduce((sum, row) => sum + row.valueEur, 0) / investmentsValue) * 100
+      : 0;
 
   const categoryTotals = new Map<string, number>();
   for (const expense of expenseRows) {
@@ -157,7 +190,16 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
     hasAnyIncome: incomeRows.length > 0,
     hasCurrentMonthIncome: monthlyIncome > 0,
     debtTotal,
+    monthlyDebtPayment,
+    debtToIncomeRatio,
     netWorth: fireNetWorth,
+    investmentsValue,
+    investmentCount,
+    pricedInvestmentCount,
+    priceCoveragePct,
+    topInvestmentName: topInvestment?.name ?? null,
+    topInvestmentWeight,
+    nonEurExposurePct,
     fireTarget,
     fireProgress,
     topExpenseCategories
@@ -176,7 +218,16 @@ function buildDebugSnapshot(snapshot: FinancialSnapshot): AiInsightDebug {
     hasAnyIncome: snapshot.hasAnyIncome,
     hasCurrentMonthIncome: snapshot.hasCurrentMonthIncome,
     debtTotal: snapshot.debtTotal,
+    monthlyDebtPayment: snapshot.monthlyDebtPayment,
+    debtToIncomeRatio: snapshot.debtToIncomeRatio,
     netWorth: snapshot.netWorth,
+    investmentsValue: snapshot.investmentsValue,
+    investmentCount: snapshot.investmentCount,
+    pricedInvestmentCount: snapshot.pricedInvestmentCount,
+    priceCoveragePct: snapshot.priceCoveragePct,
+    topInvestmentName: snapshot.topInvestmentName,
+    topInvestmentWeight: snapshot.topInvestmentWeight,
+    nonEurExposurePct: snapshot.nonEurExposurePct,
     fireTarget: snapshot.fireTarget,
     fireProgress: snapshot.fireProgress
   };
@@ -210,6 +261,8 @@ export async function POST(request: Request) {
       "Si hasAnyIncome es true pero hasCurrentMonthIncome es false, explica que faltan ingresos en el mes actual, no que falten ingresos registrados.",
       "Interpreta annualSavings como ahorro objetivo anual acumulado, no como ingresos menos gastos.",
       "Interpreta monthlySavingsTarget como el ahorro objetivo del mes actual.",
+      "Si mencionas deuda, usa debtTotal, monthlyDebtPayment y debtToIncomeRatio entregados en los datos.",
+      "Si mencionas inversiones, usa investmentsValue, priceCoveragePct, topInvestmentName, topInvestmentWeight y nonEurExposurePct entregados en los datos.",
       "Si mencionas FIRE, usa literalmente fireProgress y fireTarget entregados en los datos.",
       "Si mencionas patrimonio, usa netWorth entregado en los datos.",
       "No contradigas ni recalcules las metricas principales del snapshot.",

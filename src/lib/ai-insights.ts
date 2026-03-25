@@ -9,7 +9,16 @@ export type FinancialSnapshot = {
   hasAnyIncome: boolean;
   hasCurrentMonthIncome: boolean;
   debtTotal: number;
+  monthlyDebtPayment: number;
+  debtToIncomeRatio: number | null;
   netWorth: number;
+  investmentsValue: number;
+  investmentCount: number;
+  pricedInvestmentCount: number;
+  priceCoveragePct: number;
+  topInvestmentName: string | null;
+  topInvestmentWeight: number;
+  nonEurExposurePct: number;
   fireTarget: number;
   fireProgress: number;
   topExpenseCategories: Array<{ category: string; amount: number }>;
@@ -59,6 +68,34 @@ export function generateRuleBasedInsights(snapshot: FinancialSnapshot): string[]
     insights.push(
       `Tu progreso FIRE actual es ${snapshot.fireProgress.toFixed(1)}%. Mantener aportaciones consistentes es mas importante que intentar hacer market timing.`
     );
+  }
+
+  if (snapshot.debtTotal > 0) {
+    if (snapshot.debtToIncomeRatio !== null && snapshot.debtToIncomeRatio >= 20) {
+      insights.push(
+        `La carga mensual de deuda absorbe ${snapshot.debtToIncomeRatio.toFixed(1)}% de tus ingresos del mes. Prioriza bajar esa presion antes de aumentar riesgo en cartera.`
+      );
+    } else {
+      insights.push(
+        `Tienes ${snapshot.debtTotal.toFixed(2)} EUR de deuda conectada al patrimonio y una cuota mensual de ${snapshot.monthlyDebtPayment.toFixed(2)} EUR. Mantenerla controlada protege tu patrimonio neto.`
+      );
+    }
+  }
+
+  if (snapshot.investmentsValue > 0) {
+    if (snapshot.priceCoveragePct < 80) {
+      insights.push(
+        `Solo el ${snapshot.priceCoveragePct.toFixed(1)}% de tu cartera tiene precio actualizado. Antes de sacar conclusiones de rentabilidad, revisa los activos sin precio.`
+      );
+    } else if (snapshot.topInvestmentName && snapshot.topInvestmentWeight >= 25) {
+      insights.push(
+        `${snapshot.topInvestmentName} concentra ${snapshot.topInvestmentWeight.toFixed(1)}% de tu cartera. Vigila si esa posicion encaja con el riesgo que quieres asumir.`
+      );
+    } else if (snapshot.nonEurExposurePct >= 35) {
+      insights.push(
+        `El ${snapshot.nonEurExposurePct.toFixed(1)}% de tu cartera esta fuera de EUR. La divisa puede mover bastante tu resultado aunque el activo no cambie mucho.`
+      );
+    }
   }
 
   if (insights.length === 0) {
