@@ -1875,7 +1875,7 @@ export default function DashboardPage() {
           <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}</p>
           <p className="mt-2 max-w-sm text-sm text-white/76">Patrimonio neto combinando caja, inversiones y la deuda pendiente que ya has registrado.</p>
-          <div className="mt-6 grid grid-cols-1 gap-3 2xl:grid-cols-3">
+          <div className="mt-6 flex flex-col gap-3 2xl:grid 2xl:grid-cols-3">
             <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
               <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
