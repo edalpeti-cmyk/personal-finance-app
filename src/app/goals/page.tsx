@@ -43,6 +43,11 @@ type ExpenseRow = {
   amount: number;
   expense_date: string;
 };
+type BudgetRow = {
+  category: string;
+  budget_amount: number;
+  month: string;
+};
 type GoalProgressHistoryRow = {
   goal_id: string;
   snapshot_month: string;
@@ -129,6 +134,7 @@ export default function GoalsPage() {
   const [progressHistory, setProgressHistory] = useState<GoalProgressHistoryRow[]>([]);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
   const [investmentLinks, setInvestmentLinks] = useState<InvestmentLinkRow[]>([]);
   const [debtLinks, setDebtLinks] = useState<DebtLinkRow[]>([]);
   const [goalInvestmentLinks, setGoalInvestmentLinks] = useState<GoalInvestmentLinkRow[]>([]);
@@ -214,7 +220,7 @@ export default function GoalsPage() {
       supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false }),
       supabase.from("income").select("amount, income_date").eq("user_id", uid),
       supabase.from("expenses").select("amount, expense_date").eq("user_id", uid),
-      supabase.from("monthly_budgets").select("category").eq("user_id", uid),
+      supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
       supabase.from("investments").select("id, asset_name, asset_symbol, asset_type, quantity, current_price, average_buy_price, asset_currency").eq("user_id", uid).order("asset_name", { ascending: true }),
       supabase.from("debts").select("id, debt_name, outstanding_balance, currency, status").eq("user_id", uid).order("debt_name", { ascending: true }),
       supabase.from("goal_investment_links").select("goal_id, investment_id, allocation_pct").eq("user_id", uid),
@@ -234,8 +240,9 @@ export default function GoalsPage() {
     setProgressHistory((historyResult.data as GoalProgressHistoryRow[]) ?? []);
     setIncomeRows((incomeResult.data as IncomeRow[]) ?? []);
     setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
+    setBudgetRows((budgetsResult.data as BudgetRow[]) ?? []);
     setBudgetCategories(
-      Array.from(new Set((((budgetsResult.data as Array<{ category: string }> | null) ?? []).map((row) => row.category.trim()).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "es"))
+      Array.from(new Set((((budgetsResult.data as BudgetRow[] | null) ?? []).map((row) => row.category.trim()).filter(Boolean)))).sort((a, b) => a.localeCompare(b, "es"))
     );
     setInvestmentLinks((investmentsResult.data as InvestmentLinkRow[]) ?? []);
     setDebtLinks((debtsResult.data as DebtLinkRow[]) ?? []);
@@ -284,6 +291,16 @@ export default function GoalsPage() {
       ),
     [investmentLinks]
   );
+  const currentMonthBudgetByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of budgetRows) {
+      if (row.month.slice(0, 7) !== currentMonth) continue;
+      const category = row.category.trim();
+      if (!category) continue;
+      map.set(category, (map.get(category) ?? 0) + Number(row.budget_amount || 0));
+    }
+    return map;
+  }, [budgetRows, currentMonth]);
   const linkedInvestmentConfigsByGoal = useMemo(() => {
     const map = new Map<string, Array<{ investment_id: string; allocation_pct: number }>>();
     for (const row of goalInvestmentLinks) {
@@ -359,16 +376,35 @@ export default function GoalsPage() {
     () =>
       goals.map((goal) => {
         const current = combinedCurrentByGoal.get(goal.id) ?? { manual: Number(goal.current_amount || 0), linked: 0, total: Number(goal.current_amount || 0) };
+        const linkedBudgetCategories = Array.from(
+          new Set(
+            goalBudgetCategoryLinks
+              .filter((row) => row.goal_id === goal.id)
+              .map((row) => row.category)
+              .concat(goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])
+          )
+        );
+        const linkedBudgetContribution = linkedBudgetCategories.reduce((sum, category) => sum + Number(currentMonthBudgetByCategory.get(category) ?? 0), 0);
+        const manualMonthlyContribution = Number(goal.monthly_contribution ?? 0);
+        const totalMonthlyContribution = manualMonthlyContribution + linkedBudgetContribution;
         const progressPct = Number(goal.target_amount) > 0 ? Math.min((current.total / Number(goal.target_amount)) * 100, 100) : 0;
-        return { ...goal, computedManualCurrent: current.manual, computedLinkedCurrent: current.linked, computedCurrentTotal: current.total, computedProgressPct: progressPct };
+        return {
+          ...goal,
+          computedManualCurrent: current.manual,
+          computedLinkedCurrent: current.linked,
+          computedCurrentTotal: current.total,
+          computedLinkedBudgetContribution: linkedBudgetContribution,
+          computedMonthlyContributionTotal: totalMonthlyContribution,
+          computedProgressPct: progressPct
+        };
       }),
-    [combinedCurrentByGoal, goals]
+    [combinedCurrentByGoal, currentMonthBudgetByCategory, goalBudgetCategoryLinks, goals]
   );
   const activeGoals = useMemo(() => goalsWithComputedProgress.filter((goal) => goal.status === "active"), [goalsWithComputedProgress]);
   const completedGoals = useMemo(() => goalsWithComputedProgress.filter((goal) => goal.status === "completed"), [goalsWithComputedProgress]);
   const totalTarget = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.target_amount || 0), 0), [activeGoals]);
   const totalCurrent = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.computedCurrentTotal || 0), 0), [activeGoals]);
-  const totalMonthlyContribution = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.monthly_contribution || 0), 0), [activeGoals]);
+  const totalMonthlyContribution = useMemo(() => activeGoals.reduce((sum, goal) => sum + Number(goal.computedMonthlyContributionTotal || 0), 0), [activeGoals]);
   const monthlyCoveragePct = useMemo(
     () => (currentMonthSavingsTarget > 0 ? Math.min((totalMonthlyContribution / currentMonthSavingsTarget) * 100, 100) : 0),
     [currentMonthSavingsTarget, totalMonthlyContribution]
@@ -1535,7 +1571,9 @@ export default function GoalsPage() {
                       <p>Objetivo: <span className="font-medium text-white">{formatCurrencyByPreference(goal.target_amount, currency)}</span></p>
                       <p>Progreso: <span className="font-medium text-white">{progressPct.toFixed(1)}%</span></p>
                       <p>Prioridad: <span className="font-medium text-white">{goal.priority}</span></p>
-                      <p>Aporte mensual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p>
+                      <p>Aporte mensual total: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedMonthlyContributionTotal ?? 0, currency)}</span></p>
+                      <p>Aporte manual: <span className="font-medium text-white">{formatCurrencyByPreference(goal.monthly_contribution ?? 0, currency)}</span></p>
+                      <p>Aporte desde presupuesto: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedLinkedBudgetContribution ?? 0, currency)}</span></p>
                       <p>Fecha objetivo: <span className="font-medium text-white">{goal.target_date ? formatDateByPreference(goal.target_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Partidas presupuesto: <span className="font-medium text-white">{(linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])).length > 0 ? (linkedBudgetCategoriesByGoal.get(goal.id) ?? (goal.linked_category?.trim() ? [goal.linked_category.trim()] : [])).join(", ") : "Sin partidas"}</span></p>
@@ -1567,6 +1605,7 @@ export default function GoalsPage() {
                         <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
                           <p>Saldo pendiente: <span className="font-medium text-white">{formatCurrencyByPreference(linkedDebtProgress.outstandingEur, currency)}</span></p>
                           <p>Progreso de cancelacion: <span className="font-medium text-white">{linkedDebtProgress.progressPct.toFixed(1)}%</span></p>
+                          <p>Aportacion planificada: <span className="font-medium text-white">{formatCurrencyByPreference(goal.computedLinkedBudgetContribution ?? 0, currency)}</span></p>
                         </div>
                       </div>
                     ) : null}
