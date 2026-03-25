@@ -458,6 +458,36 @@ export default function GoalsPage() {
     });
   }, [investmentLinks, investmentSearch]);
   const debtLinkById = useMemo(() => new Map(debtLinks.map((row) => [row.id, row])), [debtLinks]);
+  const debtProgressByGoal = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        debtName: string;
+        outstandingEur: number;
+        progressPct: number;
+        status: DebtLinkRow["status"];
+      }
+    >();
+
+    for (const goal of goals) {
+      if (!goal.linked_debt_id) continue;
+      const linkedDebt = debtLinkById.get(goal.linked_debt_id);
+      if (!linkedDebt) continue;
+
+      const outstandingEur = convertToEur(Number(linkedDebt.outstanding_balance || 0), linkedDebt.currency, FALLBACK_RATES_TO_EUR);
+      const targetAmountValue = Number(goal.target_amount || 0);
+      const progressPct = targetAmountValue > 0 ? Math.max(0, Math.min(((targetAmountValue - outstandingEur) / targetAmountValue) * 100, 100)) : 0;
+
+      map.set(goal.id, {
+        debtName: linkedDebt.debt_name,
+        outstandingEur,
+        progressPct,
+        status: linkedDebt.status
+      });
+    }
+
+    return map;
+  }, [debtLinkById, goals]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -1301,6 +1331,7 @@ export default function GoalsPage() {
               {goalsWithComputedProgress.map((goal) => {
                 const progressPct = goal.computedProgressPct;
                 const linkedConfigs = linkedInvestmentConfigsByGoal.get(goal.id) ?? [];
+                const linkedDebtProgress = debtProgressByGoal.get(goal.id);
                 return (
                   <article key={goal.id} className="rounded-[28px] border border-white/8 bg-white/5 p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -1323,9 +1354,35 @@ export default function GoalsPage() {
                       <p>Categoria: <span className="font-medium text-white">{goal.linked_category?.trim() || "Sin conectar"}</span></p>
                       <p>Cuenta: <span className="font-medium text-white">{goal.linked_account?.trim() || "Sin conectar"}</span></p>
                       <p>Deuda: <span className="font-medium text-white">{goal.linked_debt_id ? debtLinkById.get(goal.linked_debt_id)?.debt_name ?? "Conectada" : "Sin conectar"}</span></p>
+                      {linkedDebtProgress ? (
+                        <>
+                          <p>Saldo pendiente: <span className="font-medium text-white">{formatCurrencyByPreference(linkedDebtProgress.outstandingEur, currency)}</span></p>
+                          <p>Cancelacion: <span className="font-medium text-white">{linkedDebtProgress.progressPct.toFixed(1)}%</span></p>
+                        </>
+                      ) : null}
                       <p>Tipos vinculados: <span className="font-medium text-white">{(linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : [])).length > 0 ? (linkedAssetTypeConfigsByGoal.get(goal.id) ?? (goal.linked_asset_type ? [{ asset_type: goal.linked_asset_type, allocation_pct: 100 }] : [])).map((item) => `${ASSET_TYPE_OPTIONS.find((option) => option.value === item.asset_type)?.label ?? item.asset_type} (${Number(item.allocation_pct ?? 100).toFixed(0)}%)`).join(", ") : "Sin tipo"}</span></p>
                       <p>Posiciones vinculadas: <span className="font-medium text-white">{linkedConfigs.length > 0 ? linkedConfigs.map((item) => `${investmentLinks.find((investment) => investment.id === item.investment_id)?.asset_name ?? "Posicion"} (${Number(item.allocation_pct ?? 100).toFixed(0)}%)`).join(", ") : "Sin posiciones"}</span></p>
                     </div>
+                    {linkedDebtProgress ? (
+                      <div className="mt-5 rounded-[22px] border border-amber-300/10 bg-amber-500/5 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-amber-200">Deuda conectada</p>
+                            <p className="mt-2 font-[var(--font-heading)] text-xl font-semibold text-white">{linkedDebtProgress.debtName}</p>
+                          </div>
+                          <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
+                            {linkedDebtProgress.status === "active" ? "Activa" : linkedDebtProgress.status === "paused" ? "Pausada" : "Cerrada"}
+                          </span>
+                        </div>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-[linear-gradient(90deg,#b45309_0%,#f59e0b_100%)]" style={{ width: `${Math.min(linkedDebtProgress.progressPct, 100)}%` }} />
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
+                          <p>Saldo pendiente: <span className="font-medium text-white">{formatCurrencyByPreference(linkedDebtProgress.outstandingEur, currency)}</span></p>
+                          <p>Progreso de cancelacion: <span className="font-medium text-white">{linkedDebtProgress.progressPct.toFixed(1)}%</span></p>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="mt-5 rounded-[22px] border border-white/8 bg-slate-950/35 p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Evolucion mensual</p>
                       {((latestHistoryByGoal.get(goal.id) ?? []).length === 0) ? (
