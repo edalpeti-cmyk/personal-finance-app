@@ -18,6 +18,11 @@ type ExpenseRow = { amount: number; category: string; expense_date: string };
 type DebtRow = { outstanding_balance: number; monthly_payment: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
 type BudgetRow = { category: string; budget_amount: number; month: string };
 type SavingsTargetRow = { month: string; savings_target: number };
+type BudgetSavingsRow = {
+  month: string;
+  budget_amount: number;
+  budget_kind: "expense" | "investment_transfer" | "emergency_fund";
+};
 type InvestmentRow = {
   asset_name: string;
   current_price: number | null;
@@ -123,6 +128,7 @@ export default function ReviewPage() {
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
   const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
+  const [budgetSavingsRows, setBudgetSavingsRows] = useState<BudgetSavingsRow[]>([]);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
   const [debtRows, setDebtRows] = useState<DebtRow[]>([]);
   const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
@@ -141,7 +147,7 @@ export default function ReviewPage() {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
@@ -152,10 +158,11 @@ export default function ReviewPage() {
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
       supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
       supabase.from("monthly_review_closures").select("review_month, status, conclusion_title, conclusion_summary, manual_note, closed_at").eq("user_id", uid).order("review_month", { ascending: false }).limit(6),
-      supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false })
+      supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false }),
+      supabase.from("monthly_budgets").select("month, budget_amount, budget_kind").eq("user_id", uid).in("budget_kind", ["investment_transfer", "emergency_fund"])
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -166,6 +173,7 @@ export default function ReviewPage() {
     setExpenseRows((expenseResult.data as ExpenseRow[]) ?? []);
     setBudgetRows((budgetResult.data as BudgetRow[]) ?? []);
     setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
+    setBudgetSavingsRows((budgetSavingsResult.data as BudgetSavingsRow[]) ?? []);
     setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
     setDebtRows((debtsResult.data as DebtRow[]) ?? []);
     setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
@@ -213,8 +221,12 @@ export default function ReviewPage() {
     const previousIncome = incomeRows.filter((row) => isSameMonth(row.income_date, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const currentExpenses = expenseRows.filter((row) => isSameMonth(row.expense_date, selectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const previousExpenses = expenseRows.filter((row) => isSameMonth(row.expense_date, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.amount || 0), 0);
-    const currentSavingsTarget = savingsTargets.filter((row) => isSameMonth(row.month, selectedMonth)).reduce((sum, row) => sum + Number(row.savings_target || 0), 0);
-    const previousSavingsTarget = savingsTargets.filter((row) => isSameMonth(row.month, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.savings_target || 0), 0);
+    const currentManualSavingsTarget = savingsTargets.filter((row) => isSameMonth(row.month, selectedMonth)).reduce((sum, row) => sum + Number(row.savings_target || 0), 0);
+    const previousManualSavingsTarget = savingsTargets.filter((row) => isSameMonth(row.month, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.savings_target || 0), 0);
+    const currentTransferSavings = budgetSavingsRows.filter((row) => isSameMonth(row.month, selectedMonth)).reduce((sum, row) => sum + Number(row.budget_amount || 0), 0);
+    const previousTransferSavings = budgetSavingsRows.filter((row) => isSameMonth(row.month, previousSelectedMonth)).reduce((sum, row) => sum + Number(row.budget_amount || 0), 0);
+    const currentSavingsTarget = currentManualSavingsTarget + currentTransferSavings;
+    const previousSavingsTarget = previousManualSavingsTarget + previousTransferSavings;
     const actualSavings = currentIncome - currentExpenses;
     const previousActualSavings = previousIncome - previousExpenses;
     const savingsDeltaVsTarget = actualSavings - currentSavingsTarget;
@@ -280,7 +292,7 @@ export default function ReviewPage() {
       topGoals,
       activeGoalsCount: activeGoals.length
     };
-  }, [budgetRows, debtRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
+  }, [budgetRows, budgetSavingsRows, debtRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
 
   const reviewActions = useMemo<Array<ReviewAction & { completed: boolean }>>(() => {
     const actions: ReviewAction[] = [];

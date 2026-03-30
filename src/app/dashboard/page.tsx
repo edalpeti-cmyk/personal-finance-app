@@ -44,6 +44,7 @@ type InvestmentRow = {
 };
 type SnapshotRow = { snapshot_date: string; total_net_worth: number };
 type SavingsTargetRow = { savings_target: number; month: string };
+type BudgetSavingsRow = { budget_amount: number; month: string; budget_kind: "expense" | "investment_transfer" | "emergency_fund" };
 type FireSettingsRow = {
   annual_expenses: number;
   current_net_worth: number;
@@ -440,7 +441,7 @@ function calculateRangeVariationPct(
   return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
-function getMonthlyTrendPoints(incomeRows: IncomeRow[], savingsTargets: SavingsTargetRow[], dateFormat: "es" | "us") {
+function getMonthlyTrendPoints(incomeRows: IncomeRow[], savingsTargets: SavingsTargetRow[], budgetSavingsRows: BudgetSavingsRow[], dateFormat: "es" | "us") {
   const now = new Date();
   const months: string[] = [];
   for (let offset = 5; offset >= 0; offset--) {
@@ -450,7 +451,9 @@ function getMonthlyTrendPoints(incomeRows: IncomeRow[], savingsTargets: SavingsT
 
   return months.map((month) => {
     const income = incomeRows.reduce((acc, row) => (row.income_date.slice(0, 7) === month ? acc + Number(row.amount) : acc), 0);
-    const savingsTarget = savingsTargets.reduce((acc, row) => (row.month.slice(0, 7) === month ? acc + Number(row.savings_target) : acc), 0);
+    const manualSavingsTarget = savingsTargets.reduce((acc, row) => (row.month.slice(0, 7) === month ? acc + Number(row.savings_target) : acc), 0);
+    const transferSavingsTarget = budgetSavingsRows.reduce((acc, row) => (row.month.slice(0, 7) === month ? acc + Number(row.budget_amount) : acc), 0);
+    const savingsTarget = manualSavingsTarget + transferSavingsTarget;
     return {
       label: formatDateByPreference(`${month}-01`, dateFormat, { month: "short", year: "2-digit" }),
       income: Number(income.toFixed(2)),
@@ -471,6 +474,7 @@ export default function DashboardPage() {
   const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>([]);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
   const [savingsTargetRows, setSavingsTargetRows] = useState<SavingsTargetRow[]>([]);
+  const [budgetSavingsRows, setBudgetSavingsRows] = useState<BudgetSavingsRow[]>([]);
   const [snapshotRows, setSnapshotRows] = useState<SnapshotRow[]>([]);
   const [chartRange, setChartRange] = useState<ChartRange>("monthly");
 
@@ -578,8 +582,8 @@ export default function DashboardPage() {
   );
 
   const monthlyTrendPoints = useMemo(
-    () => getMonthlyTrendPoints(incomeRows, savingsTargetRows, dateFormat),
-    [dateFormat, incomeRows, savingsTargetRows]
+    () => getMonthlyTrendPoints(incomeRows, savingsTargetRows, budgetSavingsRows, dateFormat),
+    [budgetSavingsRows, dateFormat, incomeRows, savingsTargetRows]
   );
 
   const monthlyTrendChartData = useMemo(
@@ -1099,8 +1103,10 @@ export default function DashboardPage() {
 
   const currentMonthSavingsTarget = useMemo(() => {
     const now = new Date();
-    return savingsTargetRows.reduce((sum, row) => (isSameMonth(row.month, now) ? sum + Number(row.savings_target) : sum), 0);
-  }, [savingsTargetRows]);
+    const manual = savingsTargetRows.reduce((sum, row) => (isSameMonth(row.month, now) ? sum + Number(row.savings_target) : sum), 0);
+    const transferBased = budgetSavingsRows.reduce((sum, row) => (isSameMonth(row.month, now) ? sum + Number(row.budget_amount || 0) : sum), 0);
+    return manual + transferBased;
+  }, [budgetSavingsRows, savingsTargetRows]);
 
   const currentMonthIncome = useMemo(() => {
     const now = new Date();
@@ -1800,7 +1806,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult, budgetSavingsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
@@ -1808,10 +1814,11 @@ export default function DashboardPage() {
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle(),
         supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
-        supabase.from("internal_transfers").select("amount, transfer_date").eq("user_id", userId).eq("transfer_type", "investment")
+        supabase.from("internal_transfers").select("amount, transfer_date").eq("user_id", userId).in("transfer_type", ["investment", "emergency_fund"]),
+        supabase.from("monthly_budgets").select("budget_amount, month, budget_kind").eq("user_id", userId).in("budget_kind", ["investment_transfer", "emergency_fund"])
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error || budgetSavingsResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
@@ -1820,6 +1827,7 @@ export default function DashboardPage() {
             fireSettingsResult.error?.message ||
             cashBaselineResult.error?.message ||
             transfersResult.error?.message ||
+            budgetSavingsResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -1841,6 +1849,7 @@ export default function DashboardPage() {
       setIncomeRows(nextIncomeRows);
       setInvestmentRows(investmentRows);
       setSavingsTargetRows(savingsTargetRows);
+      setBudgetSavingsRows((budgetSavingsResult.data as BudgetSavingsRow[]) ?? []);
 
       const investmentsValue = investmentRows.reduce((acc, row) => {
         const qty = Number(row.quantity) || 0;
@@ -1880,7 +1889,12 @@ export default function DashboardPage() {
         (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.savings_target) : acc),
         0
       );
-      const savingsRate = monthIncome > 0 ? (monthSavingsTarget / monthIncome) * 100 : null;
+      const monthBudgetSavings = (((budgetSavingsResult.data as BudgetSavingsRow[] | null) ?? [])).reduce(
+        (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.budget_amount || 0) : acc),
+        0
+      );
+      const totalMonthSavings = monthSavingsTarget + monthBudgetSavings;
+      const savingsRate = monthIncome > 0 ? (totalMonthSavings / monthIncome) * 100 : null;
 
       const annualExpenses = nextExpenseRows.reduce(
         (acc, row) => (isWithinLast12Months(row.expense_date, now) ? acc + Number(row.amount) : acc),
@@ -1890,10 +1904,15 @@ export default function DashboardPage() {
         (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.savings_target) : acc),
         0
       );
+      const annualBudgetSavings = (((budgetSavingsResult.data as BudgetSavingsRow[] | null) ?? [])).reduce(
+        (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.budget_amount || 0) : acc),
+        0
+      );
+      const totalAnnualSavings = annualSavings + annualBudgetSavings;
 
       const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
       const fireNetWorth = fireSettings && fireSettings.current_net_worth >= 0 ? fireSettings.current_net_worth : totalNetWorth;
-      const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(annualSavings, 0);
+      const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(totalAnnualSavings, 0);
       const fireExpectedReturn =
         fireSettings && fireSettings.expected_return >= -20 && fireSettings.expected_return <= 30
           ? fireSettings.expected_return / 100
@@ -1910,7 +1929,7 @@ export default function DashboardPage() {
         fireProgress,
         yearsToFire,
         annualExpenses,
-        annualSavings,
+        annualSavings: totalAnnualSavings,
         cashPosition,
         investmentsValue,
         debtTotal,

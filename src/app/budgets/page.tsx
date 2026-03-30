@@ -15,7 +15,7 @@ type BudgetRow = {
   month: string;
   category: string;
   budget_amount: number;
-  budget_kind: "expense" | "investment_transfer";
+  budget_kind: "expense" | "investment_transfer" | "emergency_fund";
 };
 
 type ExpenseRow = {
@@ -25,6 +25,7 @@ type ExpenseRow = {
 type TransferRow = {
   category: string;
   amount: number;
+  transfer_type: "investment" | "emergency_fund";
 };
 
 type IncomeRow = {
@@ -47,7 +48,7 @@ type BudgetWithActual = {
   actual: number;
   remaining: number;
   spentPercent: number;
-  budgetKind: "expense" | "investment_transfer";
+  budgetKind: "expense" | "investment_transfer" | "emergency_fund";
 };
 
 type IncomeSavingsSummary = {
@@ -101,16 +102,16 @@ function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[], tr
     const key = item.category || "Sin categoria";
     expenseByCategory.set(key, (expenseByCategory.get(key) ?? 0) + Number(item.amount));
   }
-  const transferByCategory = new Map<string, number>();
+  const transferByBudgetKey = new Map<string, number>();
   for (const item of transferRows) {
-    const key = item.category || "Sin categoria";
-    transferByCategory.set(key, (transferByCategory.get(key) ?? 0) + Number(item.amount));
+    const key = `${item.transfer_type}:${item.category || "Sin categoria"}`;
+    transferByBudgetKey.set(key, (transferByBudgetKey.get(key) ?? 0) + Number(item.amount));
   }
 
   const rows: BudgetWithActual[] = budgetRows.map((budget) => {
     const actual =
-      budget.budget_kind === "investment_transfer"
-        ? transferByCategory.get(budget.category) ?? 0
+      budget.budget_kind === "investment_transfer" || budget.budget_kind === "emergency_fund"
+        ? transferByBudgetKey.get(`${budget.budget_kind === "investment_transfer" ? "investment" : "emergency_fund"}:${budget.category}`) ?? 0
         : expenseByCategory.get(budget.category) ?? 0;
     const remaining = Number(budget.budget_amount) - actual;
     const spentPercent = Number(budget.budget_amount) > 0 ? (actual / Number(budget.budget_amount)) * 100 : 0;
@@ -171,7 +172,7 @@ export default function BudgetsPage() {
   const [copySourceMonth, setCopySourceMonth] = useState(getPreviousMonth(new Date().toISOString().slice(0, 7)));
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
-  const [budgetKind, setBudgetKind] = useState<"expense" | "investment_transfer">("expense");
+  const [budgetKind, setBudgetKind] = useState<"expense" | "investment_transfer" | "emergency_fund">("expense");
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
 
   const [incomeSource, setIncomeSource] = useState("");
@@ -322,7 +323,7 @@ export default function BudgetsPage() {
       return;
     }
 
-      const sourceBudgets = (sourceBudgetsResult.data as Array<{ category: string; budget_amount: number; budget_kind?: "expense" | "investment_transfer" }>) ?? [];
+      const sourceBudgets = (sourceBudgetsResult.data as Array<{ category: string; budget_amount: number; budget_kind?: "expense" | "investment_transfer" | "emergency_fund" }>) ?? [];
     const sourceSavingsTarget = Number((sourceSavingsTargetResult.data as { savings_target?: number } | null)?.savings_target ?? 0);
 
     if (sourceBudgets.length === 0 && sourceSavingsTarget === 0) {
@@ -450,8 +451,16 @@ export default function BudgetsPage() {
       const currentExpenseTotal = currentExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const prevIncomeTotal = prevIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const prevExpenseTotal = prevExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const currentSavings = Number((currentSavingsTargetData.data as SavingsTargetRow | null)?.savings_target ?? 0);
-      const prevSavings = Number((previousSavingsTargetData.data as SavingsTargetRow | null)?.savings_target ?? 0);
+      const currentManualSavings = Number((currentSavingsTargetData.data as SavingsTargetRow | null)?.savings_target ?? 0);
+      const prevManualSavings = Number((previousSavingsTargetData.data as SavingsTargetRow | null)?.savings_target ?? 0);
+      const currentTransferSavings = ((currentBudgets.data as BudgetRow[] | null) ?? [])
+        .filter((row) => row.budget_kind === "investment_transfer" || row.budget_kind === "emergency_fund")
+        .reduce((sum, row) => sum + Number(row.budget_amount || 0), 0);
+      const prevTransferSavings = ((previousBudgets.data as BudgetRow[] | null) ?? [])
+        .filter((row) => row.budget_kind === "investment_transfer" || row.budget_kind === "emergency_fund")
+        .reduce((sum, row) => sum + Number(row.budget_amount || 0), 0);
+      const currentSavings = currentManualSavings + currentTransferSavings;
+      const prevSavings = prevManualSavings + prevTransferSavings;
 
       setRows(builtCurrent.rows);
       setPrevRows(builtPrevious.rows);
@@ -654,7 +663,7 @@ export default function BudgetsPage() {
     const { error } = await supabase.from("internal_transfers").insert({
       user_id: userId,
       category: row.category,
-      transfer_type: "investment",
+      transfer_type: row.budgetKind === "emergency_fund" ? "emergency_fund" : "investment",
       amount: parsedAmount,
       transfer_date: monthToDate(selectedMonth),
       notes: "Registrado desde presupuesto"
@@ -788,9 +797,10 @@ export default function BudgetsPage() {
             </label>
             <label className="grid gap-2 text-sm text-slate-200">
               Tipo de partida
-              <select className={inputClass()} value={budgetKind} onChange={(e) => setBudgetKind(e.target.value as "expense" | "investment_transfer")}>
+              <select className={inputClass()} value={budgetKind} onChange={(e) => setBudgetKind(e.target.value as "expense" | "investment_transfer" | "emergency_fund")}>
                 <option value="expense">Gasto</option>
                 <option value="investment_transfer">Transferencia a inversion</option>
+                <option value="emergency_fund">Fondo de emergencia</option>
               </select>
             </label>
             <label className="grid gap-2 text-sm text-slate-200">
@@ -936,8 +946,8 @@ export default function BudgetsPage() {
                       <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">
                         <div className="flex flex-col gap-2">
                           <span>{row.category}</span>
-                          <span className={`ui-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] ${row.budgetKind === "investment_transfer" ? "border-sky-400/20 bg-sky-500/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-300"}`}>
-                            {row.budgetKind === "investment_transfer" ? "Transferencia a inversion" : "Gasto"}
+                          <span className={`ui-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] ${row.budgetKind === "investment_transfer" ? "border-sky-400/20 bg-sky-500/10 text-sky-200" : row.budgetKind === "emergency_fund" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200" : "border-white/10 bg-white/5 text-slate-300"}`}>
+                            {row.budgetKind === "investment_transfer" ? "Transferencia a inversion" : row.budgetKind === "emergency_fund" ? "Fondo de emergencia" : "Gasto"}
                           </span>
                         </div>
                       </td>
@@ -945,7 +955,7 @@ export default function BudgetsPage() {
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
                       <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap">{row.budgetKind === "investment_transfer" ? <button type="button" onClick={() => void handleRegisterInvestmentTransfer(row)} className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20">Registrar traspaso</button> : null}<button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap">{row.budgetKind === "investment_transfer" || row.budgetKind === "emergency_fund" ? <button type="button" onClick={() => void handleRegisterInvestmentTransfer(row)} className={`rounded-full px-2.5 py-1.5 text-[11px] font-medium ${row.budgetKind === "emergency_fund" ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"}`}>{row.budgetKind === "emergency_fund" ? "Aportar al fondo" : "Registrar traspaso"}</button> : null}<button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>
