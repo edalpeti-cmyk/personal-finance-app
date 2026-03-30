@@ -2025,38 +2025,46 @@ export default function DashboardPage() {
               <SectionHeader
                 eyebrow="Centro del mes"
                 title="Lo importante antes de entrar al detalle"
-                description="Un resumen operativo para saber si toca registrar, ajustar o revisar."
+                description="Una lectura rapida para saber si toca actuar o solo seguir el plan."
               />
 
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Ahorro del mes</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(currentMonthSavingsTarget, currency)}</p>
-                  <p className="mt-2 text-sm leading-6 text-white/72">
-                    {currentMonthIncome > 0
-                      ? `Objetivo sobre ${formatCurrencyByPreference(currentMonthIncome, currency)} de ingresos actuales.`
-                      : "Todavia no hay ingresos del mes para contextualizar la tasa de ahorro."}
-                  </p>
-                </article>
+              <div className="mt-5 grid gap-3 xl:grid-cols-2">
                 <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Siguiente accion</p>
                   <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">
                     {dashboardReminders[0]?.title ?? "Panel al dia"}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-white/72">
-                    {dashboardReminders[0]?.cta ?? "No hay pendientes urgentes. Puedes usar el dashboard como revisión rápida."}
+                    {dashboardReminders[0]?.body ?? "No hay pendientes urgentes. Puedes usar el dashboard como revision rapida."}
                   </p>
+                  {dashboardReminders[0]?.href ? (
+                    <Link href={dashboardReminders[0].href} className="mt-4 inline-flex text-sm font-medium text-emerald-300 transition hover:text-emerald-200">
+                      {dashboardReminders[0].cta}
+                    </Link>
+                  ) : null}
                 </article>
                 <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cobertura de cartera</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Pulso del mes</p>
                   <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">
-                    {investmentRows.length === 0 ? "Sin cartera" : `${investmentRows.filter((row) => row.current_price !== null).length}/${investmentRows.length}`}
+                    {formatCurrencyByPreference(currentMonthSavingsTarget, currency)}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-white/72">
-                    {investmentRows.length === 0
-                      ? "Aun no has registrado inversiones en la cartera."
-                      : "Posiciones con precio actual guardado frente al total de activos registrados."}
+                    {currentMonthIncome > 0
+                      ? `Objetivo de ahorro sobre ${formatCurrencyByPreference(currentMonthIncome, currency)} de ingresos.`
+                      : "Todavia no hay ingresos del mes para contextualizar el objetivo actual."}
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-200">
+                    <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                      {investmentRows.length === 0
+                        ? "Sin cartera"
+                        : `Cobertura ${investmentRows.filter((row) => row.current_price !== null).length}/${investmentRows.length}`}
+                    </span>
+                    <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                      {metrics.monthlyDebtPayment > 0
+                        ? `Cuota deuda ${formatCurrencyByPreference(metrics.monthlyDebtPayment, currency)}`
+                        : "Sin cuota de deuda"}
+                    </span>
+                  </div>
                 </article>
               </div>
             </section>
@@ -2067,19 +2075,24 @@ export default function DashboardPage() {
                 title="Asesoramiento proactivo"
                 description="Recomendaciones breves y accionables basadas en tu deuda, ahorro, inversiones y plan FIRE."
               />
-              <div className="mt-5 grid gap-3 xl:grid-cols-3">
+              <div className="mt-5">
                 {financialGuidance.length > 0 ? (
-                  financialGuidance.map((item) => (
-                    <article key={item.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
-                      <p className={`text-xs uppercase tracking-[0.18em] ${item.tone === "warning" ? "text-amber-300" : item.tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>{item.title}</p>
-                      <p className="mt-3 text-sm leading-6 text-white/84">{item.body}</p>
-                      <Link href={item.href} className="mt-4 inline-flex text-sm font-medium text-emerald-300 transition hover:text-emerald-200">
-                        {item.cta}
+                  <article className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <p className={`text-xs uppercase tracking-[0.18em] ${financialGuidance[0].tone === "warning" ? "text-amber-300" : financialGuidance[0].tone === "success" ? "text-emerald-300" : "text-sky-300"}`}>{financialGuidance[0].title}</p>
+                    <p className="mt-3 max-w-3xl text-sm leading-6 text-white/84">{financialGuidance[0].body}</p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Link href={financialGuidance[0].href} className="inline-flex text-sm font-medium text-emerald-300 transition hover:text-emerald-200">
+                        {financialGuidance[0].cta}
                       </Link>
-                    </article>
-                  ))
+                      {financialGuidance.length > 1 ? (
+                        <Link href="/review" className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10">
+                          Ver mas recomendaciones
+                        </Link>
+                      ) : null}
+                    </div>
+                  </article>
                 ) : (
-                  <article className="rounded-[24px] border border-emerald-400/12 bg-white/6 p-4 xl:col-span-3">
+                  <article className="rounded-[24px] border border-emerald-400/12 bg-white/6 p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Panel estable</p>
                     <p className="mt-3 text-sm leading-6 text-white/84">
                       Ahora mismo no hay recomendaciones prioritarias activas con tu configuracion. Puedes activarlas o afinarlas desde Configuracion.
