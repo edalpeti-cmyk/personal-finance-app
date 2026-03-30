@@ -96,6 +96,14 @@ type InvestmentTransactionRow = {
   executed_at: string;
   created_at?: string;
 };
+type InternalTransferRow = {
+  id: string;
+  category: string;
+  amount: number;
+  transfer_date: string;
+  transfer_type: "investment" | "emergency_fund";
+  linked_investment_transaction_id: string | null;
+};
 type PeriodPerformance = {
   amount: number | null;
   pct: number | null;
@@ -300,6 +308,14 @@ function parseCsvLine(line: string) {
 
   values.push(current.trim());
   return values;
+}
+
+function normalizeTransferMatchValue(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function buildEstimatedAssetEvolution(row: EnrichedInvestment) {
@@ -2384,7 +2400,7 @@ export default function InvestmentsPage() {
       const commissionLocal = Number((validation.fee || 0).toFixed(4));
       const totalEur = Number((totalLocal * tradeFxRate).toFixed(4));
       const commissionEur = Number((commissionLocal * tradeFxRate).toFixed(4));
-      await supabase.from("investment_transactions").insert({
+      const buyTransactionResult = await supabase.from("investment_transactions").insert({
         investment_id: transactionInvestmentId,
         user_id: userId,
         transaction_type: "buy",
@@ -2400,7 +2416,68 @@ export default function InvestmentsPage() {
         commission_eur: commissionEur,
         realized_gain_eur: null,
         executed_at: purchaseDate
-      });
+      }).select("id").single();
+
+      const linkedTransactionId = (buyTransactionResult.data as { id: string } | null)?.id ?? null;
+
+      if (buyTransactionResult.error) {
+        setMessage(buyTransactionResult.error.message);
+        showToast({ type: "error", text: "La posicion se guardo, pero no se pudo registrar la compra en el historial." });
+        setSaving(false);
+        return;
+      }
+
+      if (linkedTransactionId) {
+        const transferMonth = purchaseDate.slice(0, 7);
+        const monthStart = `${transferMonth}-01`;
+        const monthEnd = new Date(Number(transferMonth.slice(0, 4)), Number(transferMonth.slice(5, 7)), 0).toISOString().slice(0, 10);
+        const { data: pendingTransfersData, error: pendingTransfersError } = await supabase
+          .from("internal_transfers")
+          .select("id, category, amount, transfer_date, transfer_type, linked_investment_transaction_id")
+          .eq("user_id", userId)
+          .eq("transfer_type", "investment")
+          .is("linked_investment_transaction_id", null)
+          .gte("transfer_date", monthStart)
+          .lte("transfer_date", monthEnd)
+          .order("transfer_date", { ascending: false });
+
+        if (!pendingTransfersError) {
+          const normalizedName = normalizeTransferMatchValue(validation.cleanName);
+          const normalizedSymbol = normalizeTransferMatchValue(validation.cleanSymbol);
+          const pendingTransfers = ((pendingTransfersData as InternalTransferRow[] | null) ?? []).map((row) => {
+            const normalizedCategory = normalizeTransferMatchValue(row.category);
+            let score = 0;
+            if (normalizedSymbol && normalizedCategory === normalizedSymbol) score += 5;
+            if (normalizedName && normalizedCategory === normalizedName) score += 4;
+            if (normalizedSymbol && normalizedCategory.includes(normalizedSymbol)) score += 3;
+            if (normalizedName && (normalizedName.includes(normalizedCategory) || normalizedCategory.includes(normalizedName))) score += 2;
+            score -= Math.abs(Number(row.amount || 0) - totalEur) / 1000;
+            return { ...row, score };
+          });
+
+          const suggestedTransfer = pendingTransfers.sort((a, b) => b.score - a.score)[0];
+
+          if (suggestedTransfer) {
+            const shouldLink = window.confirm(
+              `Tienes un traspaso pendiente de ${formatCurrencyByPreference(Number(suggestedTransfer.amount || 0), "EUR")} en "${suggestedTransfer.category}" del ${suggestedTransfer.transfer_date}. Quieres enlazar esta compra con ese traspaso?`
+            );
+
+            if (shouldLink) {
+              const { error: linkError } = await supabase
+                .from("internal_transfers")
+                .update({ linked_investment_transaction_id: linkedTransactionId })
+                .eq("id", suggestedTransfer.id)
+                .eq("user_id", userId);
+
+              if (linkError) {
+                showToast({ type: "error", text: "La compra se guardo, pero no se pudo enlazar con el traspaso pendiente." });
+              } else {
+                showToast({ type: "success", text: "Compra enlazada con un traspaso pendiente del mismo mes." });
+              }
+            }
+          }
+        }
+      }
     }
 
     resetForm();

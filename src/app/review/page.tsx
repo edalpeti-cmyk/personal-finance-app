@@ -23,6 +23,15 @@ type BudgetSavingsRow = {
   budget_amount: number;
   budget_kind: "expense" | "investment_transfer" | "emergency_fund";
 };
+type CashBaselineRow = {
+  baseline_amount: number;
+  baseline_date: string;
+};
+type InternalTransferRow = {
+  amount: number;
+  transfer_date: string;
+  transfer_type: "investment" | "emergency_fund";
+};
 type InvestmentRow = {
   asset_name: string;
   current_price: number | null;
@@ -129,6 +138,8 @@ export default function ReviewPage() {
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
   const [savingsTargets, setSavingsTargets] = useState<SavingsTargetRow[]>([]);
   const [budgetSavingsRows, setBudgetSavingsRows] = useState<BudgetSavingsRow[]>([]);
+  const [cashBaseline, setCashBaseline] = useState<CashBaselineRow | null>(null);
+  const [internalTransferRows, setInternalTransferRows] = useState<InternalTransferRow[]>([]);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
   const [debtRows, setDebtRows] = useState<DebtRow[]>([]);
   const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
@@ -147,7 +158,7 @@ export default function ReviewPage() {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult, cashBaselineResult, internalTransfersResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
@@ -159,10 +170,12 @@ export default function ReviewPage() {
       supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
       supabase.from("monthly_review_closures").select("review_month, status, conclusion_title, conclusion_summary, manual_note, closed_at").eq("user_id", uid).order("review_month", { ascending: false }).limit(6),
       supabase.from("goal_progress_history").select("goal_id, snapshot_month, current_amount, target_amount, progress_pct").eq("user_id", uid).order("snapshot_month", { ascending: false }),
-      supabase.from("monthly_budgets").select("month, budget_amount, budget_kind").eq("user_id", uid).in("budget_kind", ["investment_transfer", "emergency_fund"])
+      supabase.from("monthly_budgets").select("month, budget_amount, budget_kind").eq("user_id", uid).in("budget_kind", ["investment_transfer", "emergency_fund"]),
+      supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", uid).maybeSingle(),
+      supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", uid).in("transfer_type", ["investment", "emergency_fund"])
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error, cashBaselineResult.error, internalTransfersResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -174,6 +187,8 @@ export default function ReviewPage() {
     setBudgetRows((budgetResult.data as BudgetRow[]) ?? []);
     setSavingsTargets((savingsResult.data as SavingsTargetRow[]) ?? []);
     setBudgetSavingsRows((budgetSavingsResult.data as BudgetSavingsRow[]) ?? []);
+    setCashBaseline((cashBaselineResult.data as CashBaselineRow | null) ?? null);
+    setInternalTransferRows((internalTransfersResult.data as InternalTransferRow[]) ?? []);
     setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
     setDebtRows((debtsResult.data as DebtRow[]) ?? []);
     setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
@@ -256,8 +271,19 @@ export default function ReviewPage() {
       .filter((row) => row.status !== "closed" && row.include_in_net_worth)
       .reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const pricesConnected = investmentRows.filter((row) => row.current_price !== null).length;
-    const cashPosition = incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) - expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-    const totalNetWorth = cashPosition + investmentValue - debtTotal;
+    const baselineStart = cashBaseline?.baseline_date ? `${cashBaseline.baseline_date}T00:00:00` : null;
+    const incomeFromBaseline = baselineStart
+      ? incomeRows.reduce((sum, row) => sum + (new Date(`${row.income_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount || 0) : 0), 0)
+      : incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const expensesFromBaseline = baselineStart
+      ? expenseRows.reduce((sum, row) => sum + (new Date(`${row.expense_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount || 0) : 0), 0)
+      : expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const investmentTransfersFromBaseline = baselineStart
+      ? internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "investment" && new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount || 0) : 0), 0)
+      : internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "investment" ? Number(row.amount || 0) : 0), 0);
+    const emergencyFundReserved = internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "emergency_fund" ? Number(row.amount || 0) : 0), 0);
+    const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
+    const totalNetWorth = cashPosition + investmentValue + emergencyFundReserved - debtTotal;
     const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
     const fireProgress = fireTarget > 0 ? (totalNetWorth / fireTarget) * 100 : 0;
 
@@ -282,6 +308,8 @@ export default function ReviewPage() {
       savingsDeltaVsTarget,
       overspent,
       debtTotal,
+      cashPosition,
+      emergencyFundReserved,
       monthlyDebtPayment,
       debtPaymentRatio: currentIncome > 0 ? (monthlyDebtPayment / currentIncome) * 100 : null,
       pricesConnected,
@@ -292,7 +320,7 @@ export default function ReviewPage() {
       topGoals,
       activeGoalsCount: activeGoals.length
     };
-  }, [budgetRows, budgetSavingsRows, debtRows, expenseRows, fireSettings, goalRows, incomeRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
+  }, [budgetRows, budgetSavingsRows, cashBaseline, debtRows, expenseRows, fireSettings, goalRows, incomeRows, internalTransferRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
 
   const reviewActions = useMemo<Array<ReviewAction & { completed: boolean }>>(() => {
     const actions: ReviewAction[] = [];
@@ -776,6 +804,31 @@ export default function ReviewPage() {
               <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentExpenses, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousExpenses, currency)}</p></article>
               <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro objetivo</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentSavingsTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousSavingsTarget, currency)}</p></article>
               <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro real</p><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${reviewMetrics.actualSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.actualSavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousActualSavings, currency)}</p></article>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+              <SectionHeader
+                eyebrow="Liquidez y patrimonio"
+                title="Caja, reserva y patrimonio neto"
+                description="El mismo desglose base que ves en el dashboard, para cerrar el mes con el contexto correcto."
+              />
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Caja disponible</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(reviewMetrics.cashPosition, currency)}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">Liquidez general despues de gastos, traspasos a inversion y fondo de emergencia.</p>
+                </article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Fondo de emergencia</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(reviewMetrics.emergencyFundReserved, currency)}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">Capital reservado fuera de la caja general, pero que sigue formando parte de tu patrimonio.</p>
+                </article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Patrimonio neto</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(reviewMetrics.totalNetWorth, currency)}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">Caja disponible, inversiones y reserva de emergencia menos la deuda conectada al patrimonio.</p>
+                </article>
+              </div>
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
