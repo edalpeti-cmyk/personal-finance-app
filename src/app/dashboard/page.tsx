@@ -68,6 +68,7 @@ type DashboardMetrics = {
   investmentsValue: number;
   debtTotal: number;
   monthlyDebtPayment: number;
+  emergencyFundReserved: number;
   grossWorth: number;
   usesCashBaseline: boolean;
   cashBaselineDate: string | null;
@@ -145,6 +146,7 @@ type CashBaselineSettingsRow = {
 type InternalTransferRow = {
   amount: number;
   transfer_date: string;
+  transfer_type?: "investment" | "emergency_fund";
 };
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
@@ -1814,7 +1816,7 @@ export default function DashboardPage() {
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle(),
         supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
-        supabase.from("internal_transfers").select("amount, transfer_date").eq("user_id", userId).in("transfer_type", ["investment", "emergency_fund"]),
+        supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", userId).in("transfer_type", ["investment", "emergency_fund"]),
         supabase.from("monthly_budgets").select("budget_amount, month, budget_kind").eq("user_id", userId).in("budget_kind", ["investment_transfer", "emergency_fund"])
       ]);
 
@@ -1864,17 +1866,18 @@ export default function DashboardPage() {
       const expensesFromBaseline = baselineStart
         ? nextExpenseRows.reduce((acc, row) => acc + (new Date(`${row.expense_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
         : nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const transfersFromBaseline = baselineStart
-        ? transferRows.reduce((acc, row) => acc + (new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
-        : transferRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - transfersFromBaseline;
+      const investmentTransfersFromBaseline = baselineStart
+        ? transferRows.reduce((acc, row) => acc + (row.transfer_type === "investment" && new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
+        : transferRows.reduce((acc, row) => acc + (row.transfer_type === "investment" ? Number(row.amount) : 0), 0);
+      const emergencyFundReserved = transferRows.reduce((acc, row) => acc + (row.transfer_type === "emergency_fund" ? Number(row.amount) : 0), 0);
+      const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
       const debtTotal = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
       const monthlyDebtPayment = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
-      const grossWorth = cashPosition + investmentsValue;
+      const grossWorth = cashPosition + investmentsValue + emergencyFundReserved;
       const totalNetWorth = grossWorth - debtTotal;
 
       const monthExpenses = nextExpenseRows.reduce(
@@ -1934,6 +1937,7 @@ export default function DashboardPage() {
         investmentsValue,
         debtTotal,
         monthlyDebtPayment,
+        emergencyFundReserved,
         grossWorth,
         usesCashBaseline: Boolean(cashBaseline?.baseline_date),
         cashBaselineDate: cashBaseline?.baseline_date ?? null
@@ -2055,6 +2059,12 @@ export default function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
               <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los meses del año actual.</p>
+            </section>
+
+            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Fondo de emergencia</p>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.emergencyFundReserved, currency)}</p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Capital reservado fuera de caja general, pero que sigue contando dentro de tu patrimonio.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
