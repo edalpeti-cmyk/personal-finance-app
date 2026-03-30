@@ -1923,7 +1923,7 @@ export default function DashboardPage() {
     <>
       <SideNav />
       <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:grid-cols-2 md:pl-72 xl:grid-cols-12">
-        <section className="rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_100%)] p-6 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:p-8 xl:col-span-7">
+        <section className="rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_62%,rgba(10,63,70,0.78)_100%)] p-6 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:p-8 xl:col-span-12">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Vista general</p>
@@ -1940,24 +1940,29 @@ export default function DashboardPage() {
               {hideBalances ? "Mostrar saldo" : "Ocultar saldo"}
             </button>
           </div>
-        </section>
-
-        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] md:col-span-2 xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}</p>
-          <p className="mt-2 max-w-sm text-sm text-white/76">Patrimonio neto combinando caja, inversiones y la deuda pendiente que ya has registrado.</p>
-          <div className="mt-6 flex flex-col gap-3">
-            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
-              <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
+          <div className="mt-8 grid gap-4 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
+            <div>
+              <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white sm:text-5xl">
+                {metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}
+              </p>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/76">
+                Patrimonio neto combinando caja, inversiones y la deuda pendiente que ya has registrado.
+              </p>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>
-              <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.investmentsValue, currency) : "--"}</p>
-            </div>
-            <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/54">Deuda</p>
-              <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.debtTotal, currency) : "--"}</p>
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
+                <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>
+                <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.investmentsValue, currency) : "--"}</p>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/54">Deuda</p>
+                <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.debtTotal, currency) : "--"}</p>
+              </div>
             </div>
           </div>
         </section>
