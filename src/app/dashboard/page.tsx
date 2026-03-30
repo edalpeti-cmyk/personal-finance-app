@@ -141,6 +141,10 @@ type CashBaselineSettingsRow = {
   baseline_amount: number;
   baseline_date: string;
 };
+type InternalTransferRow = {
+  amount: number;
+  transfer_date: string;
+};
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
   { value: "daily", label: "Diaria" },
@@ -1796,17 +1800,18 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
         supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", userId),
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle(),
-        supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle()
+        supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
+        supabase.from("internal_transfers").select("amount, transfer_date").eq("user_id", userId).eq("transfer_type", "investment")
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
@@ -1814,6 +1819,7 @@ export default function DashboardPage() {
             savingsTargetsResult.error?.message ||
             fireSettingsResult.error?.message ||
             cashBaselineResult.error?.message ||
+            transfersResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -1829,6 +1835,7 @@ export default function DashboardPage() {
       const savingsTargetRows = (savingsTargetsResult.data as SavingsTargetRow[]) ?? [];
       const fireSettings = (fireSettingsResult.data as FireSettingsRow | null) ?? null;
       const cashBaseline = (cashBaselineResult.data as CashBaselineSettingsRow | null) ?? null;
+      const transferRows = (transfersResult.data as InternalTransferRow[]) ?? [];
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
@@ -1848,7 +1855,10 @@ export default function DashboardPage() {
       const expensesFromBaseline = baselineStart
         ? nextExpenseRows.reduce((acc, row) => acc + (new Date(`${row.expense_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
         : nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline;
+      const transfersFromBaseline = baselineStart
+        ? transferRows.reduce((acc, row) => acc + (new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
+        : transferRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - transfersFromBaseline;
       const debtTotal = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);

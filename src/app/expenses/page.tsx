@@ -42,6 +42,7 @@ type ToastState = { type: "success" | "error"; text: string } | null;
 type MonthlyBudgetImportRow = {
   category: string;
   budget_amount: number;
+  budget_kind?: "expense" | "investment_transfer";
 };
 type ExpenseImportedFilter = "all" | "imported" | "manual";
 type SavedExpenseView = {
@@ -527,9 +528,10 @@ export default function ExpensesPage() {
     const [budgetResult, existingImportsResult] = await Promise.all([
       supabase
         .from("monthly_budgets")
-        .select("category, budget_amount")
+        .select("category, budget_amount, budget_kind")
         .eq("user_id", userId)
         .eq("month", monthToDate(month))
+        .eq("budget_kind", "expense")
         .order("category", { ascending: true }),
       supabase
         .from("expenses")

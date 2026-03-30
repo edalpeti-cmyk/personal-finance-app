@@ -15,9 +15,14 @@ type BudgetRow = {
   month: string;
   category: string;
   budget_amount: number;
+  budget_kind: "expense" | "investment_transfer";
 };
 
 type ExpenseRow = {
+  category: string;
+  amount: number;
+};
+type TransferRow = {
   category: string;
   amount: number;
 };
@@ -42,6 +47,7 @@ type BudgetWithActual = {
   actual: number;
   remaining: number;
   spentPercent: number;
+  budgetKind: "expense" | "investment_transfer";
 };
 
 type IncomeSavingsSummary = {
@@ -89,15 +95,23 @@ function monthDateRange(month: string) {
   };
 }
 
-function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[]) {
+function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[], transferRows: TransferRow[]) {
   const expenseByCategory = new Map<string, number>();
   for (const item of expenseRows) {
     const key = item.category || "Sin categoria";
     expenseByCategory.set(key, (expenseByCategory.get(key) ?? 0) + Number(item.amount));
   }
+  const transferByCategory = new Map<string, number>();
+  for (const item of transferRows) {
+    const key = item.category || "Sin categoria";
+    transferByCategory.set(key, (transferByCategory.get(key) ?? 0) + Number(item.amount));
+  }
 
   const rows: BudgetWithActual[] = budgetRows.map((budget) => {
-    const actual = expenseByCategory.get(budget.category) ?? 0;
+    const actual =
+      budget.budget_kind === "investment_transfer"
+        ? transferByCategory.get(budget.category) ?? 0
+        : expenseByCategory.get(budget.category) ?? 0;
     const remaining = Number(budget.budget_amount) - actual;
     const spentPercent = Number(budget.budget_amount) > 0 ? (actual / Number(budget.budget_amount)) * 100 : 0;
 
@@ -107,7 +121,8 @@ function buildMonthlyRows(budgetRows: BudgetRow[], expenseRows: ExpenseRow[]) {
       budget: Number(budget.budget_amount),
       actual,
       remaining,
-      spentPercent
+      spentPercent,
+      budgetKind: budget.budget_kind
     };
   });
 
@@ -156,6 +171,7 @@ export default function BudgetsPage() {
   const [copySourceMonth, setCopySourceMonth] = useState(getPreviousMonth(new Date().toISOString().slice(0, 7)));
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
+  const [budgetKind, setBudgetKind] = useState<"expense" | "investment_transfer">("expense");
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
 
   const [incomeSource, setIncomeSource] = useState("");
@@ -194,6 +210,7 @@ export default function BudgetsPage() {
     setEditingBudgetId(null);
     setCategory("");
     setAmount("");
+    setBudgetKind("expense");
   }, []);
 
   const resetIncomeForm = useCallback(() => {
@@ -292,7 +309,7 @@ export default function BudgetsPage() {
     const targetMonthDate = monthToDate(selectedMonth);
 
     const [sourceBudgetsResult, sourceSavingsTargetResult] = await Promise.all([
-      supabase.from("monthly_budgets").select("category, budget_amount").eq("user_id", userId).eq("month", sourceMonthDate).order("category", { ascending: true }),
+      supabase.from("monthly_budgets").select("category, budget_amount, budget_kind").eq("user_id", userId).eq("month", sourceMonthDate).order("category", { ascending: true }),
       supabase.from("monthly_savings_targets").select("savings_target").eq("user_id", userId).eq("month", sourceMonthDate).maybeSingle()
     ]);
 
@@ -305,7 +322,7 @@ export default function BudgetsPage() {
       return;
     }
 
-    const sourceBudgets = (sourceBudgetsResult.data as Array<{ category: string; budget_amount: number }>) ?? [];
+      const sourceBudgets = (sourceBudgetsResult.data as Array<{ category: string; budget_amount: number; budget_kind?: "expense" | "investment_transfer" }>) ?? [];
     const sourceSavingsTarget = Number((sourceSavingsTargetResult.data as { savings_target?: number } | null)?.savings_target ?? 0);
 
     if (sourceBudgets.length === 0 && sourceSavingsTarget === 0) {
@@ -326,7 +343,8 @@ export default function BudgetsPage() {
         user_id: userId,
         month: targetMonthDate,
         category: row.category,
-        budget_amount: Number(row.budget_amount)
+        budget_amount: Number(row.budget_amount),
+        budget_kind: row.budget_kind ?? "expense"
       }));
 
       const insertBudgetsResult = await supabase.from("monthly_budgets").insert(budgetsPayload);
@@ -372,41 +390,47 @@ export default function BudgetsPage() {
 
       const [currentData, prevData] = await Promise.all([
         Promise.all([
-          supabase.from("monthly_budgets").select("id, month, category, budget_amount").eq("user_id", uid).eq("month", currentMonthDate).order("category", { ascending: true }),
+          supabase.from("monthly_budgets").select("id, month, category, budget_amount, budget_kind").eq("user_id", uid).eq("month", currentMonthDate).order("category", { ascending: true }),
           supabase.from("monthly_savings_targets").select("id, month, savings_target").eq("user_id", uid).eq("month", currentMonthDate).maybeSingle(),
           supabase.from("expenses").select("category, amount").eq("user_id", uid).gte("expense_date", currentRange.start).lte("expense_date", currentRange.end),
-          supabase.from("income").select("id, amount, source, income_date").eq("user_id", uid).gte("income_date", currentRange.start).lte("income_date", currentRange.end).order("income_date", { ascending: false })
+          supabase.from("income").select("id, amount, source, income_date").eq("user_id", uid).gte("income_date", currentRange.start).lte("income_date", currentRange.end).order("income_date", { ascending: false }),
+          supabase.from("internal_transfers").select("category, amount").eq("user_id", uid).eq("transfer_type", "investment").gte("transfer_date", currentRange.start).lte("transfer_date", currentRange.end)
         ]),
         Promise.all([
-          supabase.from("monthly_budgets").select("id, month, category, budget_amount").eq("user_id", uid).eq("month", prevMonthDate).order("category", { ascending: true }),
+          supabase.from("monthly_budgets").select("id, month, category, budget_amount, budget_kind").eq("user_id", uid).eq("month", prevMonthDate).order("category", { ascending: true }),
           supabase.from("monthly_savings_targets").select("id, month, savings_target").eq("user_id", uid).eq("month", prevMonthDate).maybeSingle(),
           supabase.from("expenses").select("category, amount").eq("user_id", uid).gte("expense_date", prevRange.start).lte("expense_date", prevRange.end),
-          supabase.from("income").select("amount").eq("user_id", uid).gte("income_date", prevRange.start).lte("income_date", prevRange.end)
+          supabase.from("income").select("amount").eq("user_id", uid).gte("income_date", prevRange.start).lte("income_date", prevRange.end),
+          supabase.from("internal_transfers").select("category, amount").eq("user_id", uid).eq("transfer_type", "investment").gte("transfer_date", prevRange.start).lte("transfer_date", prevRange.end)
         ])
       ]);
 
-      const [currentBudgets, currentSavingsTargetData, currentExpenses, currentIncome] = currentData;
-      const [previousBudgets, previousSavingsTargetData, previousExpenses, previousIncome] = prevData;
+      const [currentBudgets, currentSavingsTargetData, currentExpenses, currentIncome, currentTransfers] = currentData;
+      const [previousBudgets, previousSavingsTargetData, previousExpenses, previousIncome, previousTransfers] = prevData;
 
       if (
         currentBudgets.error ||
         currentSavingsTargetData.error ||
         currentExpenses.error ||
         currentIncome.error ||
+        currentTransfers.error ||
         previousBudgets.error ||
         previousSavingsTargetData.error ||
         previousExpenses.error ||
-        previousIncome.error
+        previousIncome.error ||
+        previousTransfers.error
       ) {
         setMessage(
           currentBudgets.error?.message ||
             currentSavingsTargetData.error?.message ||
             currentExpenses.error?.message ||
             currentIncome.error?.message ||
+            currentTransfers.error?.message ||
             previousBudgets.error?.message ||
             previousSavingsTargetData.error?.message ||
             previousExpenses.error?.message ||
             previousIncome.error?.message ||
+            previousTransfers.error?.message ||
             "No se pudo cargar el presupuesto mensual."
         );
         return;
@@ -414,11 +438,13 @@ export default function BudgetsPage() {
 
       const currentExpenseRows = (currentExpenses.data as ExpenseRow[]) ?? [];
       const prevExpenseRows = (previousExpenses.data as ExpenseRow[]) ?? [];
+      const currentTransferRows = (currentTransfers.data as TransferRow[]) ?? [];
+      const prevTransferRows = (previousTransfers.data as TransferRow[]) ?? [];
       const currentIncomeRows = (currentIncome.data as IncomeRow[]) ?? [];
       const prevIncomeRows = ((previousIncome.data as Array<{ amount: number }>) ?? []).map((row) => ({ id: "", amount: row.amount, source: "", income_date: "" }));
 
-      const builtCurrent = buildMonthlyRows((currentBudgets.data as BudgetRow[]) ?? [], currentExpenseRows);
-      const builtPrevious = buildMonthlyRows((previousBudgets.data as BudgetRow[]) ?? [], prevExpenseRows);
+      const builtCurrent = buildMonthlyRows((currentBudgets.data as BudgetRow[]) ?? [], currentExpenseRows, currentTransferRows);
+      const builtPrevious = buildMonthlyRows((previousBudgets.data as BudgetRow[]) ?? [], prevExpenseRows, prevTransferRows);
 
       const currentIncomeTotal = currentIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const currentExpenseTotal = currentExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
@@ -582,7 +608,7 @@ export default function BudgetsPage() {
     }
 
     setSaving(true);
-    const payload = { user_id: userId, month: monthToDate(selectedMonth), category: cleanCategory, budget_amount: parsedAmount };
+    const payload = { user_id: userId, month: monthToDate(selectedMonth), category: cleanCategory, budget_amount: parsedAmount, budget_kind: budgetKind };
     const query = editingBudgetId
       ? supabase.from("monthly_budgets").update(payload).eq("id", editingBudgetId).eq("user_id", userId)
       : supabase.from("monthly_budgets").upsert(payload, { onConflict: "user_id,month,category" });
@@ -603,8 +629,44 @@ export default function BudgetsPage() {
     setEditingBudgetId(row.id);
     setCategory(row.category);
     setAmount(String(row.budget));
+    setBudgetKind(row.budgetKind);
     budgetFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast({ type: "success", text: "Modo edicion activado para este presupuesto." });
+  };
+  const handleRegisterInvestmentTransfer = async (row: BudgetWithActual) => {
+    if (!userId) return;
+    const suggestedAmount = Math.max(Number(row.remaining.toFixed(2)), 0);
+    const rawValue = window.prompt(
+      `Importe a traspasar a inversion para "${row.category}"`,
+      suggestedAmount > 0 ? String(suggestedAmount) : String(Number(row.budget.toFixed(2)))
+    );
+
+    if (!rawValue) {
+      return;
+    }
+
+    const parsedAmount = Number(rawValue);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      showToast({ type: "error", text: "El traspaso debe ser mayor que 0." });
+      return;
+    }
+
+    const { error } = await supabase.from("internal_transfers").insert({
+      user_id: userId,
+      category: row.category,
+      transfer_type: "investment",
+      amount: parsedAmount,
+      transfer_date: monthToDate(selectedMonth),
+      notes: "Registrado desde presupuesto"
+    });
+
+    if (error) {
+      showToast({ type: "error", text: error.message });
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({ type: "success", text: "Traspaso a inversion registrado." });
   };
   const handleDeleteBudget = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta categoria presupuestada. Deseas continuar?")) return;
@@ -723,6 +785,13 @@ export default function BudgetsPage() {
             <label className="grid gap-2 text-sm text-slate-200">
               Categoria
               <input className={inputClass()} value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} placeholder="Ej: Comida" />
+            </label>
+            <label className="grid gap-2 text-sm text-slate-200">
+              Tipo de partida
+              <select className={inputClass()} value={budgetKind} onChange={(e) => setBudgetKind(e.target.value as "expense" | "investment_transfer")}>
+                <option value="expense">Gasto</option>
+                <option value="investment_transfer">Transferencia a inversion</option>
+              </select>
             </label>
             <label className="grid gap-2 text-sm text-slate-200">
               Presupuesto mensual
@@ -864,12 +933,19 @@ export default function BudgetsPage() {
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="bg-white/5 shadow-sm">
-                      <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">{row.category}</td>
+                      <td className="sticky-col rounded-l-2xl px-3 py-4 font-medium text-white">
+                        <div className="flex flex-col gap-2">
+                          <span>{row.category}</span>
+                          <span className={`ui-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] ${row.budgetKind === "investment_transfer" ? "border-sky-400/20 bg-sky-500/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-300"}`}>
+                            {row.budgetKind === "investment_transfer" ? "Transferencia a inversion" : "Gasto"}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.budget, currency)}</td>
                       <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
                       <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
                       <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap"><button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap">{row.budgetKind === "investment_transfer" ? <button type="button" onClick={() => void handleRegisterInvestmentTransfer(row)} className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20">Registrar traspaso</button> : null}<button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>
