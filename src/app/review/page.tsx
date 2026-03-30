@@ -11,6 +11,7 @@ import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
 import { formatCurrencyByPreference, formatMonthByPreference } from "@/lib/preferences-format";
+import { DEFAULT_GUIDANCE_PREFERENCES, generateFinancialGuidance, type GuidanceCategory, type GuidancePreferenceMap } from "@/lib/financial-guidance";
 
 type IncomeRow = { amount: number; income_date: string };
 type ExpenseRow = { amount: number; category: string; expense_date: string };
@@ -90,6 +91,10 @@ type GoalProgressHistoryRow = {
   target_amount: number;
   progress_pct: number;
 };
+type GuidancePreferenceRow = {
+  category_key: GuidanceCategory;
+  enabled: boolean;
+};
 
 function isSameMonth(dateString: string, month: string) {
   return dateString.slice(0, 7) === month;
@@ -130,6 +135,7 @@ export default function ReviewPage() {
   const [goalProgressHistory, setGoalProgressHistory] = useState<GoalProgressHistoryRow[]>([]);
   const [monthlyNote, setMonthlyNote] = useState("");
   const [savingMonthlyNote, setSavingMonthlyNote] = useState(false);
+  const [guidancePreferences, setGuidancePreferences] = useState<GuidancePreferenceMap>(DEFAULT_GUIDANCE_PREFERENCES);
 
   const loadReviewData = useCallback(async (uid: string) => {
     setLoading(true);
@@ -178,6 +184,27 @@ export default function ReviewPage() {
     if (authLoading || !userId) return;
     void loadReviewData(userId);
   }, [authLoading, loadReviewData, userId]);
+
+  useEffect(() => {
+    const loadGuidancePreferences = async () => {
+      if (!userId) return;
+
+      const { data, error } = await supabase
+        .from("financial_guidance_preferences")
+        .select("category_key, enabled")
+        .eq("user_id", userId);
+
+      if (!error && data) {
+        const next = { ...DEFAULT_GUIDANCE_PREFERENCES };
+        for (const row of data as GuidancePreferenceRow[]) {
+          next[row.category_key] = row.enabled;
+        }
+        setGuidancePreferences(next);
+      }
+    };
+
+    void loadGuidancePreferences();
+  }, [supabase, userId]);
 
   const previousSelectedMonth = useMemo(() => previousMonth(selectedMonth), [selectedMonth]);
 
@@ -285,6 +312,46 @@ export default function ReviewPage() {
       completed: completedTaskKeys.includes(action.id)
     }));
   }, [completedTaskKeys, reviewMetrics]);
+  const financialGuidance = useMemo(() => {
+    const topInvestment = investmentRows
+      .map((row) => {
+        const valueEur = convertToEur((Number(row.current_price ?? row.average_buy_price ?? 0) || 0) * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR);
+        return { name: row.asset_name, valueEur };
+      })
+      .sort((a, b) => b.valueEur - a.valueEur)[0];
+    const investmentsValue = investmentRows.reduce(
+      (sum, row) => sum + convertToEur((Number(row.current_price ?? row.average_buy_price ?? 0) || 0) * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR),
+      0
+    );
+    const topInvestmentWeight = investmentsValue > 0 && topInvestment ? (topInvestment.valueEur / investmentsValue) * 100 : 0;
+    const nonEurExposurePct =
+      investmentsValue > 0
+        ? (investmentRows
+            .filter((row) => row.asset_currency && row.asset_currency !== "EUR")
+            .reduce((sum, row) => sum + convertToEur((Number(row.current_price ?? row.average_buy_price ?? 0) || 0) * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR), 0) / investmentsValue) * 100
+        : 0;
+
+    return generateFinancialGuidance(
+      {
+        savingsRate: reviewMetrics.currentIncome > 0 ? (reviewMetrics.currentSavingsTarget / reviewMetrics.currentIncome) * 100 : null,
+        monthlyIncome: reviewMetrics.currentIncome,
+        monthlyExpenses: reviewMetrics.currentExpenses,
+        monthlySavingsTarget: reviewMetrics.currentSavingsTarget,
+        debtTotal: reviewMetrics.debtTotal,
+        monthlyDebtPayment: reviewMetrics.monthlyDebtPayment,
+        debtPaymentRatio: reviewMetrics.debtPaymentRatio,
+        netWorth: reviewMetrics.totalNetWorth,
+        investmentsValue,
+        priceCoveragePct: reviewMetrics.investmentCount > 0 ? (reviewMetrics.pricesConnected / reviewMetrics.investmentCount) * 100 : 100,
+        topInvestmentName: topInvestment?.name ?? null,
+        topInvestmentWeight,
+        nonEurExposurePct,
+        fireTarget: reviewMetrics.fireTarget,
+        fireProgress: reviewMetrics.fireProgress
+      },
+      guidancePreferences
+    );
+  }, [guidancePreferences, investmentRows, reviewMetrics]);
 
   const toggleReviewTask = useCallback(async (taskId: string, completed: boolean) => {
     if (!userId) return;
@@ -735,6 +802,58 @@ export default function ReviewPage() {
                   </article>
                 ))}
               </div>
+            </section>
+
+            <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+              <SectionHeader
+                eyebrow="Recomendaciones del mes"
+                title="Consejos personalizados con tu contexto real"
+                description="Una lectura breve sobre deuda, ahorro, inversiones y FIRE para convertir el cierre mensual en una decision mas clara."
+              />
+              {financialGuidance.length > 0 ? (
+                <div className="mt-5 grid gap-3 xl:grid-cols-3">
+                  {financialGuidance.map((item) => (
+                    <article
+                      key={item.id}
+                      className={`rounded-[24px] border p-4 ${
+                        item.tone === "warning"
+                          ? "border-amber-300/20 bg-amber-500/10"
+                          : item.tone === "success"
+                            ? "border-emerald-300/20 bg-emerald-500/10"
+                            : "border-sky-300/20 bg-sky-500/10"
+                      }`}
+                    >
+                      <p className={`text-xs uppercase tracking-[0.18em] ${
+                        item.tone === "warning"
+                          ? "text-amber-200"
+                          : item.tone === "success"
+                            ? "text-emerald-200"
+                            : "text-sky-200"
+                      }`}>
+                        {item.title}
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-100">{item.body}</p>
+                      {item.href && item.cta ? (
+                        <Link
+                          href={item.href}
+                          className="ui-chip mt-4 inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-2 text-xs text-white transition hover:bg-white/15"
+                        >
+                          {item.cta}
+                        </Link>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-6">
+                  <EmptyStateCard
+                    eyebrow="Panel estable"
+                    title="No hay recomendaciones urgentes"
+                    description="Con la configuracion actual, el mes no muestra senales que requieran una recomendacion especial."
+                    compact
+                  />
+                </div>
+              )}
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">

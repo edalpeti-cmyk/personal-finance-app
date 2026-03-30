@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { createClient } from "@/lib/supabase/client";
+import { DEFAULT_GUIDANCE_PREFERENCES, type GuidanceCategory, type GuidancePreferenceMap } from "@/lib/financial-guidance";
 
 type DashboardAlertRuleKey =
   | "low_savings_rate"
@@ -75,6 +76,10 @@ type GoalSettingsRow = {
   target_date: string | null;
   status: "active" | "paused" | "completed" | "cancelled";
   priority: number;
+};
+type GuidancePreferenceRow = {
+  category_key: GuidanceCategory;
+  enabled: boolean;
 };
 
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
@@ -275,6 +280,10 @@ export default function SettingsPanel() {
   const [connectivityLoaded, setConnectivityLoaded] = useState(false);
   const [lastPriceUpdateAt, setLastPriceUpdateAt] = useState<string | null>(null);
   const [goalAlertsPreview, setGoalAlertsPreview] = useState<Array<{ id: GoalAlertRuleKey; tone: "warning" | "info"; title: string; body: string }>>([]);
+  const [guidancePreferences, setGuidancePreferences] = useState<GuidancePreferenceMap>(DEFAULT_GUIDANCE_PREFERENCES);
+  const [guidancePreferencesLoaded, setGuidancePreferencesLoaded] = useState(false);
+  const [savingGuidanceCategory, setSavingGuidanceCategory] = useState<GuidanceCategory | null>(null);
+  const [guidanceSettingsMessage, setGuidanceSettingsMessage] = useState<string | null>(null);
 
   const previewDate = dateFormat === "us" ? "03/13/2026" : "13/03/2026";
   const previewMoney =
@@ -310,6 +319,36 @@ export default function SettingsPanel() {
     };
 
     void loadAlertRules();
+  }, [supabase]);
+
+  useEffect(() => {
+    const loadGuidancePreferences = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setGuidancePreferencesLoaded(true);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("financial_guidance_preferences")
+        .select("category_key, enabled")
+        .eq("user_id", user.id);
+
+      if (!error && data) {
+        const next = { ...DEFAULT_GUIDANCE_PREFERENCES };
+        for (const row of data as GuidancePreferenceRow[]) {
+          next[row.category_key] = row.enabled;
+        }
+        setGuidancePreferences(next);
+      }
+
+      setGuidancePreferencesLoaded(true);
+    };
+
+    void loadGuidancePreferences();
   }, [supabase]);
 
   useEffect(() => {
@@ -563,6 +602,39 @@ export default function SettingsPanel() {
     });
   }, [connectivityHistory, connectivityHistoryFilter, connectivitySearchTerm]);
 
+  const updateGuidancePreference = async (category: GuidanceCategory, enabled: boolean) => {
+    const current = guidancePreferences[category];
+    setGuidancePreferences((prev) => ({ ...prev, [category]: enabled }));
+    setGuidanceSettingsMessage(null);
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setGuidancePreferences((prev) => ({ ...prev, [category]: current }));
+      setGuidanceSettingsMessage("No hemos podido validar tu sesion para guardar consejos personalizados.");
+      return;
+    }
+
+    setSavingGuidanceCategory(category);
+    const { error } = await supabase.from("financial_guidance_preferences").upsert(
+      {
+        user_id: user.id,
+        category_key: category,
+        enabled
+      },
+      { onConflict: "user_id,category_key" }
+    );
+
+    if (error) {
+      setGuidancePreferences((prev) => ({ ...prev, [category]: current }));
+      setGuidanceSettingsMessage("No hemos podido guardar esta preferencia de consejos. Intentalo otra vez.");
+    }
+
+    setSavingGuidanceCategory((value) => (value === category ? null : value));
+  };
+
   const updateAlertRule = async (
     ruleKey: DashboardAlertRuleKey,
     patch: Partial<Pick<DashboardAlertRule, "enabled" | "threshold">>
@@ -745,6 +817,52 @@ export default function SettingsPanel() {
                 onClick={() => setReduceMotion(true)}
               />
             </div>
+          </div>
+
+          <div className="mt-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Consejos personalizados</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Activa o pausa las familias de consejos que apareceran en Dashboard y Revision mensual.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
+                {guidancePreferencesLoaded ? "Sincronizado" : "Cargando..."}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {([
+                ["debt", "Deuda", "Carga mensual, presion financiera y capacidad de amortizacion."],
+                ["savings", "Ahorro", "Disciplina de ahorro y alineacion con tu plan mensual."],
+                ["impulse", "Compras por impulso", "Senales de poco margen entre gasto e ingresos."],
+                ["investments", "Inversiones", "Concentracion, cobertura de precios y exposicion divisa."],
+                ["fire", "FIRE", "Consejos de consistencia y avance del plan de independencia."]
+              ] as Array<[GuidanceCategory, string, string]>).map(([category, label, description]) => (
+                <article key={category} className="rounded-[22px] border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{label}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void updateGuidancePreference(category, !guidancePreferences[category])}
+                      className={`rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                        guidancePreferences[category]
+                          ? "border border-emerald-400/20 bg-emerald-500/14 text-emerald-100"
+                          : "border border-white/10 bg-white/5 text-slate-300"
+                      }`}
+                    >
+                      {guidancePreferences[category] ? "Activa" : "Pausada"}
+                    </button>
+                  </div>
+                  {savingGuidanceCategory === category ? <p className="mt-3 text-[11px] text-emerald-300">Guardando...</p> : null}
+                </article>
+              ))}
+            </div>
+            {guidanceSettingsMessage ? <p className="mt-3 text-xs text-amber-300">{guidanceSettingsMessage}</p> : null}
           </div>
 
           <div className="mt-8">
