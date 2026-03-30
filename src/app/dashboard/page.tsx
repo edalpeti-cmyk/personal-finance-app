@@ -68,6 +68,8 @@ type DashboardMetrics = {
   debtTotal: number;
   monthlyDebtPayment: number;
   grossWorth: number;
+  usesCashBaseline: boolean;
+  cashBaselineDate: string | null;
 };
 type DashboardAlert = {
   id: DashboardAlertRuleKey | "stable_panel";
@@ -134,6 +136,10 @@ type AiInsightDebug = {
 type GuidancePreferenceRow = {
   category_key: GuidanceCategory;
   enabled: boolean;
+};
+type CashBaselineSettingsRow = {
+  baseline_amount: number;
+  baseline_date: string;
 };
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
@@ -1790,22 +1796,24 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
         supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", userId),
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
-        supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
+        supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle(),
+        supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle()
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
             debtsResult.error?.message ||
             savingsTargetsResult.error?.message ||
             fireSettingsResult.error?.message ||
+            cashBaselineResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -1820,6 +1828,7 @@ export default function DashboardPage() {
       const debtRows = (debtsResult.data as DebtRow[]) ?? [];
       const savingsTargetRows = (savingsTargetsResult.data as SavingsTargetRow[]) ?? [];
       const fireSettings = (fireSettingsResult.data as FireSettingsRow | null) ?? null;
+      const cashBaseline = (cashBaselineResult.data as CashBaselineSettingsRow | null) ?? null;
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
@@ -1832,9 +1841,14 @@ export default function DashboardPage() {
         return acc + convertToEur(qty * price, row.asset_currency, ratesToEur);
       }, 0);
 
-      const totalIncomeAllTime = nextIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const totalExpensesAllTime = nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const cashPosition = totalIncomeAllTime - totalExpensesAllTime;
+      const baselineStart = cashBaseline?.baseline_date ? `${cashBaseline.baseline_date}T00:00:00` : null;
+      const incomeFromBaseline = baselineStart
+        ? nextIncomeRows.reduce((acc, row) => acc + (new Date(`${row.income_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
+        : nextIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const expensesFromBaseline = baselineStart
+        ? nextExpenseRows.reduce((acc, row) => acc + (new Date(`${row.expense_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
+        : nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
+      const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline;
       const debtTotal = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
@@ -1891,7 +1905,9 @@ export default function DashboardPage() {
         investmentsValue,
         debtTotal,
         monthlyDebtPayment,
-        grossWorth
+        grossWorth,
+        usesCashBaseline: Boolean(cashBaseline?.baseline_date),
+        cashBaselineDate: cashBaseline?.baseline_date ?? null
       });
 
       await persistSnapshot(userId, totalNetWorth, cashPosition, investmentsValue);
@@ -1954,6 +1970,11 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
                 <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
+                <p className="mt-2 text-xs leading-5 text-white/60">
+                  {metrics?.usesCashBaseline && metrics.cashBaselineDate
+                    ? `Basada en saldo inicial desde ${formatDateByPreference(metrics.cashBaselineDate, dateFormat)}`
+                    : "Basada en ingresos menos gastos registrados hasta la fecha."}
+                </p>
               </div>
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>

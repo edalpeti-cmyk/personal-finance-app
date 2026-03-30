@@ -81,6 +81,10 @@ type GuidancePreferenceRow = {
   category_key: GuidanceCategory;
   enabled: boolean;
 };
+type CashBaselineSettingsRow = {
+  baseline_amount: number;
+  baseline_date: string;
+};
 
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   {
@@ -284,6 +288,11 @@ export default function SettingsPanel() {
   const [guidancePreferencesLoaded, setGuidancePreferencesLoaded] = useState(false);
   const [savingGuidanceCategory, setSavingGuidanceCategory] = useState<GuidanceCategory | null>(null);
   const [guidanceSettingsMessage, setGuidanceSettingsMessage] = useState<string | null>(null);
+  const [cashBaselineAmount, setCashBaselineAmount] = useState("");
+  const [cashBaselineDate, setCashBaselineDate] = useState("");
+  const [cashBaselineLoaded, setCashBaselineLoaded] = useState(false);
+  const [savingCashBaseline, setSavingCashBaseline] = useState(false);
+  const [cashBaselineMessage, setCashBaselineMessage] = useState<string | null>(null);
 
   const previewDate = dateFormat === "us" ? "03/13/2026" : "13/03/2026";
   const previewMoney =
@@ -375,6 +384,35 @@ export default function SettingsPanel() {
     };
 
     void loadGoalAlertRules();
+  }, [supabase]);
+
+  useEffect(() => {
+    const loadCashBaseline = async () => {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setCashBaselineLoaded(true);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("cash_baseline_settings")
+        .select("baseline_amount, baseline_date")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!error && data) {
+        const row = data as CashBaselineSettingsRow;
+        setCashBaselineAmount(String(Number(row.baseline_amount ?? 0)));
+        setCashBaselineDate(row.baseline_date ?? "");
+      }
+
+      setCashBaselineLoaded(true);
+    };
+
+    void loadCashBaseline();
   }, [supabase]);
 
   useEffect(() => {
@@ -719,6 +757,48 @@ export default function SettingsPanel() {
     setSavingGoalAlertRuleKey((current) => (current === ruleKey ? null : current));
   };
 
+  const saveCashBaseline = async () => {
+    setCashBaselineMessage(null);
+
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setCashBaselineMessage("No hemos podido validar tu sesion para guardar la referencia de caja.");
+      return;
+    }
+
+    if (!cashBaselineDate) {
+      setCashBaselineMessage("Necesitas indicar la fecha desde la que la caja empieza a ser fiable.");
+      return;
+    }
+
+    const parsedAmount = Number(cashBaselineAmount || 0);
+    if (!Number.isFinite(parsedAmount)) {
+      setCashBaselineMessage("El saldo inicial de caja no es valido.");
+      return;
+    }
+
+    setSavingCashBaseline(true);
+    const { error } = await supabase.from("cash_baseline_settings").upsert(
+      {
+        user_id: user.id,
+        baseline_amount: parsedAmount,
+        baseline_date: cashBaselineDate
+      },
+      { onConflict: "user_id" }
+    );
+
+    if (error) {
+      setCashBaselineMessage("No hemos podido guardar la referencia de caja. Intentalo otra vez.");
+    } else {
+      setCashBaselineMessage("Referencia de caja guardada.");
+    }
+
+    setSavingCashBaseline(false);
+  };
+
   return (
     <>
       {settingsOpen ? (
@@ -817,6 +897,56 @@ export default function SettingsPanel() {
                 onClick={() => setReduceMotion(true)}
               />
             </div>
+          </div>
+
+          <div className="mt-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Referencia de caja</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  Define el saldo real con el que empezaste a usar la app y la fecha desde la que la caja debe empezar a calcularse.
+                </p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300">
+                {cashBaselineLoaded ? "Sincronizado" : "Cargando..."}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Saldo inicial</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={cashBaselineAmount}
+                  onChange={(event) => setCashBaselineAmount(event.target.value)}
+                  placeholder="Ej: 2500"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Fecha de inicio</span>
+                <input
+                  type="date"
+                  value={cashBaselineDate}
+                  onChange={(event) => setCashBaselineDate(event.target.value)}
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-300/40"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs leading-5 text-slate-400">
+                Desde esa fecha, la caja del dashboard se calculara como saldo inicial mas ingresos menos gastos posteriores.
+              </p>
+              <button
+                type="button"
+                onClick={() => void saveCashBaseline()}
+                disabled={savingCashBaseline}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10 disabled:opacity-60"
+              >
+                {savingCashBaseline ? "Guardando..." : "Guardar referencia"}
+              </button>
+            </div>
+            {cashBaselineMessage ? <p className="mt-3 text-xs text-emerald-300">{cashBaselineMessage}</p> : null}
           </div>
 
           <div className="mt-8">
