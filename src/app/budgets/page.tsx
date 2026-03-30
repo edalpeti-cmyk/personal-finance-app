@@ -915,7 +915,7 @@ export default function BudgetsPage() {
           </details>
         </section>
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-8">
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <SectionHeader
             eyebrow="Presupuesto vs real"
             title="Categorias del mes"
@@ -990,7 +990,7 @@ export default function BudgetsPage() {
         </section>
 
         {categoryComparison.length > 0 ? (
-          <section className="panel rounded-[28px] p-5 text-white xl:col-span-8">
+          <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
             <details className="group" open={categoryComparisonOpen} onToggle={(event) => setCategoryComparisonOpen(event.currentTarget.open)}>
               <summary className="list-none cursor-pointer">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Comparativa</p>
