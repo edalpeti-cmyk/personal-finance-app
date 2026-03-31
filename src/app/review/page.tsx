@@ -39,6 +39,13 @@ type InvestmentRow = {
   quantity: number;
   asset_currency: AssetCurrency | null;
 };
+type WealthAssetRow = {
+  current_estimated_value: number;
+  ownership_pct: number;
+  currency: AssetCurrency | null;
+  include_in_net_worth: boolean;
+  include_in_fire: boolean;
+};
 type FireSettingsRow = {
   annual_expenses: number;
   annual_contribution: number;
@@ -141,6 +148,7 @@ export default function ReviewPage() {
   const [cashBaseline, setCashBaseline] = useState<CashBaselineRow | null>(null);
   const [internalTransferRows, setInternalTransferRows] = useState<InternalTransferRow[]>([]);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
+  const [wealthAssetRows, setWealthAssetRows] = useState<WealthAssetRow[]>([]);
   const [debtRows, setDebtRows] = useState<DebtRow[]>([]);
   const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
   const [goalRows, setGoalRows] = useState<GoalRow[]>([]);
@@ -158,12 +166,13 @@ export default function ReviewPage() {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult, cashBaselineResult, internalTransfersResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, wealthAssetsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult, cashBaselineResult, internalTransfersResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
+      supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_net_worth, include_in_fire").eq("user_id", uid),
       supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", uid),
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
@@ -175,7 +184,7 @@ export default function ReviewPage() {
       supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", uid).in("transfer_type", ["investment", "emergency_fund"])
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error, cashBaselineResult.error, internalTransfersResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, wealthAssetsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error, cashBaselineResult.error, internalTransfersResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -190,6 +199,7 @@ export default function ReviewPage() {
     setCashBaseline((cashBaselineResult.data as CashBaselineRow | null) ?? null);
     setInternalTransferRows((internalTransfersResult.data as InternalTransferRow[]) ?? []);
     setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
+    setWealthAssetRows((wealthAssetsResult.data as WealthAssetRow[]) ?? []);
     setDebtRows((debtsResult.data as DebtRow[]) ?? []);
     setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
     setGoalRows((goalsResult.data as GoalRow[]) ?? []);
@@ -264,6 +274,12 @@ export default function ReviewPage() {
       const unit = Number(row.current_price ?? row.average_buy_price ?? 0);
       return sum + convertToEur(unit * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR);
     }, 0);
+    const wealthAssetsValue = wealthAssetRows
+      .filter((row) => row.include_in_net_worth)
+      .reduce((sum, row) => sum + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const fireIncludedWealthValue = wealthAssetRows
+      .filter((row) => row.include_in_fire)
+      .reduce((sum, row) => sum + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const debtTotal = debtRows
       .filter((row) => row.status !== "closed" && row.include_in_net_worth)
       .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
@@ -283,9 +299,9 @@ export default function ReviewPage() {
       : internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "investment" ? Number(row.amount || 0) : 0), 0);
     const emergencyFundReserved = internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "emergency_fund" ? Number(row.amount || 0) : 0), 0);
     const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
-    const totalNetWorth = cashPosition + investmentValue + emergencyFundReserved - debtTotal;
+    const totalNetWorth = cashPosition + investmentValue + wealthAssetsValue + emergencyFundReserved - debtTotal;
     const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
-    const fireProgress = fireTarget > 0 ? (totalNetWorth / fireTarget) * 100 : 0;
+    const fireProgress = fireTarget > 0 ? ((totalNetWorth + fireIncludedWealthValue - wealthAssetsValue) / fireTarget) * 100 : 0;
 
     const activeGoals = goalRows.filter((row) => row.status === "active");
     const topGoals = [...activeGoals]
@@ -308,6 +324,7 @@ export default function ReviewPage() {
       savingsDeltaVsTarget,
       overspent,
       debtTotal,
+      wealthAssetsValue,
       cashPosition,
       emergencyFundReserved,
       monthlyDebtPayment,
@@ -320,7 +337,7 @@ export default function ReviewPage() {
       topGoals,
       activeGoalsCount: activeGoals.length
     };
-  }, [budgetRows, budgetSavingsRows, cashBaseline, debtRows, expenseRows, fireSettings, goalRows, incomeRows, internalTransferRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth]);
+  }, [budgetRows, budgetSavingsRows, cashBaseline, debtRows, expenseRows, fireSettings, goalRows, incomeRows, internalTransferRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth, wealthAssetRows]);
 
   const reviewActions = useMemo<Array<ReviewAction & { completed: boolean }>>(() => {
     const actions: ReviewAction[] = [];
@@ -812,11 +829,16 @@ export default function ReviewPage() {
                 title="Caja, reserva y patrimonio neto"
                 description="El mismo desglose base que ves en el dashboard, para cerrar el mes con el contexto correcto."
               />
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <div className="mt-5 grid gap-3 md:grid-cols-4">
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Caja disponible</p>
                   <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(reviewMetrics.cashPosition, currency)}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">Liquidez general despues de gastos, traspasos a inversion y fondo de emergencia.</p>
+                </article>
+                <article className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Bienes patrimoniales</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{formatCurrencyByPreference(reviewMetrics.wealthAssetsValue, currency)}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">Valor actual de los bienes que has marcado para contar en tu patrimonio neto.</p>
                 </article>
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Fondo de emergencia</p>

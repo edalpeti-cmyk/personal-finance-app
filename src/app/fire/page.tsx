@@ -60,6 +60,12 @@ type DebtRow = {
   status: "active" | "paused" | "closed";
   include_in_net_worth: boolean;
 };
+type WealthAssetRow = {
+  current_estimated_value: number;
+  ownership_pct: number;
+  currency: AssetCurrency | null;
+  include_in_fire: boolean;
+};
 
 const MAX_YEARS = 60;
 const FIRE_SETTINGS_KEY = "personal-finance-fire-settings";
@@ -86,6 +92,7 @@ export default function FirePage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [tableOpen, setTableOpen] = useState(false);
   const [debtTotal, setDebtTotal] = useState(0);
+  const [fireAssetTotal, setFireAssetTotal] = useState(0);
 
   useEffect(() => {
     const storedTableOpen = window.localStorage.getItem(FIRE_TABLE_OPEN_KEY);
@@ -104,13 +111,14 @@ export default function FirePage() {
         return;
       }
 
-      const [settingsResult, debtsResult] = await Promise.all([
+      const [settingsResult, debtsResult, wealthAssetsResult] = await Promise.all([
         supabase
           .from("fire_settings")
           .select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("debts").select("outstanding_balance, currency, status, include_in_net_worth").eq("user_id", userId)
+        supabase.from("debts").select("outstanding_balance, currency, status, include_in_net_worth").eq("user_id", userId),
+        supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_fire").eq("user_id", userId)
       ]);
 
       const data = settingsResult.data;
@@ -119,7 +127,11 @@ export default function FirePage() {
       const registeredDebt = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+      const fireAssets = ((wealthAssetsResult.data as WealthAssetRow[] | null) ?? [])
+        .filter((row) => row.include_in_fire)
+        .reduce((sum, row) => sum + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, FALLBACK_RATES_TO_EUR), 0);
       setDebtTotal(registeredDebt);
+      setFireAssetTotal(fireAssets);
 
       if (!error && data) {
         const row = data as FireSettingsRow;
@@ -259,8 +271,8 @@ export default function FirePage() {
   const effectiveCurrentNetWorth = useMemo(() => {
     const grossNetWorth = Number(currentNetWorth);
     if (!Number.isFinite(grossNetWorth)) return 0;
-    return Math.max(grossNetWorth - debtTotal, 0);
-  }, [currentNetWorth, debtTotal]);
+    return Math.max(grossNetWorth + fireAssetTotal - debtTotal, 0);
+  }, [currentNetWorth, debtTotal, fireAssetTotal]);
 
   const simulation = useMemo(() => {
     const netWorth = effectiveCurrentNetWorth;
@@ -371,7 +383,7 @@ export default function FirePage() {
         <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_28px_72px_rgba(2,8,23,0.56)] xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Formula base</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">Gastos anuales / 0.04</p>
-          <p className="mt-3 text-sm leading-6 text-slate-200">Base compartida con el dashboard. La deuda registrada se descuenta para llegar al patrimonio neto FIRE.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Base compartida con el dashboard. La deuda registrada se descuenta y los bienes marcados para FIRE se suman a la proyeccion.</p>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
@@ -384,10 +396,10 @@ export default function FirePage() {
               {errors.annualExpenses ? <span className="text-xs text-red-300">{errors.annualExpenses}</span> : null}
             </label>
             <label className="grid gap-2 text-sm text-slate-200">
-              Patrimonio base antes de deuda (EUR)
+              Patrimonio base financiero antes de deuda (EUR)
               <input className={inputClass(Boolean(errors.currentNetWorth))} type="number" min="0" step="0.01" value={currentNetWorth} onChange={(e) => setCurrentNetWorth(e.target.value)} onBlur={() => validateField("currentNetWorth")} />
               {errors.currentNetWorth ? <span className="text-xs text-red-300">{errors.currentNetWorth}</span> : null}
-              {!errors.currentNetWorth ? <span className="text-xs text-slate-400">Deuda registrada: {formatCurrencyByPreference(debtTotal, currency)} · patrimonio neto FIRE: {formatCurrencyByPreference(effectiveCurrentNetWorth, currency)}</span> : null}
+              {!errors.currentNetWorth ? <span className="text-xs text-slate-400">Bienes FIRE: {formatCurrencyByPreference(fireAssetTotal, currency)} · deuda registrada: {formatCurrencyByPreference(debtTotal, currency)} · patrimonio neto FIRE: {formatCurrencyByPreference(effectiveCurrentNetWorth, currency)}</span> : null}
             </label>
             <label className="grid gap-2 text-sm text-slate-200">
               Ahorro/inversion anual (EUR)
@@ -421,6 +433,11 @@ export default function FirePage() {
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda registrada</p>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtTotal, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Saldo pendiente que se resta al patrimonio base para la proyeccion FIRE.</p>
+          </article>
+          <article className="kpi-card rounded-[26px] p-6 text-white">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Bienes en FIRE</p>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(fireAssetTotal, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Bienes patrimoniales que has marcado para incluir en la base FIRE.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Anos hasta FIRE</p>

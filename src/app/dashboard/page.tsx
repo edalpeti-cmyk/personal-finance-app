@@ -42,6 +42,13 @@ type InvestmentRow = {
   current_price: number | null;
   asset_currency: AssetCurrency | null;
 };
+type WealthAssetRow = {
+  current_estimated_value: number;
+  ownership_pct: number;
+  currency: AssetCurrency | null;
+  include_in_net_worth: boolean;
+  include_in_fire: boolean;
+};
 type SnapshotRow = { snapshot_date: string; total_net_worth: number };
 type SavingsTargetRow = { savings_target: number; month: string };
 type BudgetSavingsRow = { budget_amount: number; month: string; budget_kind: "expense" | "investment_transfer" | "emergency_fund" };
@@ -69,6 +76,8 @@ type DashboardMetrics = {
   debtTotal: number;
   monthlyDebtPayment: number;
   emergencyFundReserved: number;
+  wealthAssetsValue: number;
+  fireIncludedWealthValue: number;
   grossWorth: number;
   usesCashBaseline: boolean;
   cashBaselineDate: string | null;
@@ -1808,7 +1817,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult, budgetSavingsResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult, budgetSavingsResult, wealthAssetsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
@@ -1817,10 +1826,11 @@ export default function DashboardPage() {
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle(),
         supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
         supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", userId).in("transfer_type", ["investment", "emergency_fund"]),
-        supabase.from("monthly_budgets").select("budget_amount, month, budget_kind").eq("user_id", userId).in("budget_kind", ["investment_transfer", "emergency_fund"])
+        supabase.from("monthly_budgets").select("budget_amount, month, budget_kind").eq("user_id", userId).in("budget_kind", ["investment_transfer", "emergency_fund"]),
+        supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_net_worth, include_in_fire").eq("user_id", userId)
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error || budgetSavingsResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error || budgetSavingsResult.error || wealthAssetsResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
@@ -1830,6 +1840,7 @@ export default function DashboardPage() {
             cashBaselineResult.error?.message ||
             transfersResult.error?.message ||
             budgetSavingsResult.error?.message ||
+            wealthAssetsResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -1846,6 +1857,7 @@ export default function DashboardPage() {
       const fireSettings = (fireSettingsResult.data as FireSettingsRow | null) ?? null;
       const cashBaseline = (cashBaselineResult.data as CashBaselineSettingsRow | null) ?? null;
       const transferRows = (transfersResult.data as InternalTransferRow[]) ?? [];
+      const wealthAssetRows = (wealthAssetsResult.data as WealthAssetRow[]) ?? [];
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
@@ -1870,6 +1882,12 @@ export default function DashboardPage() {
         ? transferRows.reduce((acc, row) => acc + (row.transfer_type === "investment" && new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
         : transferRows.reduce((acc, row) => acc + (row.transfer_type === "investment" ? Number(row.amount) : 0), 0);
       const emergencyFundReserved = transferRows.reduce((acc, row) => acc + (row.transfer_type === "emergency_fund" ? Number(row.amount) : 0), 0);
+      const wealthAssetsValue = wealthAssetRows
+        .filter((row) => row.include_in_net_worth)
+        .reduce((acc, row) => acc + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, ratesToEur), 0);
+      const fireIncludedWealthValue = wealthAssetRows
+        .filter((row) => row.include_in_fire)
+        .reduce((acc, row) => acc + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, ratesToEur), 0);
       const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
       const debtTotal = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
@@ -1877,7 +1895,7 @@ export default function DashboardPage() {
       const monthlyDebtPayment = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
-      const grossWorth = cashPosition + investmentsValue + emergencyFundReserved;
+      const grossWorth = cashPosition + investmentsValue + emergencyFundReserved + wealthAssetsValue;
       const totalNetWorth = grossWorth - debtTotal;
 
       const monthExpenses = nextExpenseRows.reduce(
@@ -1914,7 +1932,7 @@ export default function DashboardPage() {
       const totalAnnualSavings = annualSavings + annualBudgetSavings;
 
       const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
-      const fireNetWorth = fireSettings && fireSettings.current_net_worth >= 0 ? fireSettings.current_net_worth : totalNetWorth;
+      const fireNetWorth = fireSettings && fireSettings.current_net_worth >= 0 ? fireSettings.current_net_worth + fireIncludedWealthValue : totalNetWorth;
       const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(totalAnnualSavings, 0);
       const fireExpectedReturn =
         fireSettings && fireSettings.expected_return >= -20 && fireSettings.expected_return <= 30
@@ -1938,6 +1956,8 @@ export default function DashboardPage() {
         debtTotal,
         monthlyDebtPayment,
         emergencyFundReserved,
+        wealthAssetsValue,
+        fireIncludedWealthValue,
         grossWorth,
         usesCashBaseline: Boolean(cashBaseline?.baseline_date),
         cashBaselineDate: cashBaseline?.baseline_date ?? null
@@ -1996,10 +2016,10 @@ export default function DashboardPage() {
                 {metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}
               </p>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/76">
-                Patrimonio neto combinando caja, inversiones y la deuda pendiente que ya has registrado.
+                Patrimonio neto combinando caja, inversiones, bienes patrimoniales y la deuda pendiente que ya has registrado.
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/54">Caja estimada</p>
                 <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.cashPosition, currency) : "--"}</p>
@@ -2012,6 +2032,10 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/54">Inversiones</p>
                 <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.investmentsValue, currency) : "--"}</p>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/54">Bienes</p>
+                <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.wealthAssetsValue, currency) : "--"}</p>
               </div>
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/54">Deuda</p>
