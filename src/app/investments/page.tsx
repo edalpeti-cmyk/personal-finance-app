@@ -2536,7 +2536,7 @@ export default function InvestmentsPage() {
     setAssetName(row.asset_name);
     setAssetSymbol(row.asset_symbol ?? "");
     setAssetIsin(row.asset_isin ?? "");
-    setLookupQuery(row.asset_symbol ?? row.asset_name);
+    setLookupQuery("");
     setAssetSuggestions([]);
     setAssetType(row.asset_type);
     setAssetCurrency(row.asset_currency ?? "EUR");
