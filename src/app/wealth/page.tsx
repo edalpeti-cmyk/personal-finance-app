@@ -234,6 +234,52 @@ export default function WealthPage() {
     await loadData();
   };
 
+  const handleToggleNetWorth = async (row: WealthAssetRow) => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("wealth_assets")
+      .update({ include_in_net_worth: !row.include_in_net_worth })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    showToast({
+      type: "success",
+      text: !row.include_in_net_worth
+        ? "El bien vuelve a contar en el patrimonio neto."
+        : "El bien deja de contar en el patrimonio neto."
+    });
+    await loadData();
+  };
+
+  const handleToggleFire = async (row: WealthAssetRow) => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("wealth_assets")
+      .update({ include_in_fire: !row.include_in_fire })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    showToast({
+      type: "success",
+      text: !row.include_in_fire
+        ? "El bien vuelve a contar en la base FIRE."
+        : "El bien deja de contar en la base FIRE."
+    });
+    await loadData();
+  };
+
   if (authLoading || loading) {
     return (
       <>
@@ -404,12 +450,20 @@ export default function WealthPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`rounded-full border px-3 py-1.5 text-xs ${row.include_in_net_worth ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200" : "border-white/10 bg-white/5 text-slate-200"}`}>
-                          {row.include_in_net_worth ? "Cuenta en patrimonio" : "Fuera de patrimonio"}
-                        </span>
-                        <span className={`rounded-full border px-3 py-1.5 text-xs ${row.include_in_fire ? "border-sky-400/20 bg-sky-500/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-200"}`}>
-                          {row.include_in_fire ? "Cuenta en FIRE" : "Fuera de FIRE"}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleNetWorth(row)}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition ${row.include_in_net_worth ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"}`}
+                        >
+                          {row.include_in_net_worth ? "Conectado al patrimonio" : "Fuera de patrimonio"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleFire(row)}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition ${row.include_in_fire ? "border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20" : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"}`}
+                        >
+                          {row.include_in_fire ? "Conectado a FIRE" : "Fuera de FIRE"}
+                        </button>
                         <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">
                           Editar
                         </button>
