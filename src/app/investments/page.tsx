@@ -104,6 +104,11 @@ type InternalTransferRow = {
   transfer_type: "investment" | "emergency_fund";
   linked_investment_transaction_id: string | null;
 };
+type LinkedTransferSummary = {
+  category: string;
+  amount: number;
+  transfer_date: string;
+};
 type PeriodPerformance = {
   amount: number | null;
   pct: number | null;
@@ -719,6 +724,7 @@ export default function InvestmentsPage() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
   const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
+  const [linkedTransferByTransactionId, setLinkedTransferByTransactionId] = useState<Record<string, LinkedTransferSummary>>({});
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
@@ -2131,6 +2137,7 @@ export default function InvestmentsPage() {
     const loadAssetTransactions = async () => {
       if (!selectedAssetId || !userId) {
         setSelectedAssetTransactions([]);
+        setLinkedTransferByTransactionId({});
         return;
       }
 
@@ -2142,7 +2149,39 @@ export default function InvestmentsPage() {
         .order("executed_at", { ascending: false })
         .limit(12);
 
-      setSelectedAssetTransactions((data as InvestmentTransactionRow[]) ?? []);
+      const nextTransactions = (data as InvestmentTransactionRow[]) ?? [];
+      setSelectedAssetTransactions(nextTransactions);
+
+      const transactionIds = nextTransactions.map((row) => row.id);
+      if (transactionIds.length === 0) {
+        setLinkedTransferByTransactionId({});
+        return;
+      }
+
+      const { data: linkedTransfersData } = await supabase
+        .from("internal_transfers")
+        .select("category, amount, transfer_date, linked_investment_transaction_id")
+        .eq("user_id", userId)
+        .in("linked_investment_transaction_id", transactionIds);
+
+      const linkedTransferMap = Object.fromEntries(
+        (((linkedTransfersData as Array<{
+          category: string;
+          amount: number;
+          transfer_date: string;
+          linked_investment_transaction_id: string | null;
+        }> | null) ?? []).filter((row) => row.linked_investment_transaction_id)
+          .map((row) => [
+            row.linked_investment_transaction_id as string,
+            {
+              category: row.category,
+              amount: Number(row.amount || 0),
+              transfer_date: row.transfer_date
+            }
+          ]))
+      ) as Record<string, LinkedTransferSummary>;
+
+      setLinkedTransferByTransactionId(linkedTransferMap);
     };
 
     void loadAssetTransactions();
@@ -3949,6 +3988,16 @@ export default function InvestmentsPage() {
                   <div className="mt-4 grid gap-3">
                     {selectedAssetTransactions.map((transaction) => (
                       <article key={transaction.id} className="rounded-2xl border border-white/8 bg-slate-950/45 px-4 py-3">
+                        {linkedTransferByTransactionId[transaction.id] ? (
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-200">
+                              Traspaso enlazado
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {linkedTransferByTransactionId[transaction.id].category} · {formatCurrencyByPreference(linkedTransferByTransactionId[transaction.id].amount, "EUR")} · {linkedTransferByTransactionId[transaction.id].transfer_date}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <p className={`text-sm font-medium ${transaction.transaction_type === "buy" ? "text-emerald-300" : "text-amber-300"}`}>

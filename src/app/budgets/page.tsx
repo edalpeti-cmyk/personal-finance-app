@@ -153,6 +153,12 @@ function inputClass() {
   return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
 }
 
+function budgetKindLabel(budgetKind: BudgetWithActual["budgetKind"]) {
+  if (budgetKind === "investment_transfer") return "Traspaso inv.";
+  if (budgetKind === "emergency_fund") return "Fondo emergencia";
+  return "Gasto";
+}
+
 const BUDGETS_COMPARISON_OPEN_KEY = "budgets-comparison-open";
 const BUDGETS_CATEGORY_COMPARISON_OPEN_KEY = "budgets-category-comparison-open";
 const BUDGETS_UNBUDGETED_OPEN_KEY = "budgets-unbudgeted-open";
@@ -939,7 +945,7 @@ export default function BudgetsPage() {
           {!loading && rows.length > 0 ? (
             <div className={`table-scroll mt-6 ${rows.length > 6 ? "max-h-[420px]" : ""}`}>
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-3 py-2 text-right">Presupuesto</th><th className="px-3 py-2 text-right">Real</th><th className="px-3 py-2 text-right">Restante</th><th className="px-3 py-2 text-right">Consumo</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead>
+                <thead><tr className="text-left text-slate-400"><th className="sticky-col-header px-3 py-2">Categoria</th><th className="px-2 py-2 text-right">Presupuesto</th><th className="px-2 py-2 text-right">Real</th><th className="px-2 py-2 text-right">Restante</th><th className="px-2 py-2 text-right">Consumo</th><th className="px-2 py-2 text-right">Acc.</th></tr></thead>
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="bg-white/5 shadow-sm">
@@ -947,15 +953,15 @@ export default function BudgetsPage() {
                         <div className="flex flex-col gap-2">
                           <span>{row.category}</span>
                           <span className={`ui-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] ${row.budgetKind === "investment_transfer" ? "border-sky-400/20 bg-sky-500/10 text-sky-200" : row.budgetKind === "emergency_fund" ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200" : "border-white/10 bg-white/5 text-slate-300"}`}>
-                            {row.budgetKind === "investment_transfer" ? "Transferencia a inversion" : row.budgetKind === "emergency_fund" ? "Fondo de emergencia" : "Gasto"}
+                            {budgetKindLabel(row.budgetKind)}
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.budget, currency)}</td>
-                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
-                      <td className={`px-3 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
-                      <td className={`px-3 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-3 py-4"><div className="flex justify-end gap-2 whitespace-nowrap">{row.budgetKind === "investment_transfer" || row.budgetKind === "emergency_fund" ? <button type="button" onClick={() => void handleRegisterInvestmentTransfer(row)} className={`rounded-full px-2.5 py-1.5 text-[11px] font-medium ${row.budgetKind === "emergency_fund" ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"}`}>{row.budgetKind === "emergency_fund" ? "Aportar al fondo" : "Registrar traspaso"}</button> : null}<button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
+                      <td className="px-2 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.budget, currency)}</td>
+                      <td className="px-2 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
+                      <td className={`px-2 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
+                      <td className={`px-2 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
+                      <td className="rounded-r-2xl px-2 py-4"><div className="flex justify-end gap-1.5 whitespace-nowrap">{row.budgetKind === "investment_transfer" || row.budgetKind === "emergency_fund" ? <button type="button" onClick={() => void handleRegisterInvestmentTransfer(row)} className={`rounded-full px-2 py-1.5 text-[10px] font-medium ${row.budgetKind === "emergency_fund" ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"}`}>{row.budgetKind === "emergency_fund" ? "Fondo" : "Traspaso"}</button> : null}<button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
                     </tr>
                   ))}
                 </tbody>

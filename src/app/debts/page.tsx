@@ -49,6 +49,13 @@ type DebtBudgetApplicationRow = {
   application_month: string;
   applied_amount: number;
 };
+type PlannedContributionDraft = {
+  debtId: string;
+  debtName: string;
+  currentOutstanding: number;
+  plannedContribution: number;
+  resultingOutstanding: number;
+};
 
 type ToastState = { type: "success" | "error"; text: string } | null;
 
@@ -111,6 +118,7 @@ export default function DebtsPage() {
   const [budgetCategoriesDropdownOpen, setBudgetCategoriesDropdownOpen] = useState(false);
   const [budgetCategorySearch, setBudgetCategorySearch] = useState("");
   const [applyingBudgetDebtId, setApplyingBudgetDebtId] = useState<string | null>(null);
+  const [plannedContributionDraft, setPlannedContributionDraft] = useState<PlannedContributionDraft | null>(null);
   const budgetCategoriesDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((nextToast: Exclude<ToastState, null>) => {
@@ -391,6 +399,31 @@ export default function DebtsPage() {
     });
     await loadData();
   };
+  const openPlannedContributionModal = (row: DebtRow) => {
+    const plannedContribution = Number(linkedBudgetAmountByDebt.get(row.id) ?? 0);
+    const existingApplication = currentMonthDebtBudgetApplications.get(row.id);
+    if (plannedContribution <= 0) {
+      showToast({ type: "error", text: "No hay aportacion planificada este mes para esta deuda." });
+      return;
+    }
+    if (existingApplication) {
+      showToast({ type: "error", text: "Esta aportacion planificada ya se aplico este mes." });
+      return;
+    }
+
+    const currentOutstanding = Number(row.outstanding_balance || 0);
+    const appliedAmount = Math.min(plannedContribution, currentOutstanding);
+    const resultingOutstanding = Math.max(currentOutstanding - appliedAmount, 0);
+
+    setPlannedContributionDraft({
+      debtId: row.id,
+      debtName: row.debt_name,
+      currentOutstanding,
+      plannedContribution,
+      resultingOutstanding
+    });
+  };
+
   const handleApplyPlannedContribution = async (row: DebtRow) => {
     if (!userId) return;
 
@@ -449,6 +482,7 @@ export default function DebtsPage() {
     });
     await loadData();
     setApplyingBudgetDebtId(null);
+    setPlannedContributionDraft(null);
   };
 
   if (authLoading || loading) {
@@ -752,7 +786,7 @@ export default function DebtsPage() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => void handleApplyPlannedContribution(row)}
+                          onClick={() => openPlannedContributionModal(row)}
                           disabled={applyingBudgetDebtId === row.id || plannedContribution <= 0 || plannedAlreadyApplied || row.status === "closed"}
                           className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -812,6 +846,57 @@ export default function DebtsPage() {
           )}
         </section>
       </main>
+      {plannedContributionDraft ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-slate-950/95 p-6 text-white shadow-[0_30px_80px_rgba(2,8,23,0.6)]">
+            <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Aplicar aportacion</p>
+            <h3 className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{plannedContributionDraft.debtName}</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              Vamos a aplicar la aportacion planificada de este mes a la deuda. Asi ves el efecto antes de confirmar.
+            </p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/8 bg-white/5 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Saldo actual</p>
+                <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(plannedContributionDraft.currentOutstanding, currency)}</p>
+              </div>
+              <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-amber-100">Aportacion</p>
+                <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(plannedContributionDraft.plannedContribution, currency)}</p>
+              </div>
+              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Saldo resultante</p>
+                <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(plannedContributionDraft.resultingOutstanding, currency)}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPlannedContributionDraft(null)}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const debtRow = debts.find((item) => item.id === plannedContributionDraft.debtId);
+                  if (debtRow) {
+                    void handleApplyPlannedContribution(debtRow);
+                  } else {
+                    setPlannedContributionDraft(null);
+                  }
+                }}
+                disabled={applyingBudgetDebtId === plannedContributionDraft.debtId}
+                className="rounded-full bg-amber-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-amber-300 disabled:opacity-60"
+              >
+                {applyingBudgetDebtId === plannedContributionDraft.debtId ? "Aplicando..." : "Confirmar aplicacion"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
