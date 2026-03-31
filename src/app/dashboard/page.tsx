@@ -577,6 +577,11 @@ export default function DashboardPage() {
     ) as Record<ChartRange, number | null>;
   }, [cashflowEvents, snapshotRows]);
 
+  const activeRangeVariation = timelineRangeVariations[chartRange];
+  const timelinePositive = (activeRangeVariation ?? 0) >= 0;
+  const timelineStroke = timelinePositive ? "#34d399" : "#f87171";
+  const timelineFill = timelinePositive ? "rgba(52, 211, 153, 0.16)" : "rgba(248, 113, 113, 0.16)";
+
   const timelineChartData = useMemo(
     () => ({
       labels: timelinePoints.map((point: TimelinePoint) => point.label),
@@ -584,8 +589,8 @@ export default function DashboardPage() {
         {
           label: snapshotRows.length > 1 ? "Patrimonio real guardado" : "Patrimonio estimado",
           data: timelinePoints.map((point: TimelinePoint) => point.value),
-          borderColor: "#0f766e",
-          backgroundColor: "rgba(15, 118, 110, 0.16)",
+          borderColor: timelineStroke,
+          backgroundColor: timelineFill,
           fill: true,
           tension: 0.28,
           borderWidth: 3,
@@ -594,7 +599,7 @@ export default function DashboardPage() {
         }
       ]
     }),
-    [chartRange, snapshotRows.length, timelinePoints]
+    [chartRange, snapshotRows.length, timelineFill, timelinePoints, timelineStroke]
   );
 
   const timelineChartOptions = useMemo(
@@ -2085,9 +2090,22 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion patrimonio</p>
-                    <p className="mt-2 text-sm text-white/60">
-                      {snapshotRows.length > 1 ? "Basado en snapshots guardados." : "Estimado con historico disponible."}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <p className="text-sm text-white/60">
+                        {snapshotRows.length > 1 ? "Basado en snapshots guardados." : "Estimado con historico disponible."}
+                      </p>
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                          activeRangeVariation === null
+                            ? "border-white/10 bg-white/6 text-white/58"
+                            : timelinePositive
+                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                              : "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                        }`}
+                      >
+                        {activeRangeVariation === null ? "n/d" : `${timelinePositive ? "+" : ""}${activeRangeVariation.toFixed(1)}%`}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {RANGE_OPTIONS.map((option) => {
