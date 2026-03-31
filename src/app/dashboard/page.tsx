@@ -486,6 +486,18 @@ function calculateRangeVariationPct(
   return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
+function calculateRangeDeltaAmount(range: ChartRange, snapshots: SnapshotRow[], events: CashflowEvent[]) {
+  const now = new Date();
+  const endDate = endOfDay(now);
+  const startDate = getVariationStartDate(range, now);
+  const useSnapshots = snapshots.length > 1;
+
+  const startValue = useSnapshots ? getSnapshotValueAtDate(snapshots, startDate) : getCashflowValueAtDate(events, startDate);
+  const endValue = useSnapshots ? getSnapshotValueAtDate(snapshots, endDate) : getCashflowValueAtDate(events, endDate);
+
+  return endValue - startValue;
+}
+
 function getMonthlyTrendPoints(incomeRows: IncomeRow[], savingsTargets: SavingsTargetRow[], budgetSavingsRows: BudgetSavingsRow[], dateFormat: "es" | "us") {
   const now = new Date();
   const months: string[] = [];
@@ -577,15 +589,34 @@ export default function DashboardPage() {
     ) as Record<ChartRange, number | null>;
   }, [cashflowEvents, snapshotRows]);
 
+  const timelineRangeDeltas = useMemo(() => {
+    return Object.fromEntries(
+      RANGE_OPTIONS.map((option) => [option.value, calculateRangeDeltaAmount(option.value, snapshotRows, cashflowEvents)])
+    ) as Record<ChartRange, number>;
+  }, [cashflowEvents, snapshotRows]);
+
   const activeRangeVariation = timelineRangeVariations[chartRange];
+  const activeRangeDelta = timelineRangeDeltas[chartRange];
   const timelinePositive = (activeRangeVariation ?? 0) >= 0;
   const timelineStroke = timelinePositive ? "#34d399" : "#f87171";
   const timelineFill = timelinePositive ? "rgba(52, 211, 153, 0.16)" : "rgba(248, 113, 113, 0.16)";
+  const timelineReference = timelinePoints[0]?.value ?? 0;
 
   const timelineChartData = useMemo(
     () => ({
       labels: timelinePoints.map((point: TimelinePoint) => point.label),
       datasets: [
+        {
+          label: "Referencia",
+          data: timelinePoints.map(() => timelineReference),
+          borderColor: "rgba(255,255,255,0.16)",
+          borderDash: [4, 4],
+          borderWidth: 1,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          tension: 0
+        },
         {
           label: snapshotRows.length > 1 ? "Patrimonio real guardado" : "Patrimonio estimado",
           data: timelinePoints.map((point: TimelinePoint) => point.value),
@@ -599,7 +630,7 @@ export default function DashboardPage() {
         }
       ]
     }),
-    [chartRange, snapshotRows.length, timelineFill, timelinePoints, timelineStroke]
+    [chartRange, snapshotRows.length, timelineFill, timelinePoints, timelineReference, timelineStroke]
   );
 
   const timelineChartOptions = useMemo(
@@ -2106,6 +2137,19 @@ export default function DashboardPage() {
                         {activeRangeVariation === null ? "n/d" : `${timelinePositive ? "+" : ""}${activeRangeVariation.toFixed(1)}%`}
                       </span>
                     </div>
+                    <p
+                      className={`mt-2 text-xs ${
+                        activeRangeVariation === null
+                          ? "text-white/42"
+                          : timelinePositive
+                            ? "text-emerald-200/90"
+                            : "text-rose-200/90"
+                      }`}
+                    >
+                      {activeRangeVariation === null
+                        ? "Sin base suficiente para calcular la diferencia."
+                        : `${activeRangeDelta >= 0 ? "+" : ""}${formatCurrencyByPreference(activeRangeDelta, currency)}`}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {RANGE_OPTIONS.map((option) => {
@@ -2138,7 +2182,11 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className="mt-6 text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
-              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white sm:text-5xl">
+              <p
+                className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold sm:text-5xl ${
+                  activeRangeVariation === null ? "text-white" : timelinePositive ? "text-emerald-100" : "text-rose-100"
+                }`}
+              >
                 {metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}
               </p>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/76">
