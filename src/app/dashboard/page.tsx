@@ -61,7 +61,7 @@ type FireSettingsRow = {
 };
 type CashflowEvent = { date: string; delta: number };
 type TimelinePoint = { label: string; value: number };
-type ChartRange = "daily" | "weekly" | "monthly" | "annual" | "six_months" | "current_year";
+type ChartRange = "daily" | "weekly" | "monthly" | "annual" | "six_months" | "current_year" | "max";
 
 type DashboardMetrics = {
   totalNetWorth: number;
@@ -159,12 +159,13 @@ type InternalTransferRow = {
 };
 
 const RANGE_OPTIONS: Array<{ value: ChartRange; label: string }> = [
-  { value: "daily", label: "Diaria" },
-  { value: "weekly", label: "Semanal" },
-  { value: "monthly", label: "Mensual" },
-  { value: "six_months", label: "6 meses" },
-  { value: "annual", label: "Anual" },
-  { value: "current_year", label: "Ano actual" }
+  { value: "daily", label: "1D" },
+  { value: "weekly", label: "1W" },
+  { value: "monthly", label: "1M" },
+  { value: "six_months", label: "6M" },
+  { value: "annual", label: "1Y" },
+  { value: "current_year", label: "YTD" },
+  { value: "max", label: "MAX" }
 ];
 const DASHBOARD_WIDGETS: Array<{ id: DashboardWidgetId; label: string; description: string }> = [
   { id: "netWorthChart", label: "Patrimonio", description: "Grafico de evolucion, snapshots y exportes." },
@@ -297,6 +298,38 @@ function getRangeCheckpoints(range: ChartRange, firstDate: Date, dateFormat: "es
   const now = new Date();
   const checkpoints: Array<{ date: Date; label: string }> = [];
 
+  if (range === "max") {
+    const totalMonths =
+      (now.getFullYear() - firstDate.getFullYear()) * 12 + (now.getMonth() - firstDate.getMonth());
+
+    if (totalMonths <= 2) {
+      for (let cursor = new Date(firstDate); cursor <= now; cursor = addDays(cursor, 7)) {
+        checkpoints.push({
+          date: endOfDay(cursor),
+          label: formatDateByPreference(cursor, dateFormat, { day: "2-digit", month: "short" })
+        });
+      }
+    } else if (totalMonths <= 18) {
+      for (
+        let cursor = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+        cursor <= now;
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+      ) {
+        checkpoints.push({
+          date: endOfMonth(cursor),
+          label: formatDateByPreference(cursor, dateFormat, { month: "short", year: "2-digit" })
+        });
+      }
+    } else {
+      for (let year = firstDate.getFullYear(); year <= now.getFullYear(); year++) {
+        const date = endOfYear(new Date(year, 0, 1));
+        checkpoints.push({ date, label: formatYear(date) });
+      }
+    }
+
+    return checkpoints;
+  }
+
   if (range === "daily") {
     const start = addDays(now, -29);
     for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 1)) {
@@ -407,6 +440,7 @@ function getVariationStartDate(range: ChartRange, now: Date) {
   if (range === "monthly") return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
   if (range === "six_months") return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
   if (range === "annual") return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  if (range === "max") return new Date(2000, 0, 1);
   return new Date(now.getFullYear(), 0, 1);
 }
 
@@ -586,6 +620,42 @@ export default function DashboardPage() {
             color: "#5f6d69",
             callback: (value: string | number) => formatCurrencyByPreference(Number(value), currency)
           }
+        }
+      }
+    }),
+    [currency]
+  );
+
+  const heroTimelineChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context: TooltipItem<"line">) => ` ${formatCurrencyByPreference(Number(context.parsed.y ?? 0), currency)}`
+          }
+        }
+      },
+      interaction: {
+        intersect: false,
+        mode: "index" as const
+      },
+      elements: {
+        line: {
+          borderCapStyle: "round" as const,
+          borderJoinStyle: "round" as const
+        }
+      },
+      scales: {
+        x: {
+          display: false,
+          grid: { display: false }
+        },
+        y: {
+          display: false,
+          grid: { display: false }
         }
       }
     }),
@@ -2011,7 +2081,45 @@ export default function DashboardPage() {
           </div>
           <div className="mt-8 grid gap-4 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
             <div>
-              <p className="text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
+              <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion patrimonio</p>
+                    <p className="mt-2 text-sm text-white/60">
+                      {snapshotRows.length > 1 ? "Basado en snapshots guardados." : "Estimado con historico disponible."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {RANGE_OPTIONS.map((option) => {
+                      const active = chartRange === option.value;
+                      return (
+                        <button
+                          key={`hero-${option.value}`}
+                          type="button"
+                          onClick={() => setChartRange(option.value)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                            active
+                              ? "border-emerald-400 bg-emerald-400 text-slate-950"
+                              : "border-white/10 bg-white/6 text-white/72 hover:bg-white/10"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="mt-4 h-36 sm:h-40">
+                  {timelinePoints.length > 0 ? (
+                    <Line data={timelineChartData} options={heroTimelineChartOptions} />
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-[18px] border border-dashed border-white/10 bg-slate-950/20 px-4 text-center text-xs text-white/48">
+                      Aun no hay suficiente historico para mostrar la evolucion.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="mt-6 text-xs uppercase tracking-[0.26em] text-white/60">Momentum actual</p>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white sm:text-5xl">
                 {metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}
               </p>
