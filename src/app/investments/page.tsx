@@ -637,6 +637,44 @@ function buildTransactionCostBasisMap(transactions: InvestmentTransactionRow[]) 
   return map;
 }
 
+function resolveInvestedEurFromPosition(
+  row: InvestmentRow,
+  costBasis:
+    | {
+        openQuantity: number;
+        openCostEur: number;
+        openCostLocal: number;
+        avgFxRate: number | null;
+        realizedGainEur: number;
+      }
+    | undefined,
+  ratesToEur: Record<AssetCurrency, number>
+) {
+  const qty = Number(row.quantity) || 0;
+  const avg = Number(row.average_buy_price) || 0;
+  const fallbackInvestedEur = convertToEur(qty * avg, row.asset_currency, ratesToEur);
+
+  if (!costBasis) {
+    return {
+      investedEur: fallbackInvestedEur,
+      historicalFxRate: null
+    };
+  }
+
+  const quantityGap = Math.abs((costBasis.openQuantity || 0) - qty);
+  if (quantityGap > 0.000001) {
+    return {
+      investedEur: fallbackInvestedEur,
+      historicalFxRate: qty > 0 && avg > 0 ? fallbackInvestedEur / (qty * avg) : null
+    };
+  }
+
+  return {
+    investedEur: Number(costBasis.openCostEur.toFixed(4)),
+    historicalFxRate: costBasis.avgFxRate ?? null
+  };
+}
+
 export default function InvestmentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const { userId, authLoading } = useAuthGuard();
@@ -1258,10 +1296,9 @@ export default function InvestmentsPage() {
     return investments.reduce(
       (acc, row) => {
         const qty = Number(row.quantity) || 0;
-        const avg = Number(row.average_buy_price) || 0;
         const current = Number(row.current_price ?? row.average_buy_price) || 0;
         const costBasis = costBasisMap.get(row.id);
-        const invested = costBasis ? Number(costBasis.openCostEur.toFixed(4)) : convertToEur(qty * avg, row.asset_currency, ratesToEur);
+        const invested = resolveInvestedEurFromPosition(row, costBasis, ratesToEur).investedEur;
         const currentValue = convertToEur(qty * current, row.asset_currency, ratesToEur);
 
         acc.totalValueEur += currentValue;
@@ -1285,12 +1322,11 @@ export default function InvestmentsPage() {
       const investedLocal = qty * avg;
       const currentLocal = qty * current;
       const costBasis = costBasisMap.get(row.id);
-      const investedEur = costBasis ? Number(costBasis.openCostEur.toFixed(4)) : convertToEur(investedLocal, row.asset_currency, ratesToEur);
+      const { investedEur, historicalFxRate } = resolveInvestedEurFromPosition(row, costBasis, ratesToEur);
       const currentValueEur = convertToEur(currentLocal, row.asset_currency, ratesToEur);
       const gainEur = currentValueEur - investedEur;
       const gainPct = investedEur > 0 ? (gainEur / investedEur) * 100 : null;
       const weightPct = metrics.totalValueEur > 0 ? (currentValueEur / metrics.totalValueEur) * 100 : 0;
-      const historicalFxRate = costBasis?.avgFxRate ?? null;
       const currentFxRate = ratesToEur[row.asset_currency ?? "EUR"] ?? 1;
       const assetPerformanceEur = historicalFxRate ? (currentLocal - investedLocal) * historicalFxRate : gainEur;
       const fxImpactEur = historicalFxRate ? currentLocal * (currentFxRate - historicalFxRate) : 0;
