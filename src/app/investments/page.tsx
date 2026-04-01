@@ -70,7 +70,7 @@ type SavedViewRow = {
   view_name: string;
   config: SavedInvestmentView;
 };
-type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year";
+type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year" | "max";
 type TypeChartMode = "value" | "profitability";
 type ComparisonMode = "weight" | "profitability";
 type TransactionMode = "buy" | "sell";
@@ -178,12 +178,13 @@ const MARKET_LABELS: Record<AssetMarket, string> = Object.fromEntries(
   MARKET_OPTIONS.map((option) => [option.value, option.label])
 ) as Record<AssetMarket, string>;
 const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
-  { value: "daily", label: "Diaria" },
-  { value: "weekly", label: "Semanal" },
-  { value: "monthly", label: "Mensual" },
-  { value: "six_months", label: "6 meses" },
-  { value: "annual", label: "Anual" },
-  { value: "current_year", label: "Ano actual" }
+  { value: "daily", label: "1D" },
+  { value: "weekly", label: "1W" },
+  { value: "monthly", label: "1M" },
+  { value: "six_months", label: "6M" },
+  { value: "annual", label: "1Y" },
+  { value: "current_year", label: "YTD" },
+  { value: "max", label: "MAX" }
 ];
 const INVESTMENT_VIEWS_KEY = "investment-saved-views";
 const INVESTMENT_VIEW_SCOPE = "investments";
@@ -498,6 +499,31 @@ function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
   const now = new Date();
   const checkpoints: Array<{ date: Date; label: string }> = [];
 
+  if (range === "max") {
+    const totalMonths =
+      (now.getFullYear() - firstDate.getFullYear()) * 12 + (now.getMonth() - firstDate.getMonth());
+
+    if (totalMonths <= 2) {
+      for (let cursor = new Date(firstDate); cursor <= now; cursor = addDays(cursor, 7)) {
+        checkpoints.push({ date: endOfDay(cursor), label: cursor.toISOString().slice(5, 10) });
+      }
+    } else if (totalMonths <= 18) {
+      for (
+        let cursor = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+        cursor <= now;
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+      ) {
+        checkpoints.push({ date: endOfMonth(cursor), label: `${cursor.toLocaleString("es-ES", { month: "short" })} ${String(cursor.getFullYear()).slice(-2)}` });
+      }
+    } else {
+      for (let year = firstDate.getFullYear(); year <= now.getFullYear(); year++) {
+        checkpoints.push({ date: endOfYear(new Date(year, 0, 1)), label: String(year) });
+      }
+    }
+
+    return checkpoints;
+  }
+
   if (range === "daily") {
     const start = addDays(now, -29);
     for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 1)) {
@@ -563,6 +589,81 @@ function buildTypeHistoryTimeline(history: HistoryPoint[], range: TypeChartRange
   }
 
   return points;
+}
+
+function buildEstimatedPortfolioHistory(investments: InvestmentRow[], ratesToEur: Record<AssetCurrency, number>) {
+  const byMonth = new Map<string, number>();
+
+  for (const row of investments) {
+    const date = row.purchase_date ? new Date(`${row.purchase_date}T00:00:00`) : new Date();
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const qty = Number(row.quantity) || 0;
+    const current = Number(row.current_price ?? row.average_buy_price) || 0;
+    const previous = byMonth.get(key) ?? 0;
+    byMonth.set(key, previous + convertToEur(qty * current, row.asset_currency, ratesToEur));
+  }
+
+  const history: HistoryPoint[] = [];
+  let runningCurrent = 0;
+
+  for (const key of Array.from(byMonth.keys()).sort()) {
+    const value = byMonth.get(key);
+    if (value === undefined) continue;
+    runningCurrent += value;
+    history.push({
+      snapshot_date: `${key}-28`,
+      total_value_eur: Number(runningCurrent.toFixed(2))
+    });
+  }
+
+  return history;
+}
+
+function getTypeVariationStartDate(range: TypeChartRange, now: Date) {
+  if (range === "daily") return addDays(now, -1);
+  if (range === "weekly") return addDays(now, -7);
+  if (range === "monthly") return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+  if (range === "six_months") return new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+  if (range === "annual") return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  if (range === "max") return new Date(2000, 0, 1);
+  return new Date(now.getFullYear(), 0, 1);
+}
+
+function getHistoryValueAtDate(history: HistoryPoint[], checkpoint: Date) {
+  let latestValue = Number(history[0]?.total_value_eur ?? 0);
+  for (const point of history) {
+    if (normalizeDate(point.snapshot_date) <= checkpoint) {
+      latestValue = Number(point.total_value_eur) || 0;
+    } else {
+      break;
+    }
+  }
+  return latestValue;
+}
+
+function calculateHistoryRangeDelta(history: HistoryPoint[], range: TypeChartRange) {
+  if (history.length === 0) return 0;
+  const now = new Date();
+  const startDate = getTypeVariationStartDate(range, now);
+  const endDate = endOfDay(now);
+  const startValue = getHistoryValueAtDate(history, startDate);
+  const endValue = getHistoryValueAtDate(history, endDate);
+  return endValue - startValue;
+}
+
+function calculateHistoryRangeVariationPct(history: HistoryPoint[], range: TypeChartRange) {
+  if (history.length === 0) return null;
+  const now = new Date();
+  const startDate = getTypeVariationStartDate(range, now);
+  const endDate = endOfDay(now);
+  const startValue = getHistoryValueAtDate(history, startDate);
+  const endValue = getHistoryValueAtDate(history, endDate);
+
+  if (startValue === 0) {
+    return endValue === 0 ? 0 : null;
+  }
+
+  return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
 function sortTransactionsForCostBasis(transactions: InvestmentTransactionRow[]) {
@@ -725,6 +826,8 @@ export default function InvestmentsPage() {
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
   const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [linkedTransferByTransactionId, setLinkedTransferByTransactionId] = useState<Record<string, LinkedTransferSummary>>({});
+  const [portfolioHistory, setPortfolioHistory] = useState<HistoryPoint[]>([]);
+  const [portfolioRange, setPortfolioRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
@@ -2083,6 +2186,30 @@ export default function InvestmentsPage() {
   }, [selectedAssetId, selectedTypeAssets]);
 
   useEffect(() => {
+    const loadPortfolioHistory = async () => {
+      if (!userId) {
+        setPortfolioHistory([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("investment_price_history")
+        .select("snapshot_date, total_value_eur, investment_id")
+        .eq("user_id", userId)
+        .order("snapshot_date", { ascending: true });
+
+      if (error) {
+        setPortfolioHistory([]);
+        return;
+      }
+
+      setPortfolioHistory(collapseTypeHistoryToDailyLatest((data as Array<HistoryPoint & { investment_id: string }>) ?? []));
+    };
+
+    void loadPortfolioHistory();
+  }, [supabase, userId]);
+
+  useEffect(() => {
     const loadTypeHistory = async () => {
       if (!selectedType || !userId || selectedTypeAssets.length === 0) {
         setSelectedTypeHistory([]);
@@ -2187,80 +2314,79 @@ export default function InvestmentsPage() {
     void loadAssetTransactions();
   }, [selectedAssetId, supabase, userId]);
 
-  const evolution = useMemo(() => {
-    const byMonth = new Map<string, { invested: number; current: number }>();
+  const portfolioHistorySeries = useMemo(
+    () => (portfolioHistory.length > 1 ? portfolioHistory : buildEstimatedPortfolioHistory(investments, ratesToEur)),
+    [investments, portfolioHistory, ratesToEur]
+  );
+  const portfolioTimeline = useMemo(
+    () => buildTypeHistoryTimeline(portfolioHistorySeries, portfolioRange),
+    [portfolioHistorySeries, portfolioRange]
+  );
+  const portfolioVariationPct = useMemo(
+    () => calculateHistoryRangeVariationPct(portfolioHistorySeries, portfolioRange),
+    [portfolioHistorySeries, portfolioRange]
+  );
+  const portfolioVariationAmount = useMemo(
+    () => calculateHistoryRangeDelta(portfolioHistorySeries, portfolioRange),
+    [portfolioHistorySeries, portfolioRange]
+  );
+  const portfolioPositive = (portfolioVariationPct ?? 0) >= 0;
+  const portfolioStroke = portfolioPositive ? "#34d399" : "#f87171";
+  const portfolioFill = portfolioPositive ? "rgba(52, 211, 153, 0.16)" : "rgba(248, 113, 113, 0.16)";
+  const portfolioReference = portfolioTimeline[0]?.value ?? 0;
+  const portfolioChartData = useMemo(
+    () => ({
+      labels: portfolioTimeline.map((point) => point.label),
+      datasets: [
+        {
+          label: "Referencia",
+          data: portfolioTimeline.map(() => portfolioReference),
+          borderColor: "rgba(255,255,255,0.14)",
+          borderDash: [5, 5],
+          borderWidth: 1,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          tension: 0
+        },
+        {
+          label: portfolioHistory.length > 1 ? "Valor real del portfolio" : "Valor estimado del portfolio",
+          data: portfolioTimeline.map((point) => point.value),
+          borderColor: portfolioStroke,
+          backgroundColor: portfolioFill,
+          borderWidth: 3,
+          fill: true,
+          tension: 0.28,
+          pointRadius: portfolioRange === "daily" ? 2 : 3,
+          pointHoverRadius: 5
+        }
+      ]
+    }),
+    [portfolioFill, portfolioHistory.length, portfolioRange, portfolioReference, portfolioStroke, portfolioTimeline]
+  );
 
-    for (const row of investments) {
-      const date = row.purchase_date ? new Date(`${row.purchase_date}T00:00:00`) : new Date();
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      const qty = Number(row.quantity) || 0;
-      const avg = Number(row.average_buy_price) || 0;
-      const current = Number(row.current_price ?? row.average_buy_price) || 0;
-      const previous = byMonth.get(key) ?? { invested: 0, current: 0 };
-
-      previous.invested += convertToEur(qty * avg, row.asset_currency, ratesToEur);
-      previous.current += convertToEur(qty * current, row.asset_currency, ratesToEur);
-      byMonth.set(key, previous);
-    }
-
-    const labels: string[] = [];
-    const investedData: number[] = [];
-    const currentData: number[] = [];
-    let runningInvested = 0;
-    let runningCurrent = 0;
-
-    for (const key of Array.from(byMonth.keys()).sort()) {
-      const values = byMonth.get(key);
-      if (!values) continue;
-      runningInvested += values.invested;
-      runningCurrent += values.current;
-      labels.push(key);
-      investedData.push(Number(runningInvested.toFixed(2)));
-      currentData.push(Number(runningCurrent.toFixed(2)));
-    }
-
-    return { labels, investedData, currentData };
-  }, [investments, ratesToEur]);
-
-  const chartData = {
-    labels: evolution.labels,
-    datasets: [
-      {
-        label: "Capital invertido (EUR)",
-        data: evolution.investedData,
-        borderColor: "#0f766e",
-        backgroundColor: "rgba(15, 118, 110, 0.12)",
-        borderWidth: 3,
-        tension: 0.28
+  const portfolioChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context: TooltipItem<"line">) => ` ${formatCurrencyByPreference(Number(context.parsed.y ?? 0), "EUR")}`
+          }
+        }
       },
-      {
-        label: "Valor actual (EUR)",
-        data: evolution.currentData,
-        borderColor: "#1d4ed8",
-        backgroundColor: "rgba(29, 78, 216, 0.12)",
-        borderWidth: 3,
-        tension: 0.28
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
+        y: {
+          ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") },
+          grid: { color: "rgba(148, 163, 184, 0.16)" }
+        }
       }
-    ]
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        labels: { usePointStyle: true, color: "#e2e8f0" }
-      }
-    },
-    scales: {
-      x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
-      y: {
-        ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") },
-        grid: { color: "rgba(148, 163, 184, 0.16)" }
-      }
-    }
-  };
+    }),
+    []
+  );
 
   const validateForm = () => {
     const nextErrors: InvestmentFormErrors = {};
@@ -3104,15 +3230,63 @@ export default function InvestmentsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion</p>
               <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Crecimiento del portfolio en EUR</h2>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <p className="text-sm text-slate-300">
+                  {portfolioHistory.length > 1
+                    ? "Basado en snapshots reales de cartera."
+                    : "Estimado con tus posiciones actuales hasta tener mas historico guardado."}
+                </p>
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                    portfolioVariationPct === null
+                      ? "border-white/10 bg-white/6 text-white/58"
+                      : portfolioPositive
+                        ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                        : "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                  }`}
+                >
+                  {portfolioVariationPct === null ? "n/d" : `${portfolioPositive ? "+" : ""}${portfolioVariationPct.toFixed(1)}%`}
+                </span>
+                <span
+                  className={`text-xs ${
+                    portfolioVariationPct === null
+                      ? "text-white/42"
+                      : portfolioPositive
+                        ? "text-emerald-200/90"
+                        : "text-rose-200/90"
+                  }`}
+                >
+                  {portfolioVariationPct === null
+                    ? "Sin base suficiente para calcular la diferencia."
+                    : `${portfolioVariationAmount >= 0 ? "+" : ""}${formatCurrencyByPreference(portfolioVariationAmount, "EUR")}`}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {TYPE_RANGE_OPTIONS.map((option) => {
+                const active = portfolioRange === option.value;
+                return (
+                  <button
+                    key={`portfolio-${option.value}`}
+                    type="button"
+                    onClick={() => setPortfolioRange(option.value)}
+                    className={`rounded-full px-4 py-2 text-sm transition ${
+                      active ? "bg-emerald-500 text-slate-950" : "bg-white/6 text-white/78 hover:bg-white/12"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div className="mt-6 h-[320px]">
-            {evolution.labels.length > 0 ? (
-              <Line data={chartData} options={chartOptions} />
+            {portfolioTimeline.length > 0 ? (
+              <Line data={portfolioChartData} options={portfolioChartOptions} />
             ) : (
               <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-white/15 bg-white/5 text-sm text-slate-300">
                 Aun no hay suficiente historico para dibujar la evolucion.
