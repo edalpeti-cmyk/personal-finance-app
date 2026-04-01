@@ -3816,9 +3816,6 @@ export default function InvestmentsPage() {
             >
               Exportar PDF
             </button>
-            <span className="ui-chip rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-              CSV: asset_name, asset_symbol, asset_isin, asset_type, asset_currency, asset_market, quantity, average_buy_price, current_price, purchase_date
-            </span>
           </div>
 
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando posiciones...</p> : null}
