@@ -75,7 +75,7 @@ type IncomeInlineDraft = {
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
-type TransferRecord = { id: string; amount: number; transferDate: string };
+type TransferRecord = { id: string; amount: number; transferDate: string; category: string; transferType: "investment" | "emergency_fund" };
 
 function monthToDate(month: string) {
   return `${month}-01`;
@@ -194,6 +194,7 @@ export default function BudgetsPage() {
 
   const [rows, setRows] = useState<BudgetWithActual[]>([]);
   const [latestTransferByBudgetKey, setLatestTransferByBudgetKey] = useState<Record<string, TransferRecord>>({});
+  const [currentTransferHistory, setCurrentTransferHistory] = useState<TransferRecord[]>([]);
   const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
   const [unbudgetedExpenses, setUnbudgetedExpenses] = useState<Array<{ category: string; actual: number }>>([]);
   const [currentIncomeEntries, setCurrentIncomeEntries] = useState<IncomeRow[]>([]);
@@ -475,11 +476,20 @@ export default function BudgetsPage() {
           acc[key] = {
             id: item.id,
             amount: Number(item.amount) || 0,
-            transferDate: item.transfer_date
+            transferDate: item.transfer_date,
+            category: item.category || "Sin categoria",
+            transferType: item.transfer_type
           };
         }
         return acc;
       }, {});
+      const transferHistory = currentTransferRows.map((item) => ({
+        id: item.id,
+        amount: Number(item.amount) || 0,
+        transferDate: item.transfer_date,
+        category: item.category || "Sin categoria",
+        transferType: item.transfer_type
+      }));
 
       const currentIncomeTotal = currentIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const currentExpenseTotal = currentExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
@@ -498,6 +508,7 @@ export default function BudgetsPage() {
 
       setRows(builtCurrent.rows);
       setLatestTransferByBudgetKey(latestTransferMap);
+      setCurrentTransferHistory(transferHistory);
       setPrevRows(builtPrevious.rows);
       setUnbudgetedExpenses(builtCurrent.unbudgeted);
       setCurrentIncomeEntries(currentIncomeRows);
@@ -744,6 +755,28 @@ export default function BudgetsPage() {
       type: "success",
       text: row.budgetKind === "emergency_fund" ? "Movimiento del fondo deshecho." : "Traspaso a inversion deshecho."
     });
+  };
+  const handleDeleteTransferRecord = async (transfer: TransferRecord) => {
+    if (!userId) return;
+
+    const confirmed = window.confirm(
+      `Se eliminara el movimiento de ${formatCurrencyByPreference(transfer.amount, currency)} del ${formatDateByPreference(
+        transfer.transferDate,
+        dateFormat
+      )} en "${transfer.category}". Deseas continuar?`
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("internal_transfers").delete().eq("id", transfer.id).eq("user_id", userId);
+
+    if (error) {
+      showToast({ type: "error", text: error.message || "No se pudo eliminar el movimiento." });
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({ type: "success", text: "Movimiento eliminado." });
   };
   const handleDeleteBudget = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta categoria presupuestada. Deseas continuar?")) return;
@@ -1056,6 +1089,61 @@ export default function BudgetsPage() {
             </div>
           ) : null}
         </section>
+
+        {currentTransferHistory.length > 0 ? (
+          <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Movimientos internos</p>
+            <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Traspasos del mes</h2>
+            <p className="mt-2 text-sm text-slate-300">Aqui puedes revisar y eliminar cualquier traspaso a inversion o al fondo de emergencia registrado en el mes activo.</p>
+
+            <div className={`table-scroll mt-6 ${currentTransferHistory.length > 5 ? "max-h-[320px]" : ""}`}>
+              <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                <thead>
+                  <tr className="text-left text-slate-400">
+                    <th className="sticky-col-header px-3 py-2">Fecha</th>
+                    <th className="px-3 py-2">Categoria</th>
+                    <th className="px-3 py-2">Tipo</th>
+                    <th className="px-3 py-2 text-right">Importe</th>
+                    <th className="px-3 py-2 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentTransferHistory.map((transfer) => (
+                    <tr key={transfer.id} className="bg-white/5 shadow-sm">
+                      <td className="sticky-col rounded-l-2xl px-3 py-4 text-slate-300">
+                        {formatDateByPreference(transfer.transferDate, dateFormat)}
+                      </td>
+                      <td className="px-3 py-4 font-medium text-white">{transfer.category}</td>
+                      <td className="px-3 py-4">
+                        <span
+                          className={`ui-chip inline-flex w-fit rounded-full border px-3 py-1 text-[11px] ${
+                            transfer.transferType === "emergency_fund"
+                              ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+                              : "border-sky-400/20 bg-sky-500/10 text-sky-200"
+                          }`}
+                        >
+                          {transfer.transferType === "emergency_fund" ? "Fondo emergencia" : "Traspaso inv."}
+                        </span>
+                      </td>
+                      <td className="px-3 py-4 text-right text-slate-300">{formatCurrencyByPreference(transfer.amount, currency)}</td>
+                      <td className="rounded-r-2xl px-3 py-4">
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteTransferRecord(transfer)}
+                            className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-200 hover:bg-amber-500/20"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos del mes</p>
