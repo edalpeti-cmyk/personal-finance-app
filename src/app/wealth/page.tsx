@@ -46,6 +46,7 @@ const ASSET_CATEGORIES: Array<{ value: WealthAssetCategory; label: string }> = [
   { value: "collectible", label: "Coleccionable" },
   { value: "other_asset", label: "Otro bien" }
 ];
+const WEALTH_FORM_OPEN_KEY = "wealth-form-open";
 
 function inputClass() {
   return "w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20";
@@ -63,6 +64,7 @@ export default function WealthPage() {
   const [assets, setAssets] = useState<WealthAssetRow[]>([]);
   const [debts, setDebts] = useState<DebtOptionRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(true);
 
   const [assetName, setAssetName] = useState("");
   const [assetCategory, setAssetCategory] = useState<WealthAssetCategory>("real_estate");
@@ -107,6 +109,17 @@ export default function WealthPage() {
     if (authLoading || !userId) return;
     void loadData();
   }, [authLoading, loadData, userId]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(WEALTH_FORM_OPEN_KEY);
+    if (stored) {
+      setFormOpen(stored === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(WEALTH_FORM_OPEN_KEY, String(formOpen));
+  }, [formOpen]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -206,6 +219,7 @@ export default function WealthPage() {
   };
 
   const handleEdit = (row: WealthAssetRow) => {
+    setFormOpen(true);
     setEditingId(row.id);
     setAssetName(row.asset_name);
     setAssetCategory(row.asset_category);
@@ -312,10 +326,19 @@ export default function WealthPage() {
         {toast ? <section className={`rounded-[24px] p-4 text-sm xl:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>{toast.text}</section> : null}
         {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 xl:col-span-12">{message}</section> : null}
 
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
-          <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar bien" : "Nuevo bien"}</h2>
-          <form className="mt-6 grid gap-4" onSubmit={handleSubmit}>
+        <section className="panel rounded-[28px] p-5 text-white self-start xl:col-span-5">
+          <details className="group" open={formOpen} onToggle={(event) => setFormOpen(event.currentTarget.open)}>
+            <summary className="accordion-summary cursor-pointer list-none !flex-col !items-start !gap-3">
+              <div className="accordion-summary-main w-full min-w-0">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{editingId ? "Editar bien" : "Nuevo bien"}</h2>
+              </div>
+              <div className="accordion-summary-side !w-full !justify-between">
+                <span className="accordion-metric">{editingId ? "Edicion" : "Alta"}</span>
+                <span className="accordion-chevron" aria-hidden="true">v</span>
+              </div>
+            </summary>
+            <form className="accordion-content mt-6 grid gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-2 text-sm text-slate-200">
               Nombre
               <input className={inputClass()} value={assetName} onChange={(event) => setAssetName(event.target.value)} placeholder="Ej: Vivienda Madrid, Coche familiar" />
@@ -398,7 +421,8 @@ export default function WealthPage() {
                 </button>
               ) : null}
             </div>
-          </form>
+            </form>
+          </details>
         </section>
 
         <section className="grid gap-4 xl:col-span-7 md:grid-cols-3">
