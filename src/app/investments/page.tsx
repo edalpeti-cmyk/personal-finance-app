@@ -3468,12 +3468,12 @@ export default function InvestmentsPage() {
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <details className="group">
-            <summary className="accordion-summary cursor-pointer list-none">
-              <div className="accordion-summary-main">
+            <summary className="accordion-summary cursor-pointer list-none !flex-col !items-start !gap-3">
+              <div className="accordion-summary-main w-full min-w-0">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Analitica avanzada</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Lectura extra de cartera</h2>
               </div>
-              <div className="accordion-summary-side">
+              <div className="accordion-summary-side !w-full !justify-between">
                 <span className="accordion-metric">
                   {enrichedInvestments.length === 0 ? "Sin datos" : `${enrichedInvestments.length - stalePricePositions}/${enrichedInvestments.length} precios`}
                 </span>
