@@ -346,6 +346,14 @@ function buildEstimatedAssetEvolution(row: EnrichedInvestment) {
   return { labels, values };
 }
 
+function buildEstimatedAssetHistory(row: EnrichedInvestment) {
+  const estimated = buildEstimatedAssetEvolution(row);
+  return estimated.labels.map((label, index) => ({
+    snapshot_date: `${label}-28`,
+    total_value_eur: Number(estimated.values[index] ?? 0)
+  }));
+}
+
 function buildEstimatedTypeEvolution(rows: EnrichedInvestment[], ratesToEur: Record<AssetCurrency, number>) {
   const byMonth = new Map<string, number>();
 
@@ -374,6 +382,34 @@ function buildEstimatedTypeEvolution(rows: EnrichedInvestment[], ratesToEur: Rec
     });
 
   return { labels, values };
+}
+
+function buildEstimatedTypeHistory(rows: EnrichedInvestment[], ratesToEur: Record<AssetCurrency, number>) {
+  const byMonth = new Map<string, number>();
+
+  for (const row of rows) {
+    const date = row.purchase_date ? new Date(`${row.purchase_date}T00:00:00`) : new Date();
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const current = Number(row.current ?? row.average_buy_price) || 0;
+    const qty = Number(row.quantity) || 0;
+    const valueEur = convertToEur(qty * current, row.asset_currency, ratesToEur);
+    byMonth.set(key, (byMonth.get(key) ?? 0) + valueEur);
+  }
+
+  const history: HistoryPoint[] = [];
+  let running = 0;
+
+  for (const key of Array.from(byMonth.keys()).sort()) {
+    const value = byMonth.get(key);
+    if (value === undefined) continue;
+    running += value;
+    history.push({
+      snapshot_date: `${key}-28`,
+      total_value_eur: Number(running.toFixed(2))
+    });
+  }
+
+  return history;
 }
 
 function calculatePeriodPerformance(history: HistoryPoint[], days: number): PeriodPerformance {
@@ -830,6 +866,7 @@ export default function InvestmentsPage() {
   const [portfolioRange, setPortfolioRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
+  const [selectedAssetRange, setSelectedAssetRange] = useState<TypeChartRange>("monthly");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
   const [investmentFormOpen, setInvestmentFormOpen] = useState(true);
@@ -1671,6 +1708,10 @@ export default function InvestmentsPage() {
     () => selectedTypeAssets.find((row) => row.id === selectedAssetId) ?? null,
     [selectedAssetId, selectedTypeAssets]
   );
+  const selectedAssetHistorySeries = useMemo(
+    () => (selectedAssetHistory.length > 1 ? selectedAssetHistory : selectedAsset ? buildEstimatedAssetHistory(selectedAsset) : []),
+    [selectedAsset, selectedAssetHistory]
+  );
   const selectedAssetEvolution = useMemo(() => {
     if (selectedAssetHistory.length > 1) {
       return {
@@ -1696,34 +1737,6 @@ export default function InvestmentsPage() {
 
     return selectedAssetEvolution.values.map((value) => Number((((value - base) / base) * 100).toFixed(2)));
   }, [selectedAsset?.investedEur, selectedAssetEvolution.values, selectedAssetHistory]);
-  const selectedAssetChartData = useMemo(
-    () => ({
-      labels: selectedAssetEvolution.labels,
-      datasets: [
-        {
-          label: selectedAssetHistory.length > 1 ? "Valor real en EUR" : "Valor estimado en EUR",
-          data: selectedAssetEvolution.values,
-          borderColor: "#14b8a6",
-          backgroundColor: "rgba(20, 184, 166, 0.14)",
-          borderWidth: 3,
-          fill: true,
-          tension: 0.25
-        },
-        {
-          label: "Rentabilidad %",
-          data: selectedAssetReturnPctSeries,
-          borderColor: "#f59e0b",
-          backgroundColor: "rgba(245, 158, 11, 0.1)",
-          borderWidth: 2,
-          fill: false,
-          tension: 0.22,
-          yAxisID: "yPct",
-          pointRadius: 0
-        }
-      ]
-    }),
-    [selectedAssetEvolution, selectedAssetHistory.length, selectedAssetReturnPctSeries]
-  );
   const selectedAssetIndex = useMemo(
     () => selectedTypeAssets.findIndex((row) => row.id === selectedAssetId),
     [selectedAssetId, selectedTypeAssets]
@@ -1738,6 +1751,52 @@ export default function InvestmentsPage() {
     }),
     [selectedAssetHistory]
   );
+  const selectedAssetTimeline = useMemo(
+    () => buildTypeHistoryTimeline(selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetHistorySeries, selectedAssetRange]
+  );
+  const selectedAssetVariationPct = useMemo(
+    () => calculateHistoryRangeVariationPct(selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetHistorySeries, selectedAssetRange]
+  );
+  const selectedAssetVariationAmount = useMemo(
+    () => calculateHistoryRangeDelta(selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetHistorySeries, selectedAssetRange]
+  );
+  const selectedAssetPositive = (selectedAssetVariationPct ?? 0) >= 0;
+  const selectedAssetStroke = selectedAssetPositive ? "#34d399" : "#f87171";
+  const selectedAssetFill = selectedAssetPositive ? "rgba(52, 211, 153, 0.16)" : "rgba(248, 113, 113, 0.16)";
+  const selectedAssetReference = selectedAssetTimeline[0]?.value ?? 0;
+  const selectedAssetChartData = useMemo(
+    () => ({
+      labels: selectedAssetTimeline.map((point) => point.label),
+      datasets: [
+        {
+          label: "Referencia",
+          data: selectedAssetTimeline.map(() => selectedAssetReference),
+          borderColor: "rgba(255,255,255,0.14)",
+          borderDash: [5, 5],
+          borderWidth: 1,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          tension: 0
+        },
+        {
+          label: selectedAssetHistory.length > 1 ? "Valor real en EUR" : "Valor estimado en EUR",
+          data: selectedAssetTimeline.map((point) => point.value),
+          borderColor: selectedAssetStroke,
+          backgroundColor: selectedAssetFill,
+          borderWidth: 3,
+          fill: true,
+          tension: 0.25,
+          pointRadius: selectedAssetRange === "daily" ? 2 : 3,
+          pointHoverRadius: 5
+        }
+      ]
+    }),
+    [selectedAssetFill, selectedAssetHistory.length, selectedAssetRange, selectedAssetReference, selectedAssetStroke, selectedAssetTimeline]
+  );
   const selectedTypeTimeline = useMemo(
     () => {
       if (selectedTypeHistory.length > 1) {
@@ -1750,6 +1809,22 @@ export default function InvestmentsPage() {
     [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeRange]
   );
   const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
+  const selectedTypeHistorySeries = useMemo(
+    () => (selectedTypeHistory.length > 1 ? selectedTypeHistory : buildEstimatedTypeHistory(selectedTypeAssets, ratesToEur)),
+    [ratesToEur, selectedTypeAssets, selectedTypeHistory]
+  );
+  const selectedTypeVariationPct = useMemo(
+    () => calculateHistoryRangeVariationPct(selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeHistorySeries, selectedTypeRange]
+  );
+  const selectedTypeVariationAmount = useMemo(
+    () => calculateHistoryRangeDelta(selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeHistorySeries, selectedTypeRange]
+  );
+  const selectedTypePositive = (selectedTypeVariationPct ?? 0) >= 0;
+  const selectedTypeStroke = selectedTypePositive ? "#34d399" : "#f87171";
+  const selectedTypeFill = selectedTypePositive ? "rgba(52, 211, 153, 0.16)" : "rgba(248, 113, 113, 0.16)";
+  const selectedTypeReference = selectedTypeTimeline[0]?.value ?? 0;
   const selectedTypeReturnPctSeries = useMemo(() => {
     if (selectedTypeTimeline.length === 0) {
       return [] as number[];
@@ -1767,13 +1842,27 @@ export default function InvestmentsPage() {
       labels: selectedTypeTimeline.map((point) => point.label),
       datasets: [
         {
+          label: "Referencia",
+          data: selectedTypeTimeline.map(() => selectedTypeReference),
+          borderColor: "rgba(255,255,255,0.14)",
+          borderDash: [5, 5],
+          borderWidth: 1,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          tension: 0,
+          hidden: selectedTypeChartMode === "profitability"
+        },
+        {
           label: "Valor agregado EUR",
           data: selectedTypeTimeline.map((point) => point.value),
-          borderColor: "#14b8a6",
-          backgroundColor: "rgba(20, 184, 166, 0.14)",
+          borderColor: selectedTypeStroke,
+          backgroundColor: selectedTypeFill,
           borderWidth: 3,
           fill: true,
           tension: 0.25,
+          pointRadius: selectedTypeRange === "daily" ? 2 : 3,
+          pointHoverRadius: 5,
           hidden: selectedTypeChartMode === "profitability"
         },
         {
@@ -1790,7 +1879,7 @@ export default function InvestmentsPage() {
         }
       ]
     }),
-    [selectedTypeChartMode, selectedTypeReturnPctSeries, selectedTypeTimeline]
+    [selectedTypeChartMode, selectedTypeFill, selectedTypeRange, selectedTypeReference, selectedTypeReturnPctSeries, selectedTypeStroke, selectedTypeTimeline]
   );
   const selectedTypeChartOptions = useMemo(
     () => ({
@@ -3872,11 +3961,37 @@ export default function InvestmentsPage() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="mt-4">
                       <p className="text-sm font-medium text-white">Evolucion del tipo de activo</p>
-                      <p className="mt-1 text-xs text-slate-400">
+                      <div className="mt-1 flex flex-wrap items-center gap-3">
+                        <p className="text-xs text-slate-400">
                         {selectedTypeUsesRealHistory
                           ? "Evolucion agregada real de todas las posiciones de este tipo segun el historico guardado."
                           : "Estimacion agregada del tipo construida con las posiciones actuales hasta que haya historico suficiente."}
-                      </p>
+                        </p>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                            selectedTypeVariationPct === null
+                              ? "border-white/10 bg-white/6 text-white/58"
+                              : selectedTypePositive
+                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                : "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                          }`}
+                        >
+                          {selectedTypeVariationPct === null ? "n/d" : `${selectedTypePositive ? "+" : ""}${selectedTypeVariationPct.toFixed(1)}%`}
+                        </span>
+                        <span
+                          className={`text-xs ${
+                            selectedTypeVariationPct === null
+                              ? "text-white/42"
+                              : selectedTypePositive
+                                ? "text-emerald-200/90"
+                                : "text-rose-200/90"
+                          }`}
+                        >
+                          {selectedTypeVariationPct === null
+                            ? "Sin base suficiente."
+                            : `${selectedTypeVariationAmount >= 0 ? "+" : ""}${formatCurrencyByPreference(selectedTypeVariationAmount, "EUR")}`}
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-4 flex flex-col gap-2">
                       <div className="flex flex-wrap gap-2">
@@ -4105,22 +4220,67 @@ export default function InvestmentsPage() {
                 })}
               </div>
 
-              <div className="mt-6 flex-1 rounded-3xl border border-white/8 bg-white/5 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {selectedAssetHistory.length > 1 ? "Evolucion real del activo" : "Evolucion estimada del activo"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
+                <div className="mt-6 flex-1 rounded-3xl border border-white/8 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {selectedAssetHistory.length > 1 ? "Evolucion real del activo" : "Evolucion estimada del activo"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-3">
+                        <p className="text-xs text-slate-400">
                       {selectedAssetHistory.length > 1
                         ? "Serie construida con snapshots reales del activo guardados tras las actualizaciones de precio."
                         : "Estimacion basada en precio medio y precio actual. En cuanto se acumulen snapshots reales, este grafico dejara de ser estimado."}
-                    </p>
+                        </p>
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                            selectedAssetVariationPct === null
+                              ? "border-white/10 bg-white/6 text-white/58"
+                              : selectedAssetPositive
+                                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                : "border-rose-400/20 bg-rose-400/10 text-rose-200"
+                          }`}
+                        >
+                          {selectedAssetVariationPct === null ? "n/d" : `${selectedAssetPositive ? "+" : ""}${selectedAssetVariationPct.toFixed(1)}%`}
+                        </span>
+                        <span
+                          className={`text-xs ${
+                            selectedAssetVariationPct === null
+                              ? "text-white/42"
+                              : selectedAssetPositive
+                                ? "text-emerald-200/90"
+                                : "text-rose-200/90"
+                          }`}
+                        >
+                          {selectedAssetVariationPct === null
+                            ? "Sin base suficiente."
+                            : `${selectedAssetVariationAmount >= 0 ? "+" : ""}${formatCurrencyByPreference(selectedAssetVariationAmount, "EUR")}`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                        {selectedAssetHistory.length > 1 ? `${selectedAssetHistory.length} puntos reales` : "Sin historico suficiente"}
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {TYPE_RANGE_OPTIONS.map((option) => {
+                          const active = selectedAssetRange === option.value;
+                          return (
+                            <button
+                              key={`asset-${option.value}`}
+                              type="button"
+                              onClick={() => setSelectedAssetRange(option.value)}
+                              className={`rounded-full px-3 py-1.5 text-xs transition ${
+                                active ? "bg-emerald-500 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-                    {selectedAssetHistory.length > 1 ? `${selectedAssetHistory.length} puntos reales` : "Sin historico suficiente"}
-                  </div>
-                </div>
                 <div className="mt-4 h-[320px]">
                   <Line
                     data={selectedAssetChartData}
@@ -4128,18 +4288,13 @@ export default function InvestmentsPage() {
                       responsive: true,
                       maintainAspectRatio: false,
                       plugins: {
-                        legend: { display: true, labels: { color: "#cbd5e1", usePointStyle: true } }
+                        legend: { display: false }
                       },
                       scales: {
                         x: { grid: { display: false }, ticks: { color: "#cbd5e1" } },
                         y: {
                           grid: { color: "rgba(148, 163, 184, 0.16)" },
                           ticks: { color: "#cbd5e1", callback: (value: string | number) => formatCurrencyByPreference(Number(value), "EUR") }
-                        },
-                        yPct: {
-                          position: "right",
-                          grid: { display: false },
-                          ticks: { color: "#fbbf24", callback: (value: string | number) => `${Number(value).toFixed(0)}%` }
                         }
                       }
                     }}
