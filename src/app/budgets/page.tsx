@@ -23,9 +23,11 @@ type ExpenseRow = {
   amount: number;
 };
 type TransferRow = {
+  id: string;
   category: string;
   amount: number;
   transfer_type: "investment" | "emergency_fund";
+  transfer_date: string;
 };
 
 type IncomeRow = {
@@ -73,6 +75,7 @@ type IncomeInlineDraft = {
 };
 
 type ToastState = { type: "success" | "error"; text: string } | null;
+type TransferRecord = { id: string; amount: number; transferDate: string };
 
 function monthToDate(month: string) {
   return `${month}-01`;
@@ -190,6 +193,7 @@ export default function BudgetsPage() {
   const [copyingBudget, setCopyingBudget] = useState(false);
 
   const [rows, setRows] = useState<BudgetWithActual[]>([]);
+  const [latestTransferByBudgetKey, setLatestTransferByBudgetKey] = useState<Record<string, TransferRecord>>({});
   const [prevRows, setPrevRows] = useState<BudgetWithActual[]>([]);
   const [unbudgetedExpenses, setUnbudgetedExpenses] = useState<Array<{ category: string; actual: number }>>([]);
   const [currentIncomeEntries, setCurrentIncomeEntries] = useState<IncomeRow[]>([]);
@@ -401,14 +405,27 @@ export default function BudgetsPage() {
           supabase.from("monthly_savings_targets").select("id, month, savings_target").eq("user_id", uid).eq("month", currentMonthDate).maybeSingle(),
           supabase.from("expenses").select("category, amount").eq("user_id", uid).gte("expense_date", currentRange.start).lte("expense_date", currentRange.end),
           supabase.from("income").select("id, amount, source, income_date").eq("user_id", uid).gte("income_date", currentRange.start).lte("income_date", currentRange.end).order("income_date", { ascending: false }),
-          supabase.from("internal_transfers").select("category, amount").eq("user_id", uid).eq("transfer_type", "investment").gte("transfer_date", currentRange.start).lte("transfer_date", currentRange.end)
+          supabase
+            .from("internal_transfers")
+            .select("id, category, amount, transfer_type, transfer_date")
+            .eq("user_id", uid)
+            .in("transfer_type", ["investment", "emergency_fund"])
+            .gte("transfer_date", currentRange.start)
+            .lte("transfer_date", currentRange.end)
+            .order("transfer_date", { ascending: false })
         ]),
         Promise.all([
           supabase.from("monthly_budgets").select("id, month, category, budget_amount, budget_kind").eq("user_id", uid).eq("month", prevMonthDate).order("category", { ascending: true }),
           supabase.from("monthly_savings_targets").select("id, month, savings_target").eq("user_id", uid).eq("month", prevMonthDate).maybeSingle(),
           supabase.from("expenses").select("category, amount").eq("user_id", uid).gte("expense_date", prevRange.start).lte("expense_date", prevRange.end),
           supabase.from("income").select("amount").eq("user_id", uid).gte("income_date", prevRange.start).lte("income_date", prevRange.end),
-          supabase.from("internal_transfers").select("category, amount").eq("user_id", uid).eq("transfer_type", "investment").gte("transfer_date", prevRange.start).lte("transfer_date", prevRange.end)
+          supabase
+            .from("internal_transfers")
+            .select("id, category, amount, transfer_type, transfer_date")
+            .eq("user_id", uid)
+            .in("transfer_type", ["investment", "emergency_fund"])
+            .gte("transfer_date", prevRange.start)
+            .lte("transfer_date", prevRange.end)
         ])
       ]);
 
@@ -452,6 +469,17 @@ export default function BudgetsPage() {
 
       const builtCurrent = buildMonthlyRows((currentBudgets.data as BudgetRow[]) ?? [], currentExpenseRows, currentTransferRows);
       const builtPrevious = buildMonthlyRows((previousBudgets.data as BudgetRow[]) ?? [], prevExpenseRows, prevTransferRows);
+      const latestTransferMap = currentTransferRows.reduce<Record<string, TransferRecord>>((acc, item) => {
+        const key = `${item.transfer_type}:${item.category || "Sin categoria"}`;
+        if (!acc[key]) {
+          acc[key] = {
+            id: item.id,
+            amount: Number(item.amount) || 0,
+            transferDate: item.transfer_date
+          };
+        }
+        return acc;
+      }, {});
 
       const currentIncomeTotal = currentIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
       const currentExpenseTotal = currentExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
@@ -469,6 +497,7 @@ export default function BudgetsPage() {
       const prevSavings = prevManualSavings + prevTransferSavings;
 
       setRows(builtCurrent.rows);
+      setLatestTransferByBudgetKey(latestTransferMap);
       setPrevRows(builtPrevious.rows);
       setUnbudgetedExpenses(builtCurrent.unbudgeted);
       setCurrentIncomeEntries(currentIncomeRows);
@@ -682,6 +711,39 @@ export default function BudgetsPage() {
 
     await loadData(userId, selectedMonth);
     showToast({ type: "success", text: "Traspaso a inversion registrado." });
+  };
+  const handleUndoInvestmentTransfer = async (row: BudgetWithActual) => {
+    if (!userId) return;
+
+    const transferKey = `${row.budgetKind === "emergency_fund" ? "emergency_fund" : "investment"}:${row.category}`;
+    const transfer = latestTransferByBudgetKey[transferKey];
+
+    if (!transfer) {
+      showToast({ type: "error", text: "No hay ningun traspaso reciente para deshacer en esta partida." });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Se deshara el ultimo movimiento de ${formatCurrencyByPreference(transfer.amount, currency)} registrado el ${formatDateByPreference(
+        transfer.transferDate,
+        dateFormat
+      )} para "${row.category}". Deseas continuar?`
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("internal_transfers").delete().eq("id", transfer.id).eq("user_id", userId);
+
+    if (error) {
+      showToast({ type: "error", text: error.message || "No se pudo deshacer el traspaso." });
+      return;
+    }
+
+    await loadData(userId, selectedMonth);
+    showToast({
+      type: "success",
+      text: row.budgetKind === "emergency_fund" ? "Movimiento del fondo deshecho." : "Traspaso a inversion deshecho."
+    });
   };
   const handleDeleteBudget = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta categoria presupuestada. Deseas continuar?")) return;
@@ -961,7 +1023,32 @@ export default function BudgetsPage() {
                       <td className="px-2 py-4 text-right text-slate-300">{formatCurrencyByPreference(row.actual, currency)}</td>
                       <td className={`px-2 py-4 text-right font-medium ${row.remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>{formatCurrencyByPreference(row.remaining, currency)}</td>
                       <td className={`px-2 py-4 text-right ${row.spentPercent > 100 ? "text-red-300" : row.spentPercent > 85 ? "text-amber-300" : "text-slate-100"}`}>{row.spentPercent.toFixed(1)}%</td>
-                      <td className="rounded-r-2xl px-2 py-4"><div className="flex justify-end gap-1.5 whitespace-nowrap">{row.budgetKind === "investment_transfer" || row.budgetKind === "emergency_fund" ? <button type="button" onClick={() => void handleRegisterInvestmentTransfer(row)} className={`rounded-full px-2 py-1.5 text-[10px] font-medium ${row.budgetKind === "emergency_fund" ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"}`}>{row.budgetKind === "emergency_fund" ? "Fondo" : "Traspaso"}</button> : null}<button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-medium text-slate-100 hover:bg-white/10">Editar</button><button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button></div></td>
+                      <td className="rounded-r-2xl px-2 py-4">
+                        <div className="flex justify-end gap-1.5 whitespace-nowrap">
+                          {row.budgetKind === "investment_transfer" || row.budgetKind === "emergency_fund" ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleRegisterInvestmentTransfer(row)}
+                                className={`rounded-full px-2 py-1.5 text-[10px] font-medium ${row.budgetKind === "emergency_fund" ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20" : "border border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"}`}
+                              >
+                                {row.budgetKind === "emergency_fund" ? "Fondo" : "Traspaso"}
+                              </button>
+                              {latestTransferByBudgetKey[`${row.budgetKind === "emergency_fund" ? "emergency_fund" : "investment"}:${row.category}`] ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUndoInvestmentTransfer(row)}
+                                  className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-1.5 text-[10px] font-medium text-amber-200 hover:bg-amber-500/20"
+                                >
+                                  Deshacer
+                                </button>
+                              ) : null}
+                            </>
+                          ) : null}
+                          <button type="button" onClick={() => handleEditBudget(row)} className="rounded-full border border-white/10 bg-white/5 px-2 py-1.5 text-[10px] font-medium text-slate-100 hover:bg-white/10">Editar</button>
+                          <button type="button" onClick={() => void handleDeleteBudget(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[10px] font-medium text-red-200 hover:bg-red-500/20">Borrar</button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
