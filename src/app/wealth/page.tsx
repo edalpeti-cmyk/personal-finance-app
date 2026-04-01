@@ -425,20 +425,20 @@ export default function WealthPage() {
           </details>
         </section>
 
-        <section className="grid gap-4 xl:col-span-7 md:grid-cols-3">
+        <section className="grid gap-4 xl:col-span-7 md:grid-cols-2 2xl:grid-cols-3">
           <article className="kpi-card rounded-[26px] p-6 text-white">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor bruto</p>
-            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalGross, currency)}</p>
+            <p className="mt-4 font-[var(--font-heading)] text-[2.4rem] font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalGross, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de todos los bienes registrados con su porcentaje de propiedad.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio neto</p>
-            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.netWorthIncluded, currency)}</p>
+            <p className="mt-4 font-[var(--font-heading)] text-[2.4rem] font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.netWorthIncluded, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Bienes que has decidido incluir dentro del patrimonio neto.</p>
           </article>
-          <article className="kpi-card rounded-[26px] p-6 text-white">
+          <article className="kpi-card rounded-[26px] p-6 text-white md:col-span-2 2xl:col-span-1">
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Incluidos en FIRE</p>
-            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.fireIncluded, currency)}</p>
+            <p className="mt-4 font-[var(--font-heading)] text-[2.4rem] font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.fireIncluded, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Bienes que tambien quieres considerar en la base FIRE.</p>
           </article>
         </section>
