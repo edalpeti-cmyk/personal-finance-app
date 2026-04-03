@@ -54,6 +54,8 @@ type PlannedContributionDraft = {
   debtName: string;
   currentOutstanding: number;
   plannedContribution: number;
+  estimatedInterest: number;
+  principalReduction: number;
   resultingOutstanding: number;
 };
 
@@ -83,6 +85,21 @@ function isCurrentMonth(dateString: string) {
   const date = new Date(`${dateString}T00:00:00`);
   const now = new Date();
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function calculateDebtContributionBreakdown(outstandingBalance: number, annualInterestRate: number, contribution: number) {
+  const normalizedOutstanding = Math.max(Number(outstandingBalance) || 0, 0);
+  const normalizedRate = Math.max(Number(annualInterestRate) || 0, 0);
+  const normalizedContribution = Math.max(Number(contribution) || 0, 0);
+  const estimatedInterest = Number(((normalizedOutstanding * (normalizedRate / 100)) / 12).toFixed(2));
+  const principalReduction = Number(Math.max(Math.min(normalizedContribution - estimatedInterest, normalizedOutstanding), 0).toFixed(2));
+  const resultingOutstanding = Number(Math.max(normalizedOutstanding - principalReduction, 0).toFixed(2));
+
+  return {
+    estimatedInterest,
+    principalReduction,
+    resultingOutstanding
+  };
 }
 
 export default function DebtsPage() {
@@ -413,13 +430,19 @@ export default function DebtsPage() {
 
     const currentOutstanding = Number(row.outstanding_balance || 0);
     const appliedAmount = Math.min(plannedContribution, currentOutstanding);
-    const resultingOutstanding = Math.max(currentOutstanding - appliedAmount, 0);
+    const { estimatedInterest, principalReduction, resultingOutstanding } = calculateDebtContributionBreakdown(
+      currentOutstanding,
+      Number(row.interest_rate || 0),
+      appliedAmount
+    );
 
     setPlannedContributionDraft({
       debtId: row.id,
       debtName: row.debt_name,
       currentOutstanding,
       plannedContribution,
+      estimatedInterest,
+      principalReduction,
       resultingOutstanding
     });
   };
@@ -442,11 +465,15 @@ export default function DebtsPage() {
     setMessage(null);
 
     const appliedAmount = Math.min(plannedContribution, Number(row.outstanding_balance || 0));
-    const nextOutstanding = Math.max(Number(row.outstanding_balance || 0) - appliedAmount, 0);
+    const { estimatedInterest, principalReduction, resultingOutstanding } = calculateDebtContributionBreakdown(
+      Number(row.outstanding_balance || 0),
+      Number(row.interest_rate || 0),
+      appliedAmount
+    );
 
     const { error: updateDebtError } = await supabase
       .from("debts")
-      .update({ outstanding_balance: Number(nextOutstanding.toFixed(2)) })
+      .update({ outstanding_balance: resultingOutstanding })
       .eq("id", row.id)
       .eq("user_id", userId);
 
@@ -476,9 +503,12 @@ export default function DebtsPage() {
 
     showToast({
       type: "success",
-      text: appliedAmount < plannedContribution
-        ? "Aportacion aplicada. La deuda ha llegado a 0 y el resto queda sin usar."
-        : "Aportacion planificada aplicada a la deuda."
+      text:
+        principalReduction <= 0
+          ? `Aportacion aplicada. Este mes ${formatCurrencyByPreference(estimatedInterest, currency)} se ha ido a interes y la deuda no ha bajado.`
+          : appliedAmount < plannedContribution
+            ? "Aportacion aplicada. La deuda ha llegado a 0 y el resto queda sin usar."
+            : `Aportacion aplicada. ${formatCurrencyByPreference(principalReduction, currency)} reducen principal.`
     });
     await loadData();
     setApplyingBudgetDebtId(null);
@@ -852,7 +882,7 @@ export default function DebtsPage() {
             <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Aplicar aportacion</p>
             <h3 className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-white">{plannedContributionDraft.debtName}</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Vamos a aplicar la aportacion planificada de este mes a la deuda. Asi ves el efecto antes de confirmar.
+              Vamos a aplicar la aportacion planificada de este mes a la deuda. Primero cubrimos el interes mensual estimado y solo el resto reduce principal.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -869,6 +899,21 @@ export default function DebtsPage() {
                 <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(plannedContributionDraft.resultingOutstanding, currency)}</p>
               </div>
             </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-amber-300/20 bg-amber-500/10 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-amber-100">Interes estimado</p>
+                <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(plannedContributionDraft.estimatedInterest, currency)}</p>
+              </div>
+              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Amortizacion real</p>
+                <p className="mt-2 text-lg font-semibold text-white">{formatCurrencyByPreference(plannedContributionDraft.principalReduction, currency)}</p>
+              </div>
+            </div>
+
+            <p className="mt-4 text-sm leading-6 text-slate-300">
+              Si la aportacion no cubre el interes estimado, la deuda no bajara este mes aunque el pago quede registrado.
+            </p>
 
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button
