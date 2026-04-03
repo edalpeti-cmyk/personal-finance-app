@@ -824,8 +824,8 @@ export default function BudgetsPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
+      <main className="mobile-page-shell page-enter relative z-10 mx-auto grid max-w-6xl gap-4 px-4 pb-24 pt-4 md:gap-5 md:p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[28px] p-4 text-white md:rounded-[30px] md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Presupuesto mensual</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Plan mensual con ingresos y ahorro</h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
@@ -835,7 +835,7 @@ export default function BudgetsPage() {
           </p>
         </section>
 
-        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
+        <section className="rounded-[28px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-5 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] md:rounded-[30px] md:p-6 xl:col-span-5">
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Mes activo</p>
           <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatMonthByPreference(selectedMonth, dateFormat)}</p>
           <p className="mt-3 text-sm leading-6 text-slate-200">Cambia el mes para revisar historico, rehacer tu presupuesto o comparar tu ahorro frente al mes anterior.</p>

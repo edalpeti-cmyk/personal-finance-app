@@ -106,27 +106,36 @@ export default function SideNav() {
         </div>
       </aside>
 
-      <nav className="sticky top-0 z-20 flex gap-2 overflow-x-auto border-b border-black/5 bg-[rgba(248,245,239,0.92)] p-3 backdrop-blur md:hidden">
+      <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 md:hidden">
+        <div className="flex gap-2 overflow-x-auto rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(4,17,38,0.94)_0%,rgba(7,23,42,0.98)_100%)] p-2 shadow-[0_-14px_40px_rgba(2,8,23,0.4)] backdrop-blur">
         {ITEMS.map((item) => {
           const active = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm transition ${
-                active ? "bg-slate-900 text-white" : "bg-white/80 text-slate-700 shadow-sm"
+              className={`flex min-w-[82px] flex-col items-center gap-1 rounded-2xl px-3 py-2 text-center text-[11px] transition ${
+                active ? "bg-emerald-500/14 text-emerald-200" : "bg-white/4 text-white/72"
               }`}
             >
-              {item.label}
+              <NavIcon icon={item.icon} />
+              <span className="leading-tight">{item.label}</span>
             </Link>
           );
         })}
-        <button type="button" onClick={toggleSettings} className="whitespace-nowrap rounded-full bg-slate-900 px-4 py-2 text-sm text-white">
-          Configuracion
+        <button
+          type="button"
+          onClick={toggleSettings}
+          className="flex min-w-[82px] flex-col items-center gap-1 rounded-2xl bg-white/4 px-3 py-2 text-center text-[11px] text-white/72"
+        >
+          <NavIcon icon="settings" />
+          <span className="leading-tight">Config.</span>
         </button>
-        <Link href="/logout" className="whitespace-nowrap rounded-full bg-amber-100 px-4 py-2 text-sm text-amber-900">
-          Salir
+        <Link href="/logout" className="flex min-w-[82px] flex-col items-center gap-1 rounded-2xl bg-amber-200/12 px-3 py-2 text-center text-[11px] text-amber-100">
+          <svg className="h-5 w-5 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg>
+          <span className="leading-tight">Salir</span>
         </Link>
+        </div>
       </nav>
     </>
   );

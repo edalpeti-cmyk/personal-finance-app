@@ -2994,7 +2994,7 @@ export default function InvestmentsPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:pl-72 xl:grid-cols-12">
+      <main className="mobile-page-shell page-enter relative z-10 mx-auto grid max-w-6xl gap-4 px-4 pb-24 pt-4 md:gap-5 md:p-5 md:pl-72 xl:grid-cols-12">
         <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
           <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Portfolio tracker</p>
           <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Cartera con seguimiento real</h1>

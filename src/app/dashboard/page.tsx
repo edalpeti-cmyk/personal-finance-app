@@ -2098,12 +2098,12 @@ export default function DashboardPage() {
   return (
     <>
       <SideNav />
-      <main className="page-enter relative z-10 mx-auto grid max-w-6xl gap-5 p-5 md:grid-cols-2 md:pl-72 xl:grid-cols-12">
-        <section className="rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_62%,rgba(10,63,70,0.78)_100%)] p-6 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:p-8 xl:col-span-12">
+      <main className="mobile-page-shell page-enter relative z-10 mx-auto grid max-w-6xl gap-4 px-4 pb-24 pt-4 md:grid-cols-2 md:gap-5 md:p-5 md:pl-72 xl:grid-cols-12">
+        <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_62%,rgba(10,63,70,0.78)_100%)] p-5 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:rounded-[30px] md:p-8 xl:col-span-12">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Vista general</p>
-              <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Tu sistema financiero, de un vistazo</h1>
+              <h1 className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold tracking-tight text-white sm:text-4xl">Tu sistema financiero, de un vistazo</h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/72">
                 Patrimonio, ahorro, progreso FIRE e ideas accionables en una sola pantalla para decidir con rapidez.
               </p>
@@ -2119,7 +2119,7 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-          <div className="mt-8 grid gap-4 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
+          <div className="mt-6 grid gap-4 xl:mt-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
             <div>
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
