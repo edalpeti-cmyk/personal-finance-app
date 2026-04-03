@@ -19,6 +19,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import PwaInstallButton from "@/components/pwa-install-button";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
@@ -2107,13 +2108,16 @@ export default function DashboardPage() {
                 Patrimonio, ahorro, progreso FIRE e ideas accionables en una sola pantalla para decidir con rapidez.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setHideBalances(!hideBalances)}
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 transition hover:bg-white/10"
-            >
-              {hideBalances ? "Mostrar saldo" : "Ocultar saldo"}
-            </button>
+            <div className="flex flex-wrap justify-end gap-3">
+              <PwaInstallButton />
+              <button
+                type="button"
+                onClick={() => setHideBalances(!hideBalances)}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 transition hover:bg-white/10"
+              >
+                {hideBalances ? "Mostrar saldo" : "Ocultar saldo"}
+              </button>
+            </div>
           </div>
           <div className="mt-8 grid gap-4 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
             <div>
