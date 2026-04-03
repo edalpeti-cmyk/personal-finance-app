@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/theme-provider";
@@ -38,6 +39,11 @@ function NavIcon({ icon }: { icon: string }) {
 export default function SideNav() {
   const pathname = usePathname();
   const { toggleSettings } = useTheme();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   return (
     <>
@@ -106,37 +112,93 @@ export default function SideNav() {
         </div>
       </aside>
 
-      <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 md:hidden">
-        <div className="flex gap-2 overflow-x-auto rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(4,17,38,0.94)_0%,rgba(7,23,42,0.98)_100%)] p-2 shadow-[0_-14px_40px_rgba(2,8,23,0.4)] backdrop-blur">
-        {ITEMS.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex min-w-[82px] flex-col items-center gap-1 rounded-2xl px-3 py-2 text-center text-[11px] transition ${
-                active ? "bg-emerald-500/14 text-emerald-200" : "bg-white/4 text-white/72"
-              }`}
-            >
-              <NavIcon icon={item.icon} />
-              <span className="leading-tight">{item.label}</span>
-            </Link>
-          );
-        })}
-        <button
-          type="button"
-          onClick={toggleSettings}
-          className="flex min-w-[82px] flex-col items-center gap-1 rounded-2xl bg-white/4 px-3 py-2 text-center text-[11px] text-white/72"
-        >
-          <NavIcon icon="settings" />
-          <span className="leading-tight">Config.</span>
-        </button>
-        <Link href="/logout" className="flex min-w-[82px] flex-col items-center gap-1 rounded-2xl bg-amber-200/12 px-3 py-2 text-center text-[11px] text-amber-100">
-          <svg className="h-5 w-5 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg>
-          <span className="leading-tight">Salir</span>
-        </Link>
+      <div className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 flex justify-end md:hidden">
+        <div className="relative">
+          {mobileMenuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="Cerrar menu"
+                onClick={() => setMobileMenuOpen(false)}
+                className="fixed inset-0 bg-slate-950/45 backdrop-blur-[2px]"
+              />
+              <div className="absolute bottom-[calc(100%+0.75rem)] right-0 z-10 w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(4,17,38,0.98)_0%,rgba(7,23,42,0.98)_100%)] p-3 shadow-[0_24px_54px_rgba(2,8,23,0.5)]">
+                <div className="mb-2 flex items-center justify-between px-2 py-1">
+                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Menu</p>
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/72"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div className="grid gap-2">
+                  {ITEMS.map((item) => {
+                    const active = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`rounded-2xl border px-4 py-3 transition ${
+                          active
+                            ? "border-emerald-400/18 bg-[linear-gradient(90deg,rgba(8,55,60,0.96)_0%,rgba(8,74,67,0.88)_100%)] text-emerald-200"
+                            : "border-white/8 bg-white/4 text-white/88"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <NavIcon icon={item.icon} />
+                          <div>
+                            <p className="font-medium">{item.label}</p>
+                            <p className={`mt-1 text-xs ${active ? "text-white/80" : "text-white/48"}`}>{item.hint}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      toggleSettings();
+                    }}
+                    className="rounded-2xl border border-white/8 bg-white/4 px-4 py-3 text-left text-white/88 transition"
+                  >
+                    <div className="flex items-start gap-3">
+                      <NavIcon icon="settings" />
+                      <div>
+                        <p className="font-medium">Configuracion</p>
+                        <p className="mt-1 text-xs text-white/48">Tema y apariencia</p>
+                      </div>
+                    </div>
+                  </button>
+                  <Link href="/logout" className="rounded-2xl border border-amber-200/10 bg-amber-200/10 px-4 py-3 text-left text-amber-100">
+                    <div className="flex items-start gap-3">
+                      <svg className="h-5 w-5 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg>
+                      <div>
+                        <p className="font-medium">Salir</p>
+                        <p className="mt-1 text-xs text-amber-100/70">Cerrar sesion</p>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              </div>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((current) => !current)}
+            className="flex items-center gap-2 rounded-full border border-white/10 bg-[linear-gradient(180deg,rgba(4,17,38,0.94)_0%,rgba(7,23,42,0.98)_100%)] px-4 py-3 text-sm font-medium text-white shadow-[0_18px_42px_rgba(2,8,23,0.42)] backdrop-blur"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7h16" />
+              <path d="M4 12h16" />
+              <path d="M4 17h16" />
+            </svg>
+            Menu
+          </button>
         </div>
-      </nav>
+      </div>
     </>
   );
 }
