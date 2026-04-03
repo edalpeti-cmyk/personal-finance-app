@@ -1,11 +1,11 @@
-const CACHE_NAME = "finance-pwa-v2";
+const CACHE_NAME = "finance-pwa-v3";
 const OFFLINE_URL = "/offline.html";
 const APP_SHELL = [
   OFFLINE_URL,
   "/manifest.webmanifest",
-  "/icon?size=192",
-  "/icon?size=512",
-  "/apple-icon"
+  "/pwa-192.png",
+  "/pwa-512.png",
+  "/apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {

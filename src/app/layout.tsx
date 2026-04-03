@@ -10,10 +10,22 @@ export const metadata: Metadata = {
   description: "App de finanzas personales con Next.js + Supabase",
   manifest: "/manifest.webmanifest",
   themeColor: "#091426",
+  icons: {
+    icon: [
+      { url: "/pwa-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pwa-512.png", sizes: "512x512", type: "image/png" }
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    shortcut: ["/pwa-192.png"]
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Finance"
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes"
   }
 };
 
