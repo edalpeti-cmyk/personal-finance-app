@@ -28,6 +28,7 @@ type DebtRow = {
   target_end_date: string | null;
   status: DebtStatus;
   include_in_net_worth: boolean;
+  include_in_fire: boolean;
   notes: string | null;
 };
 
@@ -321,7 +322,8 @@ export default function DebtsPage() {
       target_end_date: targetEndDate || null,
       status,
       notes: notes.trim() || null,
-      include_in_net_worth: editingId ? debts.find((row) => row.id === editingId)?.include_in_net_worth ?? true : true
+      include_in_net_worth: editingId ? debts.find((row) => row.id === editingId)?.include_in_net_worth ?? true : true,
+      include_in_fire: editingId ? debts.find((row) => row.id === editingId)?.include_in_fire ?? true : true
     };
 
     const result = editingId
@@ -413,6 +415,29 @@ export default function DebtsPage() {
       text: !row.include_in_net_worth
         ? "La deuda vuelve a contar en el patrimonio neto."
         : "La deuda deja de descontar patrimonio neto."
+    });
+    await loadData();
+  };
+
+  const handleToggleFireConnection = async (row: DebtRow) => {
+    if (!userId) return;
+
+    const { error } = await supabase
+      .from("debts")
+      .update({ include_in_fire: !row.include_in_fire })
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    showToast({
+      type: "success",
+      text: !row.include_in_fire
+        ? "La deuda ahora tambien cuenta en FIRE."
+        : "La deuda deja de descontar en FIRE."
     });
     await loadData();
   };
@@ -833,6 +858,17 @@ export default function DebtsPage() {
                         >
                           {row.include_in_net_worth ? "Conectada al patrimonio" : "No conectada al patrimonio"}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleFireConnection(row)}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                            row.include_in_fire
+                              ? "border-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
+                              : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                          }`}
+                        >
+                          {row.include_in_fire ? "Conectada a FIRE" : "No conectada a FIRE"}
+                        </button>
                         <button type="button" onClick={() => handleEdit(row)} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white hover:bg-white/10">
                           Editar
                         </button>
@@ -864,6 +900,7 @@ export default function DebtsPage() {
                       <p>Inicio: <span className="font-medium text-white">{row.start_date ? formatDateByPreference(row.start_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Objetivo fin: <span className="font-medium text-white">{row.target_end_date ? formatDateByPreference(row.target_end_date, dateFormat) : "Sin fecha"}</span></p>
                       <p>Patrimonio neto: <span className="font-medium text-white">{row.include_in_net_worth ? "Conectada" : "Ignorada"}</span></p>
+                      <p>FIRE: <span className="font-medium text-white">{row.include_in_fire ? "Conectada" : "Ignorada"}</span></p>
                       <p>Aportacion planificada: <span className="font-medium text-white">{formatCurrencyByPreference(plannedContribution, currency)}</span></p>
                       <p>Aportacion aplicada este mes: <span className="font-medium text-white">{formatCurrencyByPreference(appliedBudgetContribution, currency)}</span></p>
                       <p>Partidas presupuesto: <span className="font-medium text-white">{linkedBudgetCategories.length > 0 ? linkedBudgetCategories.join(", ") : "Sin partidas"}</span></p>

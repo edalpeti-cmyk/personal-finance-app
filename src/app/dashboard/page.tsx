@@ -34,6 +34,7 @@ type DebtRow = {
   currency: AssetCurrency | null;
   status: "active" | "paused" | "closed";
   include_in_net_worth: boolean;
+  include_in_fire: boolean;
 };
 type InvestmentRow = {
   asset_name: string;
@@ -1928,7 +1929,7 @@ export default function DashboardPage() {
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
-        supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", userId),
+        supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth, include_in_fire").eq("user_id", userId),
         supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
         supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle(),
         supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
@@ -1999,6 +2000,9 @@ export default function DashboardPage() {
       const debtTotal = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
+      const fireDebtTotal = debtRows
+        .filter((row) => row.status !== "closed" && row.include_in_fire)
+        .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
       const monthlyDebtPayment = debtRows
         .filter((row) => row.status !== "closed" && row.include_in_net_worth)
         .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
@@ -2041,7 +2045,7 @@ export default function DashboardPage() {
       const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
       const fireNetWorth =
         fireSettings && fireSettings.current_net_worth >= 0
-          ? Math.max(fireSettings.current_net_worth + fireIncludedWealthValue - debtTotal, 0)
+          ? Math.max(fireSettings.current_net_worth + fireIncludedWealthValue - fireDebtTotal, 0)
           : totalNetWorth;
       const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(totalAnnualSavings, 0);
       const fireExpectedReturn =

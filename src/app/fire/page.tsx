@@ -58,7 +58,7 @@ type DebtRow = {
   outstanding_balance: number;
   currency: AssetCurrency | null;
   status: "active" | "paused" | "closed";
-  include_in_net_worth: boolean;
+  include_in_fire: boolean;
 };
 type WealthAssetRow = {
   current_estimated_value: number;
@@ -117,7 +117,7 @@ export default function FirePage() {
           .select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("debts").select("outstanding_balance, currency, status, include_in_net_worth").eq("user_id", userId),
+        supabase.from("debts").select("outstanding_balance, currency, status, include_in_fire").eq("user_id", userId),
         supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_fire").eq("user_id", userId)
       ]);
 
@@ -125,7 +125,7 @@ export default function FirePage() {
       const error = settingsResult.error;
       const debtRows = (debtsResult.data as DebtRow[] | null) ?? [];
       const registeredDebt = debtRows
-        .filter((row) => row.status !== "closed" && row.include_in_net_worth)
+        .filter((row) => row.status !== "closed" && row.include_in_fire)
         .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
       const fireAssets = ((wealthAssetsResult.data as WealthAssetRow[] | null) ?? [])
         .filter((row) => row.include_in_fire)
