@@ -120,9 +120,9 @@ export default function SideNav() {
                 type="button"
                 aria-label="Cerrar menu"
                 onClick={() => setMobileMenuOpen(false)}
-                className="fixed inset-0 bg-slate-950/45 backdrop-blur-[2px]"
+                className="fixed inset-0 z-0 bg-slate-950/45 backdrop-blur-[2px]"
               />
-              <div className="absolute bottom-[calc(100%+0.75rem)] right-0 z-10 w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(4,17,38,0.98)_0%,rgba(7,23,42,0.98)_100%)] p-3 shadow-[0_24px_54px_rgba(2,8,23,0.5)]">
+              <div className="absolute bottom-[calc(100%+0.75rem)] right-0 z-10 w-[min(21rem,calc(100vw-2rem))] max-h-[70vh] overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(4,17,38,0.98)_0%,rgba(7,23,42,0.98)_100%)] p-3 shadow-[0_24px_54px_rgba(2,8,23,0.5)]">
                 <div className="mb-2 flex items-center justify-between px-2 py-1">
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Menu</p>
                   <button
@@ -133,7 +133,8 @@ export default function SideNav() {
                     Cerrar
                   </button>
                 </div>
-                <div className="grid gap-2">
+                <div className="max-h-[calc(70vh-3.5rem)] overflow-y-auto pr-1">
+                  <div className="grid gap-2">
                   {ITEMS.map((item) => {
                     const active = pathname === item.href;
                     return (
@@ -181,6 +182,7 @@ export default function SideNav() {
                       </div>
                     </div>
                   </Link>
+                </div>
                 </div>
               </div>
             </>
