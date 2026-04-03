@@ -2039,7 +2039,10 @@ export default function DashboardPage() {
       const totalAnnualSavings = annualSavings + annualBudgetSavings;
 
       const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
-      const fireNetWorth = fireSettings && fireSettings.current_net_worth >= 0 ? fireSettings.current_net_worth + fireIncludedWealthValue : totalNetWorth;
+      const fireNetWorth =
+        fireSettings && fireSettings.current_net_worth >= 0
+          ? Math.max(fireSettings.current_net_worth + fireIncludedWealthValue - debtTotal, 0)
+          : totalNetWorth;
       const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(totalAnnualSavings, 0);
       const fireExpectedReturn =
         fireSettings && fireSettings.expected_return >= -20 && fireSettings.expected_return <= 30
