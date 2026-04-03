@@ -23,32 +23,42 @@ export default function Icon() {
       >
         <div
           style={{
+            position: "absolute",
+            width: 420,
+            height: 420,
+            borderRadius: 210,
+            background: "radial-gradient(circle, rgba(52,211,153,0.22) 0%, rgba(52,211,153,0) 70%)",
+            filter: "blur(8px)"
+          }}
+        />
+        <div
+          style={{
             width: 360,
             height: 360,
             borderRadius: 88,
-            border: "2px solid rgba(255,255,255,0.14)",
+            border: "2px solid rgba(255,255,255,0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             boxShadow: "0 22px 60px rgba(2,8,23,0.45)",
-            background: "rgba(255,255,255,0.04)"
+            background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)"
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-            <div style={{ display: "flex", gap: 18, alignItems: "flex-end" }}>
-              <div style={{ width: 30, height: 120, borderRadius: 18, background: "#34d399" }} />
-              <div style={{ width: 30, height: 170, borderRadius: 18, background: "#5eead4" }} />
-              <div style={{ width: 30, height: 90, borderRadius: 18, background: "#93c5fd" }} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 26 }}>
+            <div style={{ display: "flex", gap: 20, alignItems: "flex-end" }}>
+              <div style={{ width: 34, height: 124, borderRadius: 18, background: "linear-gradient(180deg,#34d399 0%,#0f766e 100%)" }} />
+              <div style={{ width: 34, height: 182, borderRadius: 18, background: "linear-gradient(180deg,#6ee7b7 0%,#14b8a6 100%)" }} />
+              <div style={{ width: 34, height: 102, borderRadius: 18, background: "linear-gradient(180deg,#93c5fd 0%,#2563eb 100%)" }} />
             </div>
             <div
               style={{
-                fontSize: 78,
-                fontWeight: 700,
-                letterSpacing: "-0.04em",
-                color: "white"
+                fontSize: 54,
+                fontWeight: 600,
+                letterSpacing: "0.18em",
+                color: "rgba(255,255,255,0.92)"
               }}
             >
-              F
+              FINANCE
             </div>
           </div>
         </div>
