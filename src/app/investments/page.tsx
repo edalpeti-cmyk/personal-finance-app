@@ -191,6 +191,9 @@ const INVESTMENT_VIEWS_KEY = "investment-saved-views";
 const INVESTMENT_VIEW_SCOPE = "investments";
 const INVESTMENT_COMPARISON_MODE_KEY = "investment-comparison-mode";
 const INVESTMENT_FORM_OPEN_KEY = "investment-form-open";
+const INVESTMENT_PORTFOLIO_RANGE_SESSION_KEY = "investment-portfolio-range";
+const INVESTMENT_TYPE_RANGE_SESSION_KEY = "investment-type-range";
+const INVESTMENT_ASSET_RANGE_SESSION_KEY = "investment-asset-range";
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -935,6 +938,53 @@ export default function InvestmentsPage() {
   useEffect(() => {
     window.localStorage.setItem(INVESTMENT_VIEWS_KEY, JSON.stringify(savedViews));
   }, [savedViews]);
+
+  useEffect(() => {
+    try {
+      const storedPortfolioRange = window.sessionStorage.getItem(INVESTMENT_PORTFOLIO_RANGE_SESSION_KEY);
+      if (storedPortfolioRange && TYPE_RANGE_OPTIONS.some((option) => option.value === storedPortfolioRange)) {
+        setPortfolioRange(storedPortfolioRange as TypeChartRange);
+      }
+
+      const storedTypeRange = window.sessionStorage.getItem(INVESTMENT_TYPE_RANGE_SESSION_KEY);
+      if (storedTypeRange && TYPE_RANGE_OPTIONS.some((option) => option.value === storedTypeRange)) {
+        setSelectedTypeRange(storedTypeRange as TypeChartRange);
+      }
+
+      const storedAssetRange = window.sessionStorage.getItem(INVESTMENT_ASSET_RANGE_SESSION_KEY);
+      if (storedAssetRange && TYPE_RANGE_OPTIONS.some((option) => option.value === storedAssetRange)) {
+        setSelectedAssetRange(storedAssetRange as TypeChartRange);
+      }
+    } catch {
+      setPortfolioRange("daily");
+      setSelectedTypeRange("daily");
+      setSelectedAssetRange("daily");
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(INVESTMENT_PORTFOLIO_RANGE_SESSION_KEY, portfolioRange);
+    } catch {
+      // Ignore session storage issues and keep the current in-memory range.
+    }
+  }, [portfolioRange]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(INVESTMENT_TYPE_RANGE_SESSION_KEY, selectedTypeRange);
+    } catch {
+      // Ignore session storage issues and keep the current in-memory range.
+    }
+  }, [selectedTypeRange]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(INVESTMENT_ASSET_RANGE_SESSION_KEY, selectedAssetRange);
+    } catch {
+      // Ignore session storage issues and keep the current in-memory range.
+    }
+  }, [selectedAssetRange]);
 
   useEffect(() => {
     const storedMode = window.localStorage.getItem(INVESTMENT_COMPARISON_MODE_KEY);

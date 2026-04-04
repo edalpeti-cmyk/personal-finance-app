@@ -184,6 +184,7 @@ const DASHBOARD_HIDDEN_WIDGETS_KEY = "dashboard-hidden-widgets";
 const DASHBOARD_WIDGET_SIZES_KEY = "dashboard-widget-sizes";
 const DASHBOARD_WIDGET_WIDTHS_KEY = "dashboard-widget-widths";
 const DASHBOARD_ALERTS_OPEN_KEY = "dashboard-alerts-open";
+const DASHBOARD_CHART_RANGE_SESSION_KEY = "dashboard-chart-range";
 const DASHBOARD_ALERT_RULE_DEFAULTS: DashboardAlertRule[] = [
   { key: "low_savings_rate", enabled: true, threshold: 10 },
   { key: "missing_annual_savings", enabled: true, threshold: null },
@@ -846,6 +847,25 @@ export default function DashboardPage() {
 
     return dashboardAlertGroups.active.slice(0, 4);
   }, [dashboardAlertGroups]);
+
+  useEffect(() => {
+    try {
+      const storedRange = window.sessionStorage.getItem(DASHBOARD_CHART_RANGE_SESSION_KEY);
+      if (storedRange && RANGE_OPTIONS.some((option) => option.value === storedRange)) {
+        setChartRange(storedRange as ChartRange);
+      }
+    } catch {
+      setChartRange("daily");
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(DASHBOARD_CHART_RANGE_SESSION_KEY, chartRange);
+    } catch {
+      // Ignore session storage issues and keep the current in-memory range.
+    }
+  }, [chartRange]);
 
   useEffect(() => {
     try {
