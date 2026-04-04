@@ -238,7 +238,7 @@ async function fetchFinnhubDividends(symbol: string, from: string, to: string) {
 async function fetchEodhdDividends(symbol: string, from: string, to: string) {
   const apiKey = process.env.EODHD_API_KEY;
   if (!apiKey) {
-    return null;
+    return { rows: null, status: "missing_key" as const };
   }
 
   const response = await fetch(
@@ -247,7 +247,7 @@ async function fetchEodhdDividends(symbol: string, from: string, to: string) {
   );
 
   if (!response.ok) {
-    return null;
+    return { rows: null, status: `http_${response.status}` as const };
   }
 
   const data = (await response.json()) as
@@ -264,10 +264,41 @@ async function fetchEodhdDividends(symbol: string, from: string, to: string) {
     | { error?: string; message?: string };
 
   if (!Array.isArray(data)) {
-    return null;
+    const message = [data.error, data.message].filter(Boolean).join(" ").toLowerCase();
+    if (message.includes("api key") || message.includes("invalid token") || message.includes("invalid api token")) {
+      return { rows: null, status: "invalid_key" as const };
+    }
+    if (message.includes("upgrade") || message.includes("plan") || message.includes("not available")) {
+      return { rows: null, status: "plan_restricted" as const };
+    }
+    return { rows: null, status: "api_error" as const };
   }
 
-  return data;
+  if (data.length === 0) {
+    return { rows: [], status: "empty" as const };
+  }
+
+  return { rows: data, status: "ok" as const };
+}
+
+function getEodhdDiagnosticReason(status: string) {
+  switch (status) {
+    case "missing_key":
+      return "EODHD no esta configurado en el servidor.";
+    case "invalid_key":
+      return "La API key de EODHD no es valida.";
+    case "plan_restricted":
+      return "Tu plan de EODHD no da acceso al calendario de dividendos.";
+    case "empty":
+      return "EODHD no devolvio eventos futuros para este simbolo.";
+    case "api_error":
+      return "EODHD respondio con un error y no devolvio calendario util.";
+    default:
+      if (status.startsWith("http_")) {
+        return `EODHD respondio con ${status.replace("http_", "HTTP ")}.`;
+      }
+      return "EODHD no devolvio eventos.";
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -307,7 +338,7 @@ export async function POST(request: NextRequest) {
     for (const asset of supportedAssets) {
       const candidates = getDividendCandidates(asset.assetSymbol ?? "", asset.assetMarket);
       const providerAttempts: string[] = [];
-      let eodhdRows: Awaited<ReturnType<typeof fetchEodhdDividends>> = null;
+      let eodhdResult: Awaited<ReturnType<typeof fetchEodhdDividends>> | null = null;
       let usedSource: "yahoo" | "eodhd" | "alphavantage" | "finnhub" | null = null;
       let yahooResult: Awaited<ReturnType<typeof fetchYahooDividendCalendar>> = null;
       let resolved: Awaited<ReturnType<typeof fetchAlphaVantageDividends>> = null;
@@ -328,8 +359,8 @@ export async function POST(request: NextRequest) {
 
       if (!usedSource) {
         for (const candidate of candidates) {
-          eodhdRows = await fetchEodhdDividends(candidate, today, futureLimit);
-          if (eodhdRows?.length) {
+          eodhdResult = await fetchEodhdDividends(candidate, today, futureLimit);
+          if (eodhdResult?.rows?.length) {
             usedSource = "eodhd";
             providerAttempts.push(`EODHD: ${candidate}`);
             break;
@@ -338,7 +369,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (!usedSource) {
-        providerAttempts.push("EODHD sin eventos");
+        providerAttempts.push(getEodhdDiagnosticReason(eodhdResult?.status ?? "empty"));
         for (const candidate of candidates) {
           resolved = await fetchAlphaVantageDividends(candidate);
           if (resolved?.dividend_history?.length) {
@@ -457,10 +488,10 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      if (usedSource === "eodhd" && eodhdRows?.length) {
+      if (usedSource === "eodhd" && eodhdResult?.rows?.length) {
         let insertedRows = 0;
 
-        for (const row of eodhdRows) {
+        for (const row of eodhdResult.rows) {
           const paymentDate = (row.payment_date ?? row.date)?.slice(0, 10);
           if (!paymentDate || paymentDate < today) {
             continue;
