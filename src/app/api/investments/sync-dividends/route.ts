@@ -166,6 +166,48 @@ async function fetchYahooDividendCalendar(symbol: string) {
   };
 }
 
+async function fetchYahooDividendPageFallback(symbol: string) {
+  const response = await fetch(`https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`, {
+    cache: "no-store",
+    headers: {
+      "User-Agent": "personal-finance-app/1.0"
+    }
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const html = await response.text();
+  const exDividendMatch = html.match(/"exDividendDate"\s*:\s*\{"raw":\s*(\d+)/);
+  const dividendRateMatch = html.match(/"dividendRate"\s*:\s*\{"raw":\s*([0-9.]+)/);
+  const trailingDividendMatch = html.match(/"trailingAnnualDividendRate"\s*:\s*\{"raw":\s*([0-9.]+)/);
+  const currencyMatch = html.match(/"currency"\s*:\s*"([A-Z]{3})"/);
+
+  const exDividendDate = exDividendMatch ? unixToDate(Number(exDividendMatch[1])) : null;
+  const annualDividend = dividendRateMatch
+    ? Number(dividendRateMatch[1])
+    : trailingDividendMatch
+      ? Number(trailingDividendMatch[1])
+      : null;
+
+  let dividendPerShareLocal: number | null = null;
+  if (annualDividend !== null && Number.isFinite(annualDividend) && annualDividend > 0) {
+    dividendPerShareLocal = Number((annualDividend / 2).toFixed(6));
+  }
+
+  return {
+    exDividendDate,
+    paymentDate: exDividendDate,
+    dividendPerShareLocal,
+    assetCurrency: (currencyMatch?.[1] || null) as AssetCurrency | null,
+    resolvedSymbol: symbol,
+    notes: dividendPerShareLocal !== null
+      ? "Estimacion publica desde la ficha web de Yahoo Finance."
+      : "Yahoo publico solo devolvio la fecha ex-dividend, sin importe fiable."
+  };
+}
+
 async function fetchAlphaVantageDividends(symbol: string) {
   const apiKey = process.env.ALPHAVANTAGE_API_KEY;
   if (!apiKey) {
@@ -272,8 +314,9 @@ export async function POST(request: NextRequest) {
     for (const asset of supportedAssets) {
       const candidates = getDividendCandidates(asset.assetSymbol ?? "", asset.assetMarket);
       const providerAttempts: string[] = [];
-      let usedSource: "yahoo" | "alphavantage" | "finnhub" | null = null;
+      let usedSource: "yahoo" | "yahoo_html" | "alphavantage" | "finnhub" | null = null;
       let yahooResult: Awaited<ReturnType<typeof fetchYahooDividendCalendar>> = null;
+      let yahooPageResult: Awaited<ReturnType<typeof fetchYahooDividendPageFallback>> = null;
       let resolved: Awaited<ReturnType<typeof fetchAlphaVantageDividends>> = null;
       let finnhubRows: Awaited<ReturnType<typeof fetchFinnhubDividends>> = null;
 
@@ -283,6 +326,17 @@ export async function POST(request: NextRequest) {
           usedSource = "yahoo";
           providerAttempts.push(`Yahoo: ${candidate}`);
           break;
+        }
+      }
+
+      if (!usedSource) {
+        for (const candidate of candidates) {
+          yahooPageResult = await fetchYahooDividendPageFallback(candidate);
+          if (yahooPageResult?.exDividendDate && yahooPageResult.exDividendDate >= today) {
+            usedSource = "yahoo_html";
+            providerAttempts.push(`Yahoo web: ${candidate}`);
+            break;
+          }
         }
       }
 
@@ -355,6 +409,45 @@ export async function POST(request: NextRequest) {
             dividendPerShareLocal !== null
               ? `Calendario encontrado con Yahoo para ${yahooResult.resolvedSymbol}.`
               : `Calendario encontrado con Yahoo para ${yahooResult.resolvedSymbol}, sin importe por accion.`
+        });
+        continue;
+      }
+
+      if (usedSource === "yahoo_html" && yahooPageResult?.exDividendDate && yahooPageResult.exDividendDate >= today) {
+        const providerCurrency = yahooPageResult.assetCurrency ?? asset.assetCurrency;
+        const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+        const sharesPaid = Number(asset.quantity || 0);
+        const dividendPerShareLocal = yahooPageResult.dividendPerShareLocal;
+        const grossAmountLocal = dividendPerShareLocal !== null ? dividendPerShareLocal * sharesPaid : 0;
+        const grossAmountEur = grossAmountLocal * fxRateToEur;
+
+        dividends.push({
+          investmentId: asset.investmentId,
+          paymentDate: yahooPageResult.paymentDate ?? yahooPageResult.exDividendDate,
+          exDividendDate: yahooPageResult.exDividendDate,
+          recordDate: null,
+          grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
+          netAmountLocal: Number(grossAmountLocal.toFixed(4)),
+          grossAmountEur: Number(grossAmountEur.toFixed(4)),
+          netAmountEur: Number(grossAmountEur.toFixed(4)),
+          dividendPerShareLocal: dividendPerShareLocal !== null ? Number(dividendPerShareLocal.toFixed(6)) : null,
+          sharesPaid,
+          assetCurrency: providerCurrency,
+          fxRateToEur: Number(fxRateToEur.toFixed(8)),
+          source: "yahoo",
+          notes: yahooPageResult.notes
+        });
+
+        diagnostics.push({
+          investmentId: asset.investmentId,
+          assetName: asset.assetName,
+          attemptedSymbols: candidates,
+          source: "yahoo",
+          status: "synced",
+          reason:
+            dividendPerShareLocal !== null
+              ? `Calendario estimado desde la ficha publica de Yahoo para ${yahooPageResult.resolvedSymbol}.`
+              : `Yahoo publico solo devolvio fecha ex-dividend para ${yahooPageResult.resolvedSymbol}.`
         });
         continue;
       }
