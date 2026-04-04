@@ -40,6 +40,11 @@ type InvestmentRow = {
   quantity: number;
   asset_currency: AssetCurrency | null;
 };
+type InvestmentDividendRow = {
+  status: "received" | "upcoming";
+  payment_date: string;
+  net_amount_eur: number;
+};
 type WealthAssetRow = {
   current_estimated_value: number;
   ownership_pct: number;
@@ -149,6 +154,7 @@ export default function ReviewPage() {
   const [cashBaseline, setCashBaseline] = useState<CashBaselineRow | null>(null);
   const [internalTransferRows, setInternalTransferRows] = useState<InternalTransferRow[]>([]);
   const [investmentRows, setInvestmentRows] = useState<InvestmentRow[]>([]);
+  const [investmentDividendRows, setInvestmentDividendRows] = useState<InvestmentDividendRow[]>([]);
   const [wealthAssetRows, setWealthAssetRows] = useState<WealthAssetRow[]>([]);
   const [debtRows, setDebtRows] = useState<DebtRow[]>([]);
   const [fireSettings, setFireSettings] = useState<FireSettingsRow | null>(null);
@@ -167,12 +173,13 @@ export default function ReviewPage() {
     setLoading(true);
     setMessage(null);
 
-    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, wealthAssetsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult, cashBaselineResult, internalTransfersResult] = await Promise.all([
+    const [incomeResult, expenseResult, budgetResult, savingsResult, investmentsResult, dividendsResult, wealthAssetsResult, debtsResult, fireResult, goalsResult, tasksResult, closuresResult, goalHistoryResult, budgetSavingsResult, cashBaselineResult, internalTransfersResult] = await Promise.all([
       supabase.from("income").select("amount, income_date").eq("user_id", uid).order("income_date", { ascending: false }),
       supabase.from("expenses").select("amount, category, expense_date").eq("user_id", uid).order("expense_date", { ascending: false }),
       supabase.from("monthly_budgets").select("category, budget_amount, month").eq("user_id", uid),
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
+      supabase.from("investment_dividends").select("status, payment_date, net_amount_eur").eq("user_id", uid),
       supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_net_worth, include_in_fire").eq("user_id", uid),
       supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", uid),
       supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
@@ -185,7 +192,7 @@ export default function ReviewPage() {
       supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", uid).in("transfer_type", ["investment", "emergency_fund"])
     ]);
 
-    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, wealthAssetsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error, cashBaselineResult.error, internalTransfersResult.error].find(Boolean);
+    const firstError = [incomeResult.error, expenseResult.error, budgetResult.error, savingsResult.error, investmentsResult.error, dividendsResult.error, wealthAssetsResult.error, debtsResult.error, fireResult.error, goalsResult.error, tasksResult.error, closuresResult.error, goalHistoryResult.error, budgetSavingsResult.error, cashBaselineResult.error, internalTransfersResult.error].find(Boolean);
     if (firstError) {
       setMessage(firstError.message);
       setLoading(false);
@@ -200,6 +207,7 @@ export default function ReviewPage() {
     setCashBaseline((cashBaselineResult.data as CashBaselineRow | null) ?? null);
     setInternalTransferRows((internalTransfersResult.data as InternalTransferRow[]) ?? []);
     setInvestmentRows((investmentsResult.data as InvestmentRow[]) ?? []);
+    setInvestmentDividendRows((dividendsResult.data as InvestmentDividendRow[]) ?? []);
     setWealthAssetRows((wealthAssetsResult.data as WealthAssetRow[]) ?? []);
     setDebtRows((debtsResult.data as DebtRow[]) ?? []);
     setFireSettings((fireResult.data as FireSettingsRow | null) ?? null);
@@ -303,6 +311,15 @@ export default function ReviewPage() {
     const totalNetWorth = cashPosition + investmentValue + wealthAssetsValue + emergencyFundReserved - debtTotal;
     const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
     const fireProgress = fireTarget > 0 ? ((totalNetWorth + fireIncludedWealthValue - wealthAssetsValue) / fireTarget) * 100 : 0;
+    const monthlyDividendsNet = investmentDividendRows
+      .filter((row) => row.status === "received" && isSameMonth(row.payment_date, selectedMonth))
+      .reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0);
+    const annualDividendsNet = investmentDividendRows
+      .filter((row) => row.status === "received" && new Date(`${row.payment_date}T00:00:00`).getFullYear() === new Date(`${selectedMonth}-01T00:00:00`).getFullYear())
+      .reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0);
+    const nextDividend = [...investmentDividendRows]
+      .filter((row) => row.status === "upcoming" && new Date(`${row.payment_date}T00:00:00`) >= new Date(`${selectedMonth}-01T00:00:00`))
+      .sort((a, b) => a.payment_date.localeCompare(b.payment_date))[0] ?? null;
 
     const activeGoals = goalRows.filter((row) => row.status === "active");
     const topGoals = [...activeGoals]
@@ -330,6 +347,9 @@ export default function ReviewPage() {
       emergencyFundReserved,
       monthlyDebtPayment,
       debtPaymentRatio: currentIncome > 0 ? (monthlyDebtPayment / currentIncome) * 100 : null,
+      monthlyDividendsNet,
+      annualDividendsNet,
+      nextDividend,
       pricesConnected,
       investmentCount: investmentRows.length,
       totalNetWorth,
@@ -338,7 +358,7 @@ export default function ReviewPage() {
       topGoals,
       activeGoalsCount: activeGoals.length
     };
-  }, [budgetRows, budgetSavingsRows, cashBaseline, debtRows, expenseRows, fireSettings, goalRows, incomeRows, internalTransferRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth, wealthAssetRows]);
+  }, [budgetRows, budgetSavingsRows, cashBaseline, debtRows, expenseRows, fireSettings, goalRows, incomeRows, internalTransferRows, investmentDividendRows, investmentRows, previousSelectedMonth, savingsTargets, selectedMonth, wealthAssetRows]);
 
   const reviewActions = useMemo<Array<ReviewAction & { completed: boolean }>>(() => {
     const actions: ReviewAction[] = [];
@@ -822,6 +842,8 @@ export default function ReviewPage() {
               <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="debtPayment" className="h-4 w-4 flex-none text-amber-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-amber-300">Gasto real</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentExpenses, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousExpenses, currency)}</p></article>
               <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-emerald-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro objetivo</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentSavingsTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousSavingsTarget, currency)}</p></article>
               <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-teal-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-teal-300">Ahorro real</p></div><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${reviewMetrics.actualSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.actualSavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousActualSavings, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-violet-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-violet-300">Dividendos del mes</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.monthlyDividendsNet, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Neto cobrado dentro del mes en revision.</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="timeline" className="h-4 w-4 flex-none text-fuchsia-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-fuchsia-300">Proximo dividendo</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{reviewMetrics.nextDividend ? formatCurrencyByPreference(reviewMetrics.nextDividend.net_amount_eur, currency) : "Sin datos"}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">{reviewMetrics.nextDividend ? `Pago previsto: ${reviewMetrics.nextDividend.payment_date}` : "No hay pagos futuros guardados."}</p></article>
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">

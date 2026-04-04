@@ -97,6 +97,26 @@ type InvestmentTransactionRow = {
   executed_at: string;
   created_at?: string;
 };
+type InvestmentDividendStatus = "received" | "upcoming";
+type InvestmentDividendRow = {
+  id: string;
+  investment_id: string | null;
+  status: InvestmentDividendStatus;
+  payment_date: string;
+  ex_dividend_date: string | null;
+  record_date: string | null;
+  gross_amount_local: number;
+  withholding_tax_local: number;
+  net_amount_local: number;
+  gross_amount_eur: number;
+  net_amount_eur: number;
+  asset_currency: AssetCurrency;
+  fx_rate_to_eur: number | null;
+  dividend_per_share_local: number | null;
+  shares_paid: number | null;
+  source: string | null;
+  notes: string | null;
+};
 type InternalTransferRow = {
   id: string;
   category: string;
@@ -194,6 +214,10 @@ const INVESTMENT_FORM_OPEN_KEY = "investment-form-open";
 const INVESTMENT_PORTFOLIO_RANGE_SESSION_KEY = "investment-portfolio-range";
 const INVESTMENT_TYPE_RANGE_SESSION_KEY = "investment-type-range";
 const INVESTMENT_ASSET_RANGE_SESSION_KEY = "investment-asset-range";
+const DIVIDEND_STATUSES: Array<{ value: InvestmentDividendStatus; label: string }> = [
+  { value: "received", label: "Cobrado" },
+  { value: "upcoming", label: "Proximo" }
+];
 
 function inputClass(hasError: boolean) {
   return `w-full rounded-2xl border bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 outline-none transition ${
@@ -834,6 +858,7 @@ export default function InvestmentsPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
   const [transactions, setTransactions] = useState<InvestmentTransactionRow[]>([]);
+  const [dividends, setDividends] = useState<InvestmentDividendRow[]>([]);
   const [realizedGainTotalEur, setRealizedGainTotalEur] = useState(0);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
 
@@ -874,6 +899,18 @@ export default function InvestmentsPage() {
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
   const [investmentFormOpen, setInvestmentFormOpen] = useState(true);
+  const [dividendSaving, setDividendSaving] = useState(false);
+  const [dividendStatus, setDividendStatus] = useState<InvestmentDividendStatus>("received");
+  const [dividendInvestmentId, setDividendInvestmentId] = useState("");
+  const [dividendPaymentDate, setDividendPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dividendExDate, setDividendExDate] = useState("");
+  const [dividendRecordDate, setDividendRecordDate] = useState("");
+  const [dividendGrossAmount, setDividendGrossAmount] = useState("");
+  const [dividendWithholding, setDividendWithholding] = useState("");
+  const [dividendPerShare, setDividendPerShare] = useState("");
+  const [dividendSharesPaid, setDividendSharesPaid] = useState("");
+  const [dividendSource, setDividendSource] = useState("");
+  const [dividendNotes, setDividendNotes] = useState("");
   const formRef = useRef<HTMLElement | null>(null);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const backfillingTransactionsRef = useRef(false);
@@ -892,6 +929,20 @@ export default function InvestmentsPage() {
     (value: number, digits: number) => (hideBalances ? "••••" : formatNumber(value, digits)),
     [hideBalances]
   );
+
+  const resetDividendForm = useCallback(() => {
+    setDividendStatus("received");
+    setDividendInvestmentId("");
+    setDividendPaymentDate(new Date().toISOString().slice(0, 10));
+    setDividendExDate("");
+    setDividendRecordDate("");
+    setDividendGrossAmount("");
+    setDividendWithholding("");
+    setDividendPerShare("");
+    setDividendSharesPaid("");
+    setDividendSource("");
+    setDividendNotes("");
+  }, []);
 
   useEffect(() => {
     const loadSavedViews = async () => {
@@ -1023,6 +1074,108 @@ export default function InvestmentsPage() {
     setAssetSuggestions([]);
     setErrors({});
   }, []);
+
+  const selectedDividendInvestment = useMemo(
+    () => investments.find((row) => row.id === dividendInvestmentId) ?? null,
+    [dividendInvestmentId, investments]
+  );
+
+  const handleDividendSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+
+    if (!userId) return;
+    if (!dividendInvestmentId) {
+      showToast({ type: "error", text: "Selecciona el activo que paga el dividendo." });
+      return;
+    }
+    if (!selectedDividendInvestment) {
+      showToast({ type: "error", text: "El activo seleccionado ya no esta disponible." });
+      return;
+    }
+    if (!dividendPaymentDate) {
+      showToast({ type: "error", text: "Indica la fecha de pago del dividendo." });
+      return;
+    }
+
+    const grossAmountLocal = Number(dividendGrossAmount || 0);
+    const withholdingTaxLocal = Number(dividendWithholding || 0);
+    const dividendPerShareLocal = dividendPerShare.trim() ? Number(dividendPerShare) : null;
+    const sharesPaid = dividendSharesPaid.trim() ? Number(dividendSharesPaid) : null;
+
+    if (!Number.isFinite(grossAmountLocal) || grossAmountLocal < 0) {
+      showToast({ type: "error", text: "El importe bruto del dividendo no es valido." });
+      return;
+    }
+
+    if (!Number.isFinite(withholdingTaxLocal) || withholdingTaxLocal < 0 || withholdingTaxLocal > grossAmountLocal) {
+      showToast({ type: "error", text: "La retencion no puede ser negativa ni superar el importe bruto." });
+      return;
+    }
+
+    if (dividendPerShareLocal !== null && (!Number.isFinite(dividendPerShareLocal) || dividendPerShareLocal < 0)) {
+      showToast({ type: "error", text: "El dividendo por accion no es valido." });
+      return;
+    }
+
+    if (sharesPaid !== null && (!Number.isFinite(sharesPaid) || sharesPaid < 0)) {
+      showToast({ type: "error", text: "El numero de acciones pagadas no es valido." });
+      return;
+    }
+
+    const assetDividendCurrency = selectedDividendInvestment.asset_currency ?? "EUR";
+    const fxRateToEur = ratesToEur[assetDividendCurrency] ?? 1;
+    const netAmountLocal = Math.max(grossAmountLocal - withholdingTaxLocal, 0);
+    const grossAmountEur = convertToEur(grossAmountLocal, assetDividendCurrency, ratesToEur);
+    const netAmountEur = convertToEur(netAmountLocal, assetDividendCurrency, ratesToEur);
+
+    setDividendSaving(true);
+
+    const { error } = await supabase.from("investment_dividends").insert({
+      investment_id: dividendInvestmentId,
+      user_id: userId,
+      status: dividendStatus,
+      payment_date: dividendPaymentDate,
+      ex_dividend_date: dividendExDate || null,
+      record_date: dividendRecordDate || null,
+      gross_amount_local: Number(grossAmountLocal.toFixed(4)),
+      withholding_tax_local: Number(withholdingTaxLocal.toFixed(4)),
+      net_amount_local: Number(netAmountLocal.toFixed(4)),
+      gross_amount_eur: Number(grossAmountEur.toFixed(4)),
+      net_amount_eur: Number(netAmountEur.toFixed(4)),
+      asset_currency: assetDividendCurrency,
+      fx_rate_to_eur: Number(fxRateToEur.toFixed(8)),
+      dividend_per_share_local: dividendPerShareLocal,
+      shares_paid: sharesPaid,
+      source: dividendSource.trim() || null,
+      notes: dividendNotes.trim() || null
+    });
+
+    setDividendSaving(false);
+
+    if (error) {
+      showToast({ type: "error", text: error.message });
+      return;
+    }
+
+    await loadDividends(userId);
+    resetDividendForm();
+    showToast({ type: "success", text: dividendStatus === "received" ? "Dividendo guardado." : "Proximo dividendo guardado." });
+  };
+
+  const handleDeleteDividend = async (id: string) => {
+    if (!userId) return;
+    const confirmed = window.confirm("Se eliminara este registro de dividendo. ¿Quieres continuar?");
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("investment_dividends").delete().eq("id", id).eq("user_id", userId);
+    if (error) {
+      showToast({ type: "error", text: error.message });
+      return;
+    }
+
+    await loadDividends(userId);
+    showToast({ type: "success", text: "Dividendo eliminado." });
+  };
 
   useEffect(() => {
     const trimmedQuery = lookupQuery.trim();
@@ -1278,6 +1431,24 @@ export default function InvestmentsPage() {
     [supabase]
   );
 
+  const loadDividends = useCallback(
+    async (uid: string) => {
+      const { data, error } = await supabase
+        .from("investment_dividends")
+        .select("id, investment_id, status, payment_date, ex_dividend_date, record_date, gross_amount_local, withholding_tax_local, net_amount_local, gross_amount_eur, net_amount_eur, asset_currency, fx_rate_to_eur, dividend_per_share_local, shares_paid, source, notes")
+        .eq("user_id", uid)
+        .order("payment_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        return;
+      }
+
+      setDividends((data as InvestmentDividendRow[]) ?? []);
+    },
+    [supabase]
+  );
+
   const backfillHistoricalTransactionFx = useCallback(
     async (uid: string, rows: InvestmentTransactionRow[]) => {
       const rowsNeedingReview = rows.filter((row) => row.asset_currency !== "EUR" && Boolean(row.executed_at));
@@ -1463,12 +1634,12 @@ export default function InvestmentsPage() {
         return;
       }
 
-      await Promise.all([loadInvestments(userId), loadRealizedGainTotal(userId), loadTransactions(userId)]);
+      await Promise.all([loadInvestments(userId), loadRealizedGainTotal(userId), loadTransactions(userId), loadDividends(userId)]);
       setLoading(false);
     };
 
     void init();
-  }, [authLoading, loadInvestments, loadRealizedGainTotal, loadTransactions, userId]);
+  }, [authLoading, loadDividends, loadInvestments, loadRealizedGainTotal, loadTransactions, userId]);
 
   useEffect(() => {
     if (!userId || transactions.length === 0) {
@@ -1510,6 +1681,41 @@ export default function InvestmentsPage() {
   const profitEur = metrics.totalValueEur - metrics.investedCapitalEur;
   const profitability = metrics.investedCapitalEur > 0 ? (profitEur / metrics.investedCapitalEur) * 100 : null;
   const combinedProfitEur = profitEur + realizedGainTotalEur;
+  const dividendMetrics = useMemo(() => {
+    const now = new Date();
+    const received = dividends.filter((row) => row.status === "received");
+    const upcoming = dividends
+      .filter((row) => row.status === "upcoming" && new Date(`${row.payment_date}T00:00:00`) >= new Date(now.toISOString().slice(0, 10)))
+      .sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+    const currentYear = now.getFullYear();
+
+    const totalGrossEur = received.reduce((sum, row) => sum + Number(row.gross_amount_eur || 0), 0);
+    const totalNetEur = received.reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0);
+    const totalWithholdingEur = totalGrossEur - totalNetEur;
+    const yearNetEur = received
+      .filter((row) => new Date(`${row.payment_date}T00:00:00`).getFullYear() === currentYear)
+      .reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0);
+    const nextDividend = upcoming[0] ?? null;
+
+    return {
+      totalGrossEur,
+      totalNetEur,
+      totalWithholdingEur,
+      yearNetEur,
+      receivedCount: received.length,
+      nextDividend,
+      upcomingCount: upcoming.length
+    };
+  }, [dividends]);
+
+  const dividendRowsWithInvestment = useMemo(
+    () =>
+      dividends.map((row) => ({
+        ...row,
+        assetName: row.investment_id ? investmentNameById[row.investment_id] ?? "Activo eliminado" : "Activo eliminado"
+      })),
+    [dividends, investmentNameById]
+  );
 
   const enrichedInvestments = useMemo<EnrichedInvestment[]>(() => {
     return investments.map((row) => {
@@ -1759,6 +1965,22 @@ export default function InvestmentsPage() {
     () => selectedTypeAssets.find((row) => row.id === selectedAssetId) ?? null,
     [selectedAssetId, selectedTypeAssets]
   );
+  const selectedAssetDividends = useMemo(
+    () => (selectedAsset ? dividends.filter((row) => row.investment_id === selectedAsset.id) : []),
+    [dividends, selectedAsset]
+  );
+  const selectedAssetDividendMetrics = useMemo(() => {
+    const received = selectedAssetDividends.filter((row) => row.status === "received");
+    const upcoming = selectedAssetDividends
+      .filter((row) => row.status === "upcoming")
+      .sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+
+    return {
+      totalNetEur: received.reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0),
+      totalGrossEur: received.reduce((sum, row) => sum + Number(row.gross_amount_eur || 0), 0),
+      nextDividend: upcoming[0] ?? null
+    };
+  }, [selectedAssetDividends]);
   const selectedAssetHistorySeries = useMemo(
     () => (selectedAssetHistory.length > 1 ? selectedAssetHistory : selectedAsset ? buildEstimatedAssetHistory(selectedAsset) : []),
     [selectedAsset, selectedAssetHistory]
@@ -3388,6 +3610,205 @@ export default function InvestmentsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
+          <SectionHeader
+            eyebrow="Dividendos"
+            title="Cobros y proximos pagos"
+            description="Registra dividendos cobrados y eventos proximos para seguir bruto, neto, retencion y calendario."
+            icon="annualSavings"
+          />
+
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <article className="kpi-card rounded-[24px] p-4">
+              <div className="flex items-center gap-2">
+                <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-emerald-200/80" />
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Total neto cobrado</p>
+              </div>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
+                {formatCurrencyByPreference(dividendMetrics.totalNetEur, "EUR")}
+              </p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma neta de todos los dividendos ya cobrados.</p>
+            </article>
+            <article className="kpi-card rounded-[24px] p-4">
+              <div className="flex items-center gap-2">
+                <KpiIcon type="netWorth" className="h-4 w-4 flex-none text-sky-200/80" />
+                <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Total bruto cobrado</p>
+              </div>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
+                {formatCurrencyByPreference(dividendMetrics.totalGrossEur, "EUR")}
+              </p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe antes de retencion, consolidado en EUR.</p>
+            </article>
+            <article className="kpi-card rounded-[24px] p-4">
+              <div className="flex items-center gap-2">
+                <KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-teal-200/80" />
+                <p className="text-xs uppercase tracking-[0.22em] text-teal-300">Dividendos este año</p>
+              </div>
+              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
+                {formatCurrencyByPreference(dividendMetrics.yearNetEur, "EUR")}
+              </p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Acumulado neto cobrado en el año natural actual.</p>
+            </article>
+            <article className="kpi-card rounded-[24px] p-4">
+              <div className="flex items-center gap-2">
+                <KpiIcon type="timeline" className="h-4 w-4 flex-none text-amber-200/80" />
+                <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Proximo dividendo</p>
+              </div>
+              <p className="mt-4 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
+                {dividendMetrics.nextDividend ? formatCurrencyByPreference(dividendMetrics.nextDividend.net_amount_eur, "EUR") : "Sin datos"}
+              </p>
+              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">
+                {dividendMetrics.nextDividend
+                  ? `${investmentNameById[dividendMetrics.nextDividend.investment_id ?? ""] ?? "Activo"} · ${dividendMetrics.nextDividend.payment_date}`
+                  : "No hay pagos futuros guardados ahora mismo."}
+              </p>
+            </article>
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+            <section className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Nuevo registro</p>
+                <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Registrar dividendo</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Puedes guardar tanto un dividendo cobrado como un pago proximo previsto.</p>
+              </div>
+              <form onSubmit={handleDividendSubmit} className="mt-5 grid gap-4" noValidate>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-2 text-sm text-slate-200 sm:col-span-2">
+                    Activo
+                    <select className={inputClass(false)} value={dividendInvestmentId} onChange={(event) => setDividendInvestmentId(event.target.value)}>
+                      <option value="">Selecciona un activo</option>
+                      {investments.map((row) => (
+                        <option key={`dividend-investment-${row.id}`} value={row.id}>
+                          {row.asset_name}{row.asset_symbol ? ` (${row.asset_symbol})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Estado
+                    <select className={inputClass(false)} value={dividendStatus} onChange={(event) => setDividendStatus(event.target.value as InvestmentDividendStatus)}>
+                      {DIVIDEND_STATUSES.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Fecha de pago
+                    <input className={inputClass(false)} type="date" value={dividendPaymentDate} onChange={(event) => setDividendPaymentDate(event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Ex-dividend
+                    <input className={inputClass(false)} type="date" value={dividendExDate} onChange={(event) => setDividendExDate(event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Record date
+                    <input className={inputClass(false)} type="date" value={dividendRecordDate} onChange={(event) => setDividendRecordDate(event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Bruto local
+                    <input className={inputClass(false)} type="number" min="0" step="0.0001" value={dividendGrossAmount} onChange={(event) => setDividendGrossAmount(event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Retencion local
+                    <input className={inputClass(false)} type="number" min="0" step="0.0001" value={dividendWithholding} onChange={(event) => setDividendWithholding(event.target.value)} />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Dividendo por accion
+                    <input className={inputClass(false)} type="number" min="0" step="0.000001" value={dividendPerShare} onChange={(event) => setDividendPerShare(event.target.value)} placeholder="Opcional" />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Acciones pagadas
+                    <input className={inputClass(false)} type="number" min="0" step="0.00000001" value={dividendSharesPaid} onChange={(event) => setDividendSharesPaid(event.target.value)} placeholder="Opcional" />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200">
+                    Fuente
+                    <input className={inputClass(false)} value={dividendSource} onChange={(event) => setDividendSource(event.target.value)} placeholder="Broker, comunicado, etc." />
+                  </label>
+                  <label className="grid gap-2 text-sm text-slate-200 sm:col-span-2">
+                    Notas
+                    <textarea className={inputClass(false)} rows={3} value={dividendNotes} onChange={(event) => setDividendNotes(event.target.value)} placeholder="Opcional" />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={dividendSaving} type="submit">
+                    {dividendSaving ? "Guardando..." : dividendStatus === "received" ? "Guardar dividendo" : "Guardar proximo pago"}
+                  </button>
+                  <button type="button" onClick={resetDividendForm} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 hover:bg-white/10">
+                    Limpiar
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className="rounded-[24px] border border-white/8 bg-white/5 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Historial</p>
+                  <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Dividendos guardados</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">Cobros reales y pagos proximos clasificados en una sola vista.</p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                  {dividendRowsWithInvestment.length} registros
+                </span>
+              </div>
+
+              {dividendRowsWithInvestment.length === 0 ? (
+                <div className="mt-5">
+                  <EmptyStateCard
+                    eyebrow="Sin dividendos"
+                    title="Todavia no has registrado pagos"
+                    description="Guarda tus cobros reales o proximos dividendos para construir el historial y el calendario."
+                    actionLabel="Usar este formulario"
+                    actionHref="/investments"
+                    compact
+                  />
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-3">
+                  {dividendRowsWithInvestment.map((row) => (
+                    <article key={row.id} className="rounded-2xl border border-white/8 bg-slate-950/40 px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-white">{row.assetName}</p>
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${row.status === "received" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>
+                              {row.status === "received" ? "Cobrado" : "Proximo"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Pago: {row.payment_date}
+                            {row.ex_dividend_date ? ` · Ex-dividend: ${row.ex_dividend_date}` : ""}
+                            {row.record_date ? ` · Record: ${row.record_date}` : ""}
+                          </p>
+                          <div className="mt-3 grid gap-1 text-xs text-slate-300 sm:grid-cols-2">
+                            <p>Bruto: <span className="font-medium text-white">{formatCurrencyByPreference(row.gross_amount_local, row.asset_currency)}</span></p>
+                            <p>Neto: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_local, row.asset_currency)}</span></p>
+                            <p>EUR neto: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_eur, "EUR")}</span></p>
+                            <p>Retencion: <span className="font-medium text-white">{formatCurrencyByPreference(row.withholding_tax_local, row.asset_currency)}</span></p>
+                            <p>Acciones: <span className="font-medium text-white">{row.shares_paid ? formatAssetUnits(Number(row.shares_paid), 4) : "n/d"}</span></p>
+                            <p>Por accion: <span className="font-medium text-white">{row.dividend_per_share_local !== null ? formatCurrencyByPreference(row.dividend_per_share_local, row.asset_currency) : "n/d"}</span></p>
+                          </div>
+                          {row.source || row.notes ? (
+                            <p className="mt-3 text-xs text-slate-400">
+                              {[row.source, row.notes].filter(Boolean).join(" · ")}
+                            </p>
+                          ) : null}
+                        </div>
+                        <button type="button" onClick={() => void handleDeleteDividend(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">
+                          Eliminar
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </section>
+
+        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion</p>
@@ -4260,6 +4681,22 @@ export default function InvestmentsPage() {
                     {selectedAsset.historicalFxRate ? formatNumber(selectedAsset.historicalFxRate, 4) : "n/d"}
                   </p>
                   <p className="mt-2 text-sm leading-5 text-slate-300">Cambio medio historico usado para el coste en EUR.</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Dividendos netos</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
+                    {formatCurrencyByPreference(selectedAssetDividendMetrics.totalNetEur, "EUR")}
+                  </p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">Total neto cobrado por este activo hasta ahora.</p>
+                </article>
+                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Proximo dividendo</p>
+                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
+                    {selectedAssetDividendMetrics.nextDividend ? formatCurrencyByPreference(selectedAssetDividendMetrics.nextDividend.net_amount_eur, "EUR") : "Sin datos"}
+                  </p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">
+                    {selectedAssetDividendMetrics.nextDividend ? `Pago previsto el ${selectedAssetDividendMetrics.nextDividend.payment_date}.` : "No hay proximos pagos registrados para este activo."}
+                  </p>
                 </article>
               </div>
 
