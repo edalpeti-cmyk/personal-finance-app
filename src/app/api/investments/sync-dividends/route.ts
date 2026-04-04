@@ -208,6 +208,87 @@ async function fetchYahooDividendPageFallback(symbol: string) {
   };
 }
 
+async function searchInvestingEquityPath(query: string) {
+  const response = await fetch(`https://www.investing.com/search/?q=${encodeURIComponent(query)}`, {
+    cache: "no-store",
+    headers: {
+      "User-Agent": "personal-finance-app/1.0"
+    }
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const html = await response.text();
+  const match = html.match(/\/equities\/[a-z0-9-]+/i);
+  return match ? match[0] : null;
+}
+
+async function fetchInvestingDividendPage(path: string) {
+  const response = await fetch(`https://www.investing.com${path.endsWith("-dividends") ? path : `${path}-dividends`}`, {
+    cache: "no-store",
+    headers: {
+      "User-Agent": "personal-finance-app/1.0"
+    }
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.text();
+}
+
+function parseInvestingDate(raw: string) {
+  const normalized = raw.trim();
+  const date = new Date(`${normalized}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+async function fetchInvestingDividendFallback(assetName: string, symbol: string) {
+  const queries = [symbol.replace(/\.[A-Z]+$/, ""), assetName]
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  for (const query of queries) {
+    const path = await searchInvestingEquityPath(query);
+    if (!path) {
+      continue;
+    }
+
+    const html = await fetchInvestingDividendPage(path);
+    if (!html) {
+      continue;
+    }
+
+    const rowMatch = html.match(
+      /([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})\s*<\/td>\s*<td[^>]*>\s*([0-9.]+)\s*<\/td>\s*<td[^>]*>\s*[A-Z]\s*<\/td>\s*<td[^>]*>\s*([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/i
+    );
+
+    if (!rowMatch) {
+      continue;
+    }
+
+    const exDividendDate = parseInvestingDate(rowMatch[1]);
+    const paymentDate = parseInvestingDate(rowMatch[3]);
+    const dividendPerShareLocal = Number(rowMatch[2]);
+
+    if (!exDividendDate || !paymentDate || !Number.isFinite(dividendPerShareLocal) || dividendPerShareLocal <= 0) {
+      continue;
+    }
+
+    return {
+      exDividendDate,
+      paymentDate,
+      dividendPerShareLocal,
+      resolvedPath: path
+    };
+  }
+
+  return null;
+}
+
 async function fetchAlphaVantageDividends(symbol: string) {
   const apiKey = process.env.ALPHAVANTAGE_API_KEY;
   if (!apiKey) {
@@ -314,9 +395,10 @@ export async function POST(request: NextRequest) {
     for (const asset of supportedAssets) {
       const candidates = getDividendCandidates(asset.assetSymbol ?? "", asset.assetMarket);
       const providerAttempts: string[] = [];
-      let usedSource: "yahoo" | "yahoo_html" | "alphavantage" | "finnhub" | null = null;
+      let usedSource: "yahoo" | "yahoo_html" | "investing" | "alphavantage" | "finnhub" | null = null;
       let yahooResult: Awaited<ReturnType<typeof fetchYahooDividendCalendar>> = null;
       let yahooPageResult: Awaited<ReturnType<typeof fetchYahooDividendPageFallback>> = null;
+      let investingResult: Awaited<ReturnType<typeof fetchInvestingDividendFallback>> = null;
       let resolved: Awaited<ReturnType<typeof fetchAlphaVantageDividends>> = null;
       let finnhubRows: Awaited<ReturnType<typeof fetchFinnhubDividends>> = null;
 
@@ -337,6 +419,14 @@ export async function POST(request: NextRequest) {
             providerAttempts.push(`Yahoo web: ${candidate}`);
             break;
           }
+        }
+      }
+
+      if (!usedSource) {
+        investingResult = await fetchInvestingDividendFallback(asset.assetName, asset.assetSymbol ?? "");
+        if (investingResult?.paymentDate && investingResult.paymentDate >= today) {
+          usedSource = "investing";
+          providerAttempts.push(`Investing: ${investingResult.resolvedPath}`);
         }
       }
 
@@ -448,6 +538,42 @@ export async function POST(request: NextRequest) {
             dividendPerShareLocal !== null
               ? `Calendario estimado desde la ficha publica de Yahoo para ${yahooPageResult.resolvedSymbol}.`
               : `Yahoo publico solo devolvio fecha ex-dividend para ${yahooPageResult.resolvedSymbol}.`
+        });
+        continue;
+      }
+
+      if (usedSource === "investing" && investingResult?.paymentDate && investingResult.paymentDate >= today) {
+        const providerCurrency = asset.assetCurrency;
+        const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+        const sharesPaid = Number(asset.quantity || 0);
+        const dividendPerShareLocal = investingResult.dividendPerShareLocal;
+        const grossAmountLocal = dividendPerShareLocal * sharesPaid;
+        const grossAmountEur = grossAmountLocal * fxRateToEur;
+
+        dividends.push({
+          investmentId: asset.investmentId,
+          paymentDate: investingResult.paymentDate,
+          exDividendDate: investingResult.exDividendDate,
+          recordDate: null,
+          grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
+          netAmountLocal: Number(grossAmountLocal.toFixed(4)),
+          grossAmountEur: Number(grossAmountEur.toFixed(4)),
+          netAmountEur: Number(grossAmountEur.toFixed(4)),
+          dividendPerShareLocal: Number(dividendPerShareLocal.toFixed(6)),
+          sharesPaid,
+          assetCurrency: providerCurrency,
+          fxRateToEur: Number(fxRateToEur.toFixed(8)),
+          source: "investing",
+          notes: `Estimacion publica desde Investing.com (${investingResult.resolvedPath}).`
+        });
+
+        diagnostics.push({
+          investmentId: asset.investmentId,
+          assetName: asset.assetName,
+          attemptedSymbols: candidates,
+          source: "investing",
+          status: "synced",
+          reason: `Calendario estimado desde Investing.com (${investingResult.resolvedPath}).`
         });
         continue;
       }
