@@ -256,8 +256,6 @@ function formatProviderLabel(provider: string) {
       return "Twelve Data";
     case "finnhub":
       return "Finnhub";
-    case "eodhd":
-      return "EODHD";
     case "stooq":
       return "Stooq";
     case "yahoo":
