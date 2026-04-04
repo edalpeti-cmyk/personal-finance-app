@@ -16,6 +16,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { type AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
@@ -425,32 +426,50 @@ export default function FirePage() {
 
         <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital FIRE</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="fireTarget" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital FIRE</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(fireNumber, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Objetivo total estimado para alcanzar FIRE.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda registrada</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="debt" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda registrada</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtTotal, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Saldo pendiente que se resta al patrimonio base para la proyeccion FIRE.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Bienes en FIRE</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="fireIncluded" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Bienes en FIRE</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(fireAssetTotal, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Bienes patrimoniales que has marcado para incluir en la base FIRE.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Anos hasta FIRE</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="timeline" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Anos hasta FIRE</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{simulation.yearsToFire === null ? `>${MAX_YEARS}` : simulation.yearsToFire}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Horizonte estimado con tus datos actuales.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio neto FIRE</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="netWorth" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio neto FIRE</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(effectiveCurrentNetWorth, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Patrimonio base menos deuda registrada actualmente.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white md:col-span-2">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Edad objetivo</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="age" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Edad objetivo</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{simulation.yearsToFire === null ? "No definida" : `${Number(currentAge) + simulation.yearsToFire} anos`}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Edad aproximada para alcanzar tu objetivo FIRE.</p>
           </article>

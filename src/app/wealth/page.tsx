@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
@@ -427,17 +428,26 @@ export default function WealthPage() {
 
         <section className="grid gap-4 xl:col-span-7">
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor bruto</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="wealth" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor bruto</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-[2.15rem] font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.totalGross, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de todos los bienes registrados con su porcentaje de propiedad.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio neto</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="netWorth" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Patrimonio neto</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-[2.15rem] font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.netWorthIncluded, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Bienes que has decidido incluir dentro del patrimonio neto.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Incluidos en FIRE</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="fireIncluded" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Incluidos en FIRE</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-[2.15rem] font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.fireIncluded, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Bienes que tambien quieres considerar en la base FIRE.</p>
           </article>

@@ -20,6 +20,7 @@ import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
 import InfoHint from "@/components/info-hint";
+import KpiIcon from "@/components/kpi-icon";
 import PwaInstallButton from "@/components/pwa-install-button";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
@@ -499,32 +500,6 @@ function calculateRangeDeltaAmount(range: ChartRange, snapshots: SnapshotRow[], 
   const endValue = useSnapshots ? getSnapshotValueAtDate(snapshots, endDate) : getCashflowValueAtDate(events, endDate);
 
   return endValue - startValue;
-}
-
-function MetricIcon({ type }: { type: "savingsRate" | "annualSavings" | "emergencyFund" | "debtPayment" | "fireTarget" }) {
-  const common = {
-    className: "h-4 w-4 flex-none text-emerald-200/80",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const
-  };
-
-  if (type === "savingsRate") {
-    return <svg {...common}><path d="M4 16 10 10 13 13 20 6" /><path d="m14 6 6 0 0 6" /></svg>;
-  }
-  if (type === "annualSavings") {
-    return <svg {...common}><path d="M12 2v20" /><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6" /></svg>;
-  }
-  if (type === "emergencyFund") {
-    return <svg {...common}><path d="M12 3 4 7v5c0 5 3.4 8.8 8 10 4.6-1.2 8-5 8-10V7l-8-4Z" /><path d="m9 12 2 2 4-4" /></svg>;
-  }
-  if (type === "debtPayment") {
-    return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /><path d="M7 15h2" /></svg>;
-  }
-  return <svg {...common}><path d="M12 3s4 3 4 7a4 4 0 1 1-8 0c0-2 1-3 2-5" /><path d="M10 14c0 1.5 1 3 2 4 1-1 2-2.5 2-4 0-1.4-.7-2.4-2-3-1.3.6-2 1.6-2 3Z" /></svg>;
 }
 
 function getMonthlyTrendPoints(incomeRows: IncomeRow[], savingsTargets: SavingsTargetRow[], budgetSavingsRows: BudgetSavingsRow[], dateFormat: "es" | "us") {
@@ -2286,7 +2261,7 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <MetricIcon type="savingsRate" />
+                  <KpiIcon type="savingsRate" />
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
                 </div>
                 <InfoHint text="Basada en tu ahorro objetivo del mes actual frente a los ingresos del mes." />
@@ -2299,7 +2274,7 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <MetricIcon type="annualSavings" />
+                  <KpiIcon type="annualSavings" />
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
                 </div>
                 <InfoHint text="Suma de tus objetivos de ahorro de los meses del año actual." />
@@ -2310,7 +2285,7 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <MetricIcon type="emergencyFund" />
+                  <KpiIcon type="emergencyFund" />
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Fondo de emergencia</p>
                 </div>
                 <InfoHint text="Capital reservado fuera de caja general, pero que sigue contando dentro de tu patrimonio." />
@@ -2321,7 +2296,7 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <MetricIcon type="debtPayment" />
+                  <KpiIcon type="debtPayment" />
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota deuda mensual</p>
                 </div>
                 <InfoHint text="Carga fija mensual de toda la deuda activa o pausada." />
@@ -2332,7 +2307,7 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <MetricIcon type="fireTarget" />
+                  <KpiIcon type="fireTarget" />
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
                 </div>
                 <InfoHint text="Calculado con la misma configuracion que tienes en la pagina FIRE." />

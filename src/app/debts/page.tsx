@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
@@ -749,17 +750,26 @@ export default function DebtsPage() {
 
         <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda total</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="debt" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Deuda total</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtMetrics.debtTotal, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Saldo pendiente consolidado de las deudas abiertas.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota mensual</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="debtPayment" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota mensual</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(debtMetrics.monthlyBurden, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Carga fija mensual actual de toda la deuda activa o pausada.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Aporte planificado</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="plannedContribution" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Aporte planificado</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
               {formatCurrencyByPreference(
                 debts
@@ -771,7 +781,10 @@ export default function DebtsPage() {
             <p className="mt-4 max-w-[28ch] text-sm leading-6 text-slate-300">Suma de partidas del presupuesto conectadas directamente a deudas este mes.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Conectadas y no conectadas</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="connection" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Conectadas y no conectadas</p>
+            </div>
             <div className="mt-4 grid gap-3">
               <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Conectadas</p>
@@ -789,12 +802,18 @@ export default function DebtsPage() {
             <p className="mt-4 max-w-[28ch] text-sm leading-6 text-slate-300">Te ayuda a distinguir lo que ya descuenta patrimonio neto de lo que has dejado fuera.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Interes medio</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="interest" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Interes medio</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{debtMetrics.weightedInterest.toFixed(2)}%</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Media ponderada segun el saldo pendiente de cada deuda.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 text-white">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota / ingresos</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="ratio" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota / ingresos</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
               {debtMetrics.paymentToIncomeRatio === null ? "Sin base" : `${debtMetrics.paymentToIncomeRatio.toFixed(1)}%`}
             </p>
