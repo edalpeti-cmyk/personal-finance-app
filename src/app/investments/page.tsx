@@ -19,6 +19,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
@@ -3276,12 +3277,18 @@ export default function InvestmentsPage() {
 
         <section className="grid gap-3 xl:col-span-5 md:grid-cols-2">
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Valor total en EUR</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="netWorth" className="h-4 w-4 flex-none text-sky-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Valor total en EUR</p>
+            </div>
             <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
             <p className="mt-3 max-w-[28ch] text-sm leading-6 text-slate-300">Suma del valor actual de tus posiciones, consolidada en EUR.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia latente</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="timeline" className="h-4 w-4 flex-none text-emerald-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia latente</p>
+            </div>
             <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-tight ${profitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(profitEur, "EUR")}
             </p>
@@ -3291,26 +3298,38 @@ export default function InvestmentsPage() {
             <p className="mt-3 max-w-[28ch] text-sm leading-6 text-slate-300">Resultado aun no realizado de las posiciones que sigues manteniendo en cartera.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Plusvalia realizada</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-teal-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-300">Plusvalia realizada</p>
+            </div>
             <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-tight ${realizedGainTotalEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(realizedGainTotalEur, "EUR")}
             </p>
             <p className="mt-3 max-w-[28ch] text-sm leading-6 text-slate-300">Suma acumulada de ganancias o perdidas cerradas en tus ventas.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Resultado total</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-orange-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Resultado total</p>
+            </div>
             <p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-tight ${combinedProfitEur >= 0 ? "text-emerald-300" : "text-red-300"}`}>
               {formatCurrencyByPreference(combinedProfitEur, "EUR")}
             </p>
             <p className="mt-3 max-w-[28ch] text-sm leading-6 text-slate-300">Suma de la plusvalia latente actual y la plusvalia ya realizada en ventas.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4 md:col-span-1">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Precios conectados</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="connection" className="h-4 w-4 flex-none text-violet-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-violet-300">Precios conectados</p>
+            </div>
             <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{metrics.trackedPositions}</p>
             <p className="mt-3 max-w-[28ch] text-sm leading-6 text-slate-300">Activos con simbolo valido para actualizar precio automaticamente.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4 md:col-span-1">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mayor posicion</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="connection" className="h-4 w-4 flex-none text-fuchsia-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-fuchsia-300">Mayor posicion</p>
+            </div>
             <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">{biggestPosition ? biggestPosition.asset_name : "Sin datos"}</p>
             <p className="mt-3 max-w-[28ch] text-sm leading-6 text-slate-300">
               {biggestPosition ? `${biggestPosition.weightPct.toFixed(1)}% del portfolio` : "Anade posiciones para medir concentracion."}
@@ -3690,6 +3709,7 @@ export default function InvestmentsPage() {
             eyebrow="Posiciones"
             title="Tipos de activo"
             description="Primero eliges el tipo de activo y luego abres los activos concretos dentro de ese grupo."
+            icon="connection"
           />
 
           <div className="mt-6 grid gap-4 xl:grid-cols-6">

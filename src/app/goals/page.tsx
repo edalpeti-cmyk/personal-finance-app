@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import SideNav from "@/components/side-nav";
 import { useTheme } from "@/components/theme-provider";
@@ -1424,10 +1425,38 @@ export default function GoalsPage() {
         </section>
 
         <section className="grid gap-3 xl:col-span-7 md:grid-cols-2">
-          <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital objetivo</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de objetivos activos.</p></article>
-          <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital ya asignado</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalCurrent, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe actual acumulado de metas activas.</p></article>
-          <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Aporte mensual</p><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalMonthlyContribution, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Contribucion mensual comprometida.</p></article>
-          <article className="kpi-card rounded-[24px] p-4"><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Pendiente de asignar</p><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${unassignedMonthlySavings >= 0 ? "text-white" : "text-red-300"}`}>{formatCurrencyByPreference(unassignedMonthlySavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo del mes que aun no esta repartido entre metas.</p></article>
+          <article className="kpi-card rounded-[24px] p-4">
+            <div className="flex items-center gap-2">
+              <KpiIcon type="fireTarget" className="h-4 w-4 flex-none text-sky-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Capital objetivo</p>
+            </div>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalTarget, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de objetivos activos.</p>
+          </article>
+          <article className="kpi-card rounded-[24px] p-4">
+            <div className="flex items-center gap-2">
+              <KpiIcon type="netWorth" className="h-4 w-4 flex-none text-emerald-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Capital ya asignado</p>
+            </div>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalCurrent, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe actual acumulado de metas activas.</p>
+          </article>
+          <article className="kpi-card rounded-[24px] p-4">
+            <div className="flex items-center gap-2">
+              <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-teal-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-300">Aporte mensual</p>
+            </div>
+            <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totalMonthlyContribution, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Contribucion mensual comprometida.</p>
+          </article>
+          <article className="kpi-card rounded-[24px] p-4">
+            <div className="flex items-center gap-2">
+              <KpiIcon type="connection" className="h-4 w-4 flex-none text-amber-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Pendiente de asignar</p>
+            </div>
+            <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${unassignedMonthlySavings >= 0 ? "text-white" : "text-red-300"}`}>{formatCurrencyByPreference(unassignedMonthlySavings, currency)}</p>
+            <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo del mes que aun no esta repartido entre metas.</p>
+          </article>
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
@@ -1570,7 +1599,7 @@ export default function GoalsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader eyebrow="Lista" title="Objetivos guardados" description="Puedes editar prioridad, progreso actual y fecha objetivo a medida que avance el plan." />
+          <SectionHeader eyebrow="Lista" title="Objetivos guardados" description="Puedes editar prioridad, progreso actual y fecha objetivo a medida que avance el plan." icon="connection" />
           {loading ? <p className="mt-6 text-sm text-slate-300">Cargando objetivos...</p> : null}
           {!loading && goals.length === 0 ? (
             <div className="mt-6">
