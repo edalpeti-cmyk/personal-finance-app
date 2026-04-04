@@ -46,11 +46,6 @@ type InvestmentRow = {
   current_price: number | null;
   asset_currency: AssetCurrency | null;
 };
-type InvestmentDividendRow = {
-  status: "received" | "upcoming";
-  payment_date: string;
-  net_amount_eur: number;
-};
 type WealthAssetRow = {
   current_estimated_value: number;
   ownership_pct: number;
@@ -90,10 +85,6 @@ type DashboardMetrics = {
   grossWorth: number;
   usesCashBaseline: boolean;
   cashBaselineDate: string | null;
-  annualDividendsNet: number;
-  totalDividendsNet: number;
-  nextDividendDate: string | null;
-  nextDividendNetEur: number | null;
 };
 type DashboardAlert = {
   id: DashboardAlertRuleKey | "stable_panel";
@@ -1956,7 +1947,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult, budgetSavingsResult, wealthAssetsResult, dividendsResult] = await Promise.all([
+      const [expensesResult, incomeResult, investmentsResult, debtsResult, savingsTargetsResult, fireSettingsResult, cashBaselineResult, transfersResult, budgetSavingsResult, wealthAssetsResult] = await Promise.all([
         supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
         supabase.from("income").select("amount, income_date").eq("user_id", userId),
         supabase.from("investments").select("asset_name, asset_type, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
@@ -1966,11 +1957,10 @@ export default function DashboardPage() {
         supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
         supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", userId).in("transfer_type", ["investment", "emergency_fund"]),
         supabase.from("monthly_budgets").select("budget_amount, month, budget_kind").eq("user_id", userId).in("budget_kind", ["investment_transfer", "emergency_fund"]),
-        supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_net_worth, include_in_fire").eq("user_id", userId),
-        supabase.from("investment_dividends").select("status, payment_date, net_amount_eur").eq("user_id", userId)
+        supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_net_worth, include_in_fire").eq("user_id", userId)
       ]);
 
-      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error || budgetSavingsResult.error || wealthAssetsResult.error || dividendsResult.error) {
+      if (expensesResult.error || incomeResult.error || investmentsResult.error || debtsResult.error || savingsTargetsResult.error || fireSettingsResult.error || cashBaselineResult.error || transfersResult.error || budgetSavingsResult.error || wealthAssetsResult.error) {
         setMessage(
           expensesResult.error?.message ||
             incomeResult.error?.message ||
@@ -1981,7 +1971,6 @@ export default function DashboardPage() {
             transfersResult.error?.message ||
             budgetSavingsResult.error?.message ||
             wealthAssetsResult.error?.message ||
-            dividendsResult.error?.message ||
             investmentsResult.error?.message ||
             "Error al cargar datos."
         );
@@ -1999,7 +1988,6 @@ export default function DashboardPage() {
       const cashBaseline = (cashBaselineResult.data as CashBaselineSettingsRow | null) ?? null;
       const transferRows = (transfersResult.data as InternalTransferRow[]) ?? [];
       const wealthAssetRows = (wealthAssetsResult.data as WealthAssetRow[]) ?? [];
-      const dividendRows = (dividendsResult.data as InvestmentDividendRow[] | null) ?? [];
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
@@ -2075,15 +2063,6 @@ export default function DashboardPage() {
         0
       );
       const totalAnnualSavings = annualSavings + annualBudgetSavings;
-      const annualDividendsNet = dividendRows
-        .filter((row) => row.status === "received" && new Date(`${row.payment_date}T00:00:00`).getFullYear() === now.getFullYear())
-        .reduce((acc, row) => acc + Number(row.net_amount_eur || 0), 0);
-      const totalDividendsNet = dividendRows
-        .filter((row) => row.status === "received")
-        .reduce((acc, row) => acc + Number(row.net_amount_eur || 0), 0);
-      const nextDividend = [...dividendRows]
-        .filter((row) => row.status === "upcoming" && new Date(`${row.payment_date}T00:00:00`) >= new Date(now.toISOString().slice(0, 10)))
-        .sort((a, b) => a.payment_date.localeCompare(b.payment_date))[0] ?? null;
 
       const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
       const fireNetWorth =
@@ -2117,11 +2096,7 @@ export default function DashboardPage() {
         fireIncludedWealthValue,
         grossWorth,
         usesCashBaseline: Boolean(cashBaseline?.baseline_date),
-        cashBaselineDate: cashBaseline?.baseline_date ?? null,
-        annualDividendsNet,
-        totalDividendsNet,
-        nextDividendDate: nextDividend?.payment_date ?? null,
-        nextDividendNetEur: nextDividend ? Number(nextDividend.net_amount_eur || 0) : null
+        cashBaselineDate: cashBaseline?.baseline_date ?? null
       });
 
       await persistSnapshot(userId, totalNetWorth, cashPosition, investmentsValue);
@@ -2325,17 +2300,6 @@ export default function DashboardPage() {
                 <InfoHint text="Suma de tus objetivos de ahorro de los meses del año actual." />
               </div>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
-            </section>
-
-            <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-violet-200/80" />
-                  <p className="text-xs uppercase tracking-[0.22em] text-violet-300">Dividendos netos año</p>
-                </div>
-                <InfoHint text={metrics.nextDividendDate ? `Proximo dividendo previsto: ${formatDateByPreference(metrics.nextDividendDate, dateFormat)} por ${formatCurrencyByPreference(metrics.nextDividendNetEur ?? 0, currency)}.` : "Acumulado neto de dividendos cobrados durante el año natural actual."} />
-              </div>
-              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualDividendsNet, currency)}</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">

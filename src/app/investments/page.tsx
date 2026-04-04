@@ -900,6 +900,7 @@ export default function InvestmentsPage() {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
   const [investmentFormOpen, setInvestmentFormOpen] = useState(true);
   const [dividendSaving, setDividendSaving] = useState(false);
+  const [syncingDividends, setSyncingDividends] = useState(false);
   const [dividendStatus, setDividendStatus] = useState<InvestmentDividendStatus>("received");
   const [dividendInvestmentId, setDividendInvestmentId] = useState("");
   const [dividendPaymentDate, setDividendPaymentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -1175,6 +1176,120 @@ export default function InvestmentsPage() {
 
     await loadDividends(userId);
     showToast({ type: "success", text: "Dividendo eliminado." });
+  };
+
+  const handleSyncUpcomingDividends = async () => {
+    if (!userId) return;
+
+    const syncableAssets = investments.filter(
+      (row) => Boolean(row.asset_symbol) && ["stock", "etf", "fund"].includes(row.asset_type) && Number(row.quantity || 0) > 0
+    );
+
+    if (syncableAssets.length === 0) {
+      showToast({ type: "error", text: "No hay posiciones compatibles con ticker para sincronizar dividendos." });
+      return;
+    }
+
+    setSyncingDividends(true);
+
+    try {
+      const response = await fetch("/api/investments/sync-dividends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assets: syncableAssets.map((row) => ({
+            investmentId: row.id,
+            assetName: row.asset_name,
+            assetSymbol: row.asset_symbol,
+            assetType: row.asset_type,
+            assetMarket: row.asset_market ?? "AUTO",
+            assetCurrency: row.asset_currency,
+            quantity: Number(row.quantity || 0)
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        showToast({ type: "error", text: "No se pudieron consultar los proximos dividendos." });
+        setSyncingDividends(false);
+        return;
+      }
+
+      const data = (await response.json()) as {
+        dividends?: Array<{
+          investmentId: string;
+          paymentDate: string;
+          exDividendDate: string | null;
+          recordDate: string | null;
+          grossAmountLocal: number;
+          netAmountLocal: number;
+          grossAmountEur: number | null;
+          netAmountEur: number | null;
+          dividendPerShareLocal: number | null;
+          sharesPaid: number;
+          assetCurrency: AssetCurrency;
+          fxRateToEur: number | null;
+          source: string;
+          notes: string | null;
+        }>;
+      };
+
+      const syncedRows = data.dividends ?? [];
+      const syncableIds = syncableAssets.map((row) => row.id);
+
+      const deleteResult = await supabase
+        .from("investment_dividends")
+        .delete()
+        .eq("user_id", userId)
+        .eq("status", "upcoming")
+        .in("investment_id", syncableIds);
+
+      if (deleteResult.error) {
+        showToast({ type: "error", text: deleteResult.error.message });
+        setSyncingDividends(false);
+        return;
+      }
+
+      if (syncedRows.length > 0) {
+        const insertResult = await supabase.from("investment_dividends").insert(
+          syncedRows.map((row) => ({
+            investment_id: row.investmentId,
+            user_id: userId,
+            status: "upcoming",
+            payment_date: row.paymentDate,
+            ex_dividend_date: row.exDividendDate,
+            record_date: row.recordDate,
+            gross_amount_local: row.grossAmountLocal,
+            withholding_tax_local: 0,
+            net_amount_local: row.netAmountLocal,
+            gross_amount_eur: row.grossAmountEur ?? row.netAmountEur ?? 0,
+            net_amount_eur: row.netAmountEur ?? 0,
+            asset_currency: row.assetCurrency,
+            fx_rate_to_eur: row.fxRateToEur,
+            dividend_per_share_local: row.dividendPerShareLocal,
+            shares_paid: row.sharesPaid,
+            source: row.source,
+            notes: row.notes
+          }))
+        );
+
+        if (insertResult.error) {
+          showToast({ type: "error", text: insertResult.error.message });
+          setSyncingDividends(false);
+          return;
+        }
+      }
+
+      await loadDividends(userId);
+      showToast({
+        type: "success",
+        text: syncedRows.length > 0 ? `${syncedRows.length} proximos dividendos sincronizados.` : "No se encontraron proximos dividendos para las posiciones compatibles."
+      });
+    } catch {
+      showToast({ type: "error", text: "No se pudo completar la sincronizacion automatica." });
+    } finally {
+      setSyncingDividends(false);
+    }
   };
 
   useEffect(() => {
@@ -1715,6 +1830,17 @@ export default function InvestmentsPage() {
         assetName: row.investment_id ? investmentNameById[row.investment_id] ?? "Activo eliminado" : "Activo eliminado"
       })),
     [dividends, investmentNameById]
+  );
+  const upcomingDividendRows = useMemo(
+    () =>
+      dividendRowsWithInvestment
+        .filter((row) => row.status === "upcoming")
+        .sort((a, b) => a.payment_date.localeCompare(b.payment_date)),
+    [dividendRowsWithInvestment]
+  );
+  const upcomingDividendTotalNetEur = useMemo(
+    () => upcomingDividendRows.reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0),
+    [upcomingDividendRows]
   );
 
   const enrichedInvestments = useMemo<EnrichedInvestment[]>(() => {
@@ -3663,6 +3789,68 @@ export default function InvestmentsPage() {
               </p>
             </article>
           </div>
+
+          <section className="mt-6 rounded-[24px] border border-white/8 bg-white/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Calendario</p>
+                <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Proximos dividendos</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-300">Informacion automatica estimada segun tus posiciones actuales y el calendario disponible del proveedor.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                  Total previsto: {formatCurrencyByPreference(upcomingDividendTotalNetEur, "EUR")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleSyncUpcomingDividends()}
+                  disabled={syncingDividends}
+                  className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {syncingDividends ? "Sincronizando..." : "Actualizar proximos dividendos"}
+                </button>
+              </div>
+            </div>
+
+            {upcomingDividendRows.length === 0 ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-slate-950/20 p-4 text-sm text-slate-300">
+                Todavia no hay proximos dividendos sincronizados. Pulsa en <span className="font-medium text-white">Actualizar proximos dividendos</span> para consultarlos automaticamente.
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-3">
+                {upcomingDividendRows.map((row) => (
+                  <article key={`upcoming-${row.id}`} className="rounded-2xl border border-white/8 bg-slate-950/40 px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium text-white">{row.assetName}</p>
+                          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
+                            Proximo
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Pago: {row.payment_date}
+                          {row.ex_dividend_date ? ` · Ex-dividend: ${row.ex_dividend_date}` : ""}
+                          {row.record_date ? ` · Record: ${row.record_date}` : ""}
+                        </p>
+                        <div className="mt-3 grid gap-1 text-xs text-slate-300 sm:grid-cols-2">
+                          <p>Importe estimado: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_local, row.asset_currency)}</span></p>
+                          <p>Importe estimado EUR: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_eur, "EUR")}</span></p>
+                          <p>Acciones estimadas: <span className="font-medium text-white">{row.shares_paid ? formatAssetUnits(Number(row.shares_paid), 4) : "n/d"}</span></p>
+                          <p>Dividendo por accion: <span className="font-medium text-white">{row.dividend_per_share_local !== null ? formatCurrencyByPreference(row.dividend_per_share_local, row.asset_currency) : "n/d"}</span></p>
+                        </div>
+                        {row.source || row.notes ? (
+                          <p className="mt-3 text-xs text-slate-400">
+                            {[row.source, row.notes].filter(Boolean).join(" · ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
             <section className="rounded-[24px] border border-white/8 bg-white/5 p-4">
