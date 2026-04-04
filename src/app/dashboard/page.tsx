@@ -19,6 +19,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import InfoHint from "@/components/info-hint";
 import PwaInstallButton from "@/components/pwa-install-button";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
@@ -2257,37 +2258,47 @@ export default function DashboardPage() {
               ) : null}
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+                <InfoHint text="Basada en tu ahorro objetivo del mes actual frente a los ingresos del mes." />
+              </div>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.savingsRate === null ? "Sin datos" : `${metrics.savingsRate.toFixed(2)}%`}
               </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Basada en tu ahorro objetivo del mes actual frente a los ingresos del mes.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
+                <InfoHint text="Suma de tus objetivos de ahorro de los meses del año actual." />
+              </div>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.annualSavings, currency)}</p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Suma de tus objetivos de ahorro de los meses del año actual.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Fondo de emergencia</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Fondo de emergencia</p>
+                <InfoHint text="Capital reservado fuera de caja general, pero que sigue contando dentro de tu patrimonio." />
+              </div>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.emergencyFundReserved, currency)}</p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Capital reservado fuera de caja general, pero que sigue contando dentro de tu patrimonio.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota deuda mensual</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota deuda mensual</p>
+                <InfoHint text="Carga fija mensual de toda la deuda activa o pausada." />
+              </div>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(metrics.monthlyDebtPayment, currency)}</p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Carga fija mensual de toda la deuda activa o pausada.</p>
             </section>
 
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
+                <InfoHint text="Calculado con la misma configuracion que tienes en la pagina FIRE." />
+              </div>
               <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
                 {metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular"}
               </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-white/64">Calculado con la misma configuracion que tienes en la pagina FIRE.</p>
             </section>
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
