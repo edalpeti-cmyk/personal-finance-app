@@ -537,7 +537,7 @@ export default function DashboardPage() {
   const [savingsTargetRows, setSavingsTargetRows] = useState<SavingsTargetRow[]>([]);
   const [budgetSavingsRows, setBudgetSavingsRows] = useState<BudgetSavingsRow[]>([]);
   const [snapshotRows, setSnapshotRows] = useState<SnapshotRow[]>([]);
-  const [chartRange, setChartRange] = useState<ChartRange>("monthly");
+  const [chartRange, setChartRange] = useState<ChartRange>("daily");
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);

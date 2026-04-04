@@ -864,10 +864,10 @@ export default function InvestmentsPage() {
   const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [linkedTransferByTransactionId, setLinkedTransferByTransactionId] = useState<Record<string, LinkedTransferSummary>>({});
   const [portfolioHistory, setPortfolioHistory] = useState<HistoryPoint[]>([]);
-  const [portfolioRange, setPortfolioRange] = useState<TypeChartRange>("monthly");
+  const [portfolioRange, setPortfolioRange] = useState<TypeChartRange>("daily");
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
-  const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("monthly");
-  const [selectedAssetRange, setSelectedAssetRange] = useState<TypeChartRange>("monthly");
+  const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("daily");
+  const [selectedAssetRange, setSelectedAssetRange] = useState<TypeChartRange>("daily");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("weight");
   const [investmentFormOpen, setInvestmentFormOpen] = useState(true);
