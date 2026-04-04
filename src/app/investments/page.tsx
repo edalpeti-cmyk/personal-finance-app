@@ -117,6 +117,14 @@ type InvestmentDividendRow = {
   source: string | null;
   notes: string | null;
 };
+type DividendSyncDiagnostic = {
+  investmentId: string;
+  assetName: string;
+  attemptedSymbols: string[];
+  source: string | null;
+  status: "synced" | "no_data" | "unsupported" | "missing_symbol";
+  reason: string;
+};
 type InternalTransferRow = {
   id: string;
   category: string;
@@ -246,6 +254,8 @@ function formatProviderLabel(provider: string) {
       return "Alpha Vantage";
     case "twelvedata":
       return "Twelve Data";
+    case "finnhub":
+      return "Finnhub";
     case "stooq":
       return "Stooq";
     case "yahoo":
@@ -859,6 +869,7 @@ export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
   const [transactions, setTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [dividends, setDividends] = useState<InvestmentDividendRow[]>([]);
+  const [dividendSyncDiagnostics, setDividendSyncDiagnostics] = useState<DividendSyncDiagnostic[]>([]);
   const [realizedGainTotalEur, setRealizedGainTotalEur] = useState(0);
   const [ratesToEur, setRatesToEur] = useState<Record<AssetCurrency, number>>(FALLBACK_RATES_TO_EUR);
 
@@ -1187,6 +1198,7 @@ export default function InvestmentsPage() {
 
     if (syncableAssets.length === 0) {
       showToast({ type: "error", text: "No hay posiciones compatibles con ticker para sincronizar dividendos." });
+      setDividendSyncDiagnostics([]);
       return;
     }
 
@@ -1232,9 +1244,11 @@ export default function InvestmentsPage() {
           source: string;
           notes: string | null;
         }>;
+        diagnostics?: DividendSyncDiagnostic[];
       };
 
       const syncedRows = data.dividends ?? [];
+      setDividendSyncDiagnostics(data.diagnostics ?? []);
       const syncableIds = syncableAssets.map((row) => row.id);
 
       const deleteResult = await supabase
@@ -1286,6 +1300,7 @@ export default function InvestmentsPage() {
         text: syncedRows.length > 0 ? `${syncedRows.length} proximos dividendos sincronizados.` : "No se encontraron proximos dividendos para las posiciones compatibles."
       });
     } catch {
+      setDividendSyncDiagnostics([]);
       showToast({ type: "error", text: "No se pudo completar la sincronizacion automatica." });
     } finally {
       setSyncingDividends(false);
@@ -1841,6 +1856,10 @@ export default function InvestmentsPage() {
   const upcomingDividendTotalNetEur = useMemo(
     () => upcomingDividendRows.reduce((sum, row) => sum + Number(row.net_amount_eur || 0), 0),
     [upcomingDividendRows]
+  );
+  const failedDividendDiagnostics = useMemo(
+    () => dividendSyncDiagnostics.filter((row) => row.status !== "synced"),
+    [dividendSyncDiagnostics]
   );
 
   const enrichedInvestments = useMemo<EnrichedInvestment[]>(() => {
@@ -3850,6 +3869,45 @@ export default function InvestmentsPage() {
                 ))}
               </div>
             )}
+
+            {failedDividendDiagnostics.length > 0 ? (
+              <div className="mt-5 rounded-2xl border border-amber-400/15 bg-amber-400/5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Diagnostico</p>
+                    <h4 className="mt-2 text-lg font-semibold text-white">Activos sin calendario sincronizado</h4>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">Aqui vemos si el problema viene del ticker, de la cobertura del proveedor o de que no haya eventos futuros disponibles.</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                    {failedDividendDiagnostics.length} sin cobertura
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  {failedDividendDiagnostics.map((row) => (
+                    <article key={`diagnostic-${row.investmentId}`} className="rounded-2xl border border-white/8 bg-slate-950/40 px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-white">{row.assetName}</p>
+                            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
+                              {row.status === "missing_symbol" ? "Sin ticker" : row.status === "unsupported" ? "No compatible" : "Sin datos"}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-300">{row.reason}</p>
+                          <p className="mt-2 text-xs text-slate-400">
+                            Simbolos probados: <span className="text-slate-200">{row.attemptedSymbols.length > 0 ? row.attemptedSymbols.join(", ") : "ninguno"}</span>
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Proveedor final: <span className="text-slate-200">{row.source ? formatProviderLabel(row.source) : "sin respuesta util"}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">

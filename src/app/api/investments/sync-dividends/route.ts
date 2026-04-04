@@ -29,6 +29,15 @@ type SyncedDividend = {
   notes: string | null;
 };
 
+type SyncDiagnostic = {
+  investmentId: string;
+  assetName: string;
+  attemptedSymbols: string[];
+  source: string | null;
+  status: "synced" | "no_data" | "unsupported" | "missing_symbol";
+  reason: string;
+};
+
 const MARKET_SUFFIX: Partial<Record<AssetMarket, string>> = {
   ES: ".MC",
   DE: ".DE",
@@ -75,6 +84,86 @@ async function fetchRatesToEur() {
   const gbp = data.rates?.GBP ? 1 / Number(data.rates.GBP) : 1 / 0.86;
   const dkk = data.rates?.DKK ? 1 / Number(data.rates.DKK) : 1 / 7.46;
   return { EUR: 1, USD: usd, GBP: gbp, DKK: dkk } as Record<AssetCurrency, number>;
+}
+
+function extractRawNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (value && typeof value === "object" && "raw" in value) {
+    const raw = (value as { raw?: unknown }).raw;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return raw;
+    }
+  }
+
+  return null;
+}
+
+function unixToDate(value: unknown) {
+  const raw = extractRawNumber(value);
+  if (!raw) {
+    return null;
+  }
+
+  const date = new Date(raw * 1000);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+async function fetchYahooDividendCalendar(symbol: string) {
+  const response = await fetch(
+    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=calendarEvents,summaryDetail,price`,
+    {
+      cache: "no-store",
+      headers: {
+        "User-Agent": "personal-finance-app/1.0"
+      }
+    }
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    quoteSummary?: {
+      result?: Array<{
+        calendarEvents?: {
+          dividendDate?: { raw?: number } | number;
+          exDividendDate?: { raw?: number } | number;
+        };
+        summaryDetail?: {
+          exDividendDate?: { raw?: number } | number;
+          lastDividendValue?: { raw?: number } | number;
+          dividendRate?: { raw?: number } | number;
+        };
+        price?: {
+          currency?: string;
+          symbol?: string;
+        };
+      }>;
+      error?: unknown;
+    };
+  };
+
+  const result = data.quoteSummary?.result?.[0];
+  if (!result) {
+    return null;
+  }
+
+  const paymentDate = unixToDate(result.calendarEvents?.dividendDate);
+  const exDividendDate = unixToDate(result.calendarEvents?.exDividendDate) ?? unixToDate(result.summaryDetail?.exDividendDate);
+  const lastDividendValue = extractRawNumber(result.summaryDetail?.lastDividendValue);
+  const dividendRate = extractRawNumber(result.summaryDetail?.dividendRate);
+
+  return {
+    paymentDate,
+    exDividendDate,
+    dividendPerShareLocal: lastDividendValue ?? dividendRate ?? null,
+    assetCurrency: (result.price?.currency?.toUpperCase() || null) as AssetCurrency | null,
+    resolvedSymbol: result.price?.symbol?.toUpperCase() ?? symbol
+  };
 }
 
 async function fetchAlphaVantageDividends(symbol: string) {
@@ -149,15 +238,27 @@ async function fetchFinnhubDividends(symbol: string, from: string, to: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { assets?: SyncRequestAsset[] };
-    const assets = (body.assets ?? []).filter(
+    const assets = body.assets ?? [];
+    const supportedAssets = assets.filter(
       (asset) =>
         asset.assetSymbol &&
         ["stock", "etf", "fund"].includes(asset.assetType) &&
         Number(asset.quantity || 0) > 0
     );
 
-    if (assets.length === 0) {
-      return NextResponse.json({ dividends: [] satisfies SyncedDividend[] });
+    if (supportedAssets.length === 0) {
+      const diagnostics: SyncDiagnostic[] = assets.map((asset) => ({
+        investmentId: asset.investmentId,
+        assetName: asset.assetName,
+        attemptedSymbols: asset.assetSymbol ? getDividendCandidates(asset.assetSymbol, asset.assetMarket) : [],
+        source: null,
+        status: asset.assetSymbol ? "unsupported" : "missing_symbol",
+        reason: asset.assetSymbol
+          ? "La posicion no es compatible con sincronizacion automatica de dividendos."
+          : "La posicion no tiene ticker configurado."
+      }));
+
+      return NextResponse.json({ dividends: [] satisfies SyncedDividend[], diagnostics });
     }
 
     const ratesToEur = await fetchRatesToEur();
@@ -166,34 +267,102 @@ export async function POST(request: NextRequest) {
     oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
     const futureLimit = oneYearAhead.toISOString().slice(0, 10);
     const dividends: SyncedDividend[] = [];
+    const diagnostics: SyncDiagnostic[] = [];
 
-    for (const asset of assets) {
+    for (const asset of supportedAssets) {
       const candidates = getDividendCandidates(asset.assetSymbol ?? "", asset.assetMarket);
+      const providerAttempts: string[] = [];
+      let usedSource: "yahoo" | "alphavantage" | "finnhub" | null = null;
+      let yahooResult: Awaited<ReturnType<typeof fetchYahooDividendCalendar>> = null;
       let resolved: Awaited<ReturnType<typeof fetchAlphaVantageDividends>> = null;
       let finnhubRows: Awaited<ReturnType<typeof fetchFinnhubDividends>> = null;
-      let usedSource: "alphavantage" | "finnhub" | null = null;
 
       for (const candidate of candidates) {
-        resolved = await fetchAlphaVantageDividends(candidate);
-        if (resolved?.dividend_history?.length) {
-          usedSource = "alphavantage";
+        yahooResult = await fetchYahooDividendCalendar(candidate);
+        if (yahooResult?.paymentDate && yahooResult.paymentDate >= today) {
+          usedSource = "yahoo";
+          providerAttempts.push(`Yahoo: ${candidate}`);
           break;
         }
       }
 
-      if (!resolved?.dividend_history?.length) {
+      if (!usedSource) {
+        providerAttempts.push("Yahoo sin calendario futuro");
+      }
+
+      if (!usedSource) {
         for (const candidate of candidates) {
-          finnhubRows = await fetchFinnhubDividends(candidate, today, futureLimit);
-          if (finnhubRows?.length) {
-            usedSource = "finnhub";
+          resolved = await fetchAlphaVantageDividends(candidate);
+          if (resolved?.dividend_history?.length) {
+            usedSource = "alphavantage";
+            providerAttempts.push(`Alpha Vantage: ${candidate}`);
             break;
           }
         }
       }
 
+      if (!usedSource) {
+        providerAttempts.push("Alpha Vantage sin eventos");
+        for (const candidate of candidates) {
+          finnhubRows = await fetchFinnhubDividends(candidate, today, futureLimit);
+          if (finnhubRows?.length) {
+            usedSource = "finnhub";
+            providerAttempts.push(`Finnhub: ${candidate}`);
+            break;
+          }
+        }
+      }
+
+      if (!usedSource) {
+        providerAttempts.push("Finnhub sin eventos");
+      }
+
+      if (usedSource === "yahoo" && yahooResult?.paymentDate && yahooResult.paymentDate >= today) {
+        const providerCurrency = yahooResult.assetCurrency ?? asset.assetCurrency;
+        const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+        const sharesPaid = Number(asset.quantity || 0);
+        const dividendPerShareLocal = yahooResult.dividendPerShareLocal;
+        const grossAmountLocal = dividendPerShareLocal !== null ? dividendPerShareLocal * sharesPaid : 0;
+        const grossAmountEur = grossAmountLocal * fxRateToEur;
+
+        dividends.push({
+          investmentId: asset.investmentId,
+          paymentDate: yahooResult.paymentDate,
+          exDividendDate: yahooResult.exDividendDate,
+          recordDate: null,
+          grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
+          netAmountLocal: Number(grossAmountLocal.toFixed(4)),
+          grossAmountEur: Number(grossAmountEur.toFixed(4)),
+          netAmountEur: Number(grossAmountEur.toFixed(4)),
+          dividendPerShareLocal: dividendPerShareLocal !== null ? Number(dividendPerShareLocal.toFixed(6)) : null,
+          sharesPaid,
+          assetCurrency: providerCurrency,
+          fxRateToEur: Number(fxRateToEur.toFixed(8)),
+          source: "yahoo",
+          notes:
+            dividendPerShareLocal !== null
+              ? `Sincronizado automaticamente desde ${yahooResult.resolvedSymbol}.`
+              : `Yahoo devolvio calendario para ${yahooResult.resolvedSymbol}, pero no importe por accion.`
+        });
+
+        diagnostics.push({
+          investmentId: asset.investmentId,
+          assetName: asset.assetName,
+          attemptedSymbols: candidates,
+          source: "yahoo",
+          status: "synced",
+          reason:
+            dividendPerShareLocal !== null
+              ? `Calendario encontrado con Yahoo para ${yahooResult.resolvedSymbol}.`
+              : `Calendario encontrado con Yahoo para ${yahooResult.resolvedSymbol}, sin importe por accion.`
+        });
+        continue;
+      }
+
       if (usedSource === "alphavantage" && resolved?.dividend_history?.length) {
         const providerCurrency = (resolved.currency?.toUpperCase() || asset.assetCurrency) as AssetCurrency;
         const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+        let insertedRows = 0;
 
         for (const row of resolved.dividend_history) {
           const paymentDate = row.payment_date?.slice(0, 10);
@@ -226,13 +395,24 @@ export async function POST(request: NextRequest) {
             source: "alphavantage",
             notes: resolved.symbol ? `Sincronizado automaticamente desde ${resolved.symbol}.` : "Sincronizado automaticamente."
           });
+          insertedRows += 1;
         }
+
+        diagnostics.push({
+          investmentId: asset.investmentId,
+          assetName: asset.assetName,
+          attemptedSymbols: candidates,
+          source: "alphavantage",
+          status: insertedRows > 0 ? "synced" : "no_data",
+          reason: insertedRows > 0 ? "Eventos futuros encontrados con Alpha Vantage." : "Alpha Vantage no devolvio pagos futuros utilizables."
+        });
         continue;
       }
 
       if (usedSource === "finnhub" && finnhubRows?.length) {
         const providerCurrency = asset.assetCurrency;
         const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+        let insertedRows = 0;
 
         for (const row of finnhubRows) {
           const paymentDate = (row.paymentDate ?? row.date)?.slice(0, 10);
@@ -265,8 +445,41 @@ export async function POST(request: NextRequest) {
             source: "finnhub",
             notes: "Sincronizado automaticamente con fallback de Finnhub."
           });
+          insertedRows += 1;
         }
+
+        diagnostics.push({
+          investmentId: asset.investmentId,
+          assetName: asset.assetName,
+          attemptedSymbols: candidates,
+          source: "finnhub",
+          status: insertedRows > 0 ? "synced" : "no_data",
+          reason: insertedRows > 0 ? "Eventos futuros encontrados con Finnhub." : "Finnhub no devolvio pagos futuros utilizables."
+        });
+        continue;
       }
+
+      diagnostics.push({
+        investmentId: asset.investmentId,
+        assetName: asset.assetName,
+        attemptedSymbols: candidates,
+        source: null,
+        status: "no_data",
+        reason: providerAttempts.join(" · ") || "Ningun proveedor devolvio un calendario futuro para este activo."
+      });
+    }
+
+    for (const asset of assets.filter((asset) => !supportedAssets.some((candidate) => candidate.investmentId === asset.investmentId))) {
+      diagnostics.push({
+        investmentId: asset.investmentId,
+        assetName: asset.assetName,
+        attemptedSymbols: asset.assetSymbol ? getDividendCandidates(asset.assetSymbol, asset.assetMarket) : [],
+        source: null,
+        status: asset.assetSymbol ? "unsupported" : "missing_symbol",
+        reason: asset.assetSymbol
+          ? "El tipo de activo no tiene sincronizacion automatica de dividendos en esta version."
+          : "Falta ticker para consultar proveedores externos."
+      });
     }
 
     const uniqueDividends = dividends.filter(
@@ -279,7 +492,7 @@ export async function POST(request: NextRequest) {
         ) === index
     );
 
-    return NextResponse.json({ dividends: uniqueDividends });
+    return NextResponse.json({ dividends: uniqueDividends, diagnostics });
   } catch {
     return NextResponse.json({ error: "No se pudieron sincronizar los proximos dividendos." }, { status: 500 });
   }
