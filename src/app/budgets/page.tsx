@@ -6,6 +6,7 @@ import { useAuthGuard } from "@/lib/supabase/use-auth-guard";
 import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { type CurrencyCode, formatCurrencyByPreference, formatDateByPreference, formatMonthByPreference } from "@/lib/preferences-format";
@@ -916,22 +917,34 @@ export default function BudgetsPage() {
 
         <section className="grid gap-3 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="annualSavings" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalBudget, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Total planificado para el mes seleccionado.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="debtPayment" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalActual, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de los gastos ya registrados en el mes.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="annualSavings" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p>
+            </div>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeSummary.currentSavings, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Objetivo de ahorro que has marcado para este mes.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="savingsRate" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo dividido entre los ingresos del mes seleccionado.</p>
           </article>

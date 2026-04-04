@@ -17,6 +17,7 @@ import AuthLoadingState from "@/components/auth-loading-state";
 import { analyzeMonthlyExpenses } from "@/lib/expenses-analysis";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
+import KpiIcon from "@/components/kpi-icon";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
@@ -781,17 +782,26 @@ export default function ExpensesPage() {
 
         <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mes actual</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="debtPayment" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mes actual</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(currentMonthTotal, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe total de gastos del mes en curso.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Media mensual</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="timeline" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Media mensual</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(averageMonthlyExpense, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Promedio de los meses con gasto registrado.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 md:col-span-2">
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Categoria principal</p>
+            <div className="flex items-center gap-2">
+              <KpiIcon type="connection" />
+              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Categoria principal</p>
+            </div>
             <p className="mt-4 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{monthlyAnalysis.topCategory?.name ?? "Sin datos"}</p>
             <p className="mt-4 max-w-[28ch] text-sm leading-6 text-slate-300">Mayor concentracion de gasto del mes actual.</p>
           </article>
