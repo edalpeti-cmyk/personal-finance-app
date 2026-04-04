@@ -235,6 +235,41 @@ async function fetchFinnhubDividends(symbol: string, from: string, to: string) {
   return data;
 }
 
+async function fetchEodhdDividends(symbol: string, from: string, to: string) {
+  const apiKey = process.env.EODHD_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const response = await fetch(
+    `https://eodhd.com/api/calendar/dividends?filter[symbol]=${encodeURIComponent(symbol)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&api_token=${encodeURIComponent(apiKey)}&fmt=json`,
+    { cache: "no-store" }
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as
+    | Array<{
+        symbol?: string;
+        date?: string;
+        payment_date?: string;
+        ex_dividend_date?: string;
+        record_date?: string;
+        currency?: string;
+        unadjusted_value?: number | string;
+        value?: number | string;
+      }>
+    | { error?: string; message?: string };
+
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  return data;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { assets?: SyncRequestAsset[] };
@@ -272,7 +307,8 @@ export async function POST(request: NextRequest) {
     for (const asset of supportedAssets) {
       const candidates = getDividendCandidates(asset.assetSymbol ?? "", asset.assetMarket);
       const providerAttempts: string[] = [];
-      let usedSource: "yahoo" | "alphavantage" | "finnhub" | null = null;
+      let eodhdRows: Awaited<ReturnType<typeof fetchEodhdDividends>> = null;
+      let usedSource: "yahoo" | "eodhd" | "alphavantage" | "finnhub" | null = null;
       let yahooResult: Awaited<ReturnType<typeof fetchYahooDividendCalendar>> = null;
       let resolved: Awaited<ReturnType<typeof fetchAlphaVantageDividends>> = null;
       let finnhubRows: Awaited<ReturnType<typeof fetchFinnhubDividends>> = null;
@@ -291,6 +327,18 @@ export async function POST(request: NextRequest) {
       }
 
       if (!usedSource) {
+        for (const candidate of candidates) {
+          eodhdRows = await fetchEodhdDividends(candidate, today, futureLimit);
+          if (eodhdRows?.length) {
+            usedSource = "eodhd";
+            providerAttempts.push(`EODHD: ${candidate}`);
+            break;
+          }
+        }
+      }
+
+      if (!usedSource) {
+        providerAttempts.push("EODHD sin eventos");
         for (const candidate of candidates) {
           resolved = await fetchAlphaVantageDividends(candidate);
           if (resolved?.dividend_history?.length) {
@@ -405,6 +453,56 @@ export async function POST(request: NextRequest) {
           source: "alphavantage",
           status: insertedRows > 0 ? "synced" : "no_data",
           reason: insertedRows > 0 ? "Eventos futuros encontrados con Alpha Vantage." : "Alpha Vantage no devolvio pagos futuros utilizables."
+        });
+        continue;
+      }
+
+      if (usedSource === "eodhd" && eodhdRows?.length) {
+        let insertedRows = 0;
+
+        for (const row of eodhdRows) {
+          const paymentDate = (row.payment_date ?? row.date)?.slice(0, 10);
+          if (!paymentDate || paymentDate < today) {
+            continue;
+          }
+
+          const providerCurrency = ((row.currency ?? asset.assetCurrency).toUpperCase() || asset.assetCurrency) as AssetCurrency;
+          const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+          const dividendPerShareLocal = Number(row.unadjusted_value ?? row.value ?? 0);
+          if (!Number.isFinite(dividendPerShareLocal) || dividendPerShareLocal <= 0) {
+            continue;
+          }
+
+          const sharesPaid = Number(asset.quantity || 0);
+          const grossAmountLocal = dividendPerShareLocal * sharesPaid;
+          const grossAmountEur = grossAmountLocal * fxRateToEur;
+
+          dividends.push({
+            investmentId: asset.investmentId,
+            paymentDate,
+            exDividendDate: row.ex_dividend_date?.slice(0, 10) ?? null,
+            recordDate: row.record_date?.slice(0, 10) ?? null,
+            grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
+            netAmountLocal: Number(grossAmountLocal.toFixed(4)),
+            grossAmountEur: Number(grossAmountEur.toFixed(4)),
+            netAmountEur: Number(grossAmountEur.toFixed(4)),
+            dividendPerShareLocal: Number(dividendPerShareLocal.toFixed(6)),
+            sharesPaid,
+            assetCurrency: providerCurrency,
+            fxRateToEur: Number(fxRateToEur.toFixed(8)),
+            source: "eodhd",
+            notes: `Sincronizado automaticamente con EODHD para ${row.symbol ?? candidates[0] ?? asset.assetSymbol ?? asset.assetName}.`
+          });
+          insertedRows += 1;
+        }
+
+        diagnostics.push({
+          investmentId: asset.investmentId,
+          assetName: asset.assetName,
+          attemptedSymbols: candidates,
+          source: "eodhd",
+          status: insertedRows > 0 ? "synced" : "no_data",
+          reason: insertedRows > 0 ? "Eventos futuros encontrados con EODHD." : "EODHD no devolvio pagos futuros utilizables."
         });
         continue;
       }
