@@ -115,6 +115,37 @@ async function fetchAlphaVantageDividends(symbol: string) {
   return data;
 }
 
+async function fetchFinnhubDividends(symbol: string, from: string, to: string) {
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const response = await fetch(
+    `https://finnhub.io/api/v1/stock/dividend?symbol=${encodeURIComponent(symbol)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&token=${encodeURIComponent(apiKey)}`,
+    { cache: "no-store" }
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as Array<{
+    date?: string;
+    paymentDate?: string;
+    recordDate?: string;
+    amount?: number;
+    dividend?: number;
+    currency?: string;
+  }> | { error?: string };
+
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  return data;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { assets?: SyncRequestAsset[] };
@@ -131,57 +162,110 @@ export async function POST(request: NextRequest) {
 
     const ratesToEur = await fetchRatesToEur();
     const today = new Date().toISOString().slice(0, 10);
+    const oneYearAhead = new Date();
+    oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
+    const futureLimit = oneYearAhead.toISOString().slice(0, 10);
     const dividends: SyncedDividend[] = [];
 
     for (const asset of assets) {
       const candidates = getDividendCandidates(asset.assetSymbol ?? "", asset.assetMarket);
       let resolved: Awaited<ReturnType<typeof fetchAlphaVantageDividends>> = null;
+      let finnhubRows: Awaited<ReturnType<typeof fetchFinnhubDividends>> = null;
+      let usedSource: "alphavantage" | "finnhub" | null = null;
 
       for (const candidate of candidates) {
         resolved = await fetchAlphaVantageDividends(candidate);
         if (resolved?.dividend_history?.length) {
+          usedSource = "alphavantage";
           break;
         }
       }
 
       if (!resolved?.dividend_history?.length) {
+        for (const candidate of candidates) {
+          finnhubRows = await fetchFinnhubDividends(candidate, today, futureLimit);
+          if (finnhubRows?.length) {
+            usedSource = "finnhub";
+            break;
+          }
+        }
+      }
+
+      if (usedSource === "alphavantage" && resolved?.dividend_history?.length) {
+        const providerCurrency = (resolved.currency?.toUpperCase() || asset.assetCurrency) as AssetCurrency;
+        const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+
+        for (const row of resolved.dividend_history) {
+          const paymentDate = row.payment_date?.slice(0, 10);
+          if (!paymentDate || paymentDate < today) {
+            continue;
+          }
+
+          const dividendPerShareLocal = Number(row.dividend_amount ?? 0);
+          if (!Number.isFinite(dividendPerShareLocal) || dividendPerShareLocal <= 0) {
+            continue;
+          }
+
+          const sharesPaid = Number(asset.quantity || 0);
+          const grossAmountLocal = dividendPerShareLocal * sharesPaid;
+          const grossAmountEur = grossAmountLocal * fxRateToEur;
+
+          dividends.push({
+            investmentId: asset.investmentId,
+            paymentDate,
+            exDividendDate: row.ex_dividend_date?.slice(0, 10) ?? null,
+            recordDate: row.record_date?.slice(0, 10) ?? null,
+            grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
+            netAmountLocal: Number(grossAmountLocal.toFixed(4)),
+            grossAmountEur: Number(grossAmountEur.toFixed(4)),
+            netAmountEur: Number(grossAmountEur.toFixed(4)),
+            dividendPerShareLocal: Number(dividendPerShareLocal.toFixed(6)),
+            sharesPaid,
+            assetCurrency: providerCurrency,
+            fxRateToEur: Number(fxRateToEur.toFixed(8)),
+            source: "alphavantage",
+            notes: resolved.symbol ? `Sincronizado automaticamente desde ${resolved.symbol}.` : "Sincronizado automaticamente."
+          });
+        }
         continue;
       }
 
-      const providerCurrency = (resolved.currency?.toUpperCase() || asset.assetCurrency) as AssetCurrency;
-      const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
+      if (usedSource === "finnhub" && finnhubRows?.length) {
+        const providerCurrency = asset.assetCurrency;
+        const fxRateToEur = ratesToEur[providerCurrency] ?? 1;
 
-      for (const row of resolved.dividend_history) {
-        const paymentDate = row.payment_date?.slice(0, 10);
-        if (!paymentDate || paymentDate < today) {
-          continue;
+        for (const row of finnhubRows) {
+          const paymentDate = (row.paymentDate ?? row.date)?.slice(0, 10);
+          if (!paymentDate || paymentDate < today) {
+            continue;
+          }
+
+          const dividendPerShareLocal = Number(row.amount ?? row.dividend ?? 0);
+          if (!Number.isFinite(dividendPerShareLocal) || dividendPerShareLocal <= 0) {
+            continue;
+          }
+
+          const sharesPaid = Number(asset.quantity || 0);
+          const grossAmountLocal = dividendPerShareLocal * sharesPaid;
+          const grossAmountEur = grossAmountLocal * fxRateToEur;
+
+          dividends.push({
+            investmentId: asset.investmentId,
+            paymentDate,
+            exDividendDate: row.date?.slice(0, 10) ?? null,
+            recordDate: row.recordDate?.slice(0, 10) ?? null,
+            grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
+            netAmountLocal: Number(grossAmountLocal.toFixed(4)),
+            grossAmountEur: Number(grossAmountEur.toFixed(4)),
+            netAmountEur: Number(grossAmountEur.toFixed(4)),
+            dividendPerShareLocal: Number(dividendPerShareLocal.toFixed(6)),
+            sharesPaid,
+            assetCurrency: providerCurrency,
+            fxRateToEur: Number(fxRateToEur.toFixed(8)),
+            source: "finnhub",
+            notes: "Sincronizado automaticamente con fallback de Finnhub."
+          });
         }
-
-        const dividendPerShareLocal = Number(row.dividend_amount ?? 0);
-        if (!Number.isFinite(dividendPerShareLocal) || dividendPerShareLocal <= 0) {
-          continue;
-        }
-
-        const sharesPaid = Number(asset.quantity || 0);
-        const grossAmountLocal = dividendPerShareLocal * sharesPaid;
-        const grossAmountEur = grossAmountLocal * fxRateToEur;
-
-        dividends.push({
-          investmentId: asset.investmentId,
-          paymentDate,
-          exDividendDate: row.ex_dividend_date?.slice(0, 10) ?? null,
-          recordDate: row.record_date?.slice(0, 10) ?? null,
-          grossAmountLocal: Number(grossAmountLocal.toFixed(4)),
-          netAmountLocal: Number(grossAmountLocal.toFixed(4)),
-          grossAmountEur: Number(grossAmountEur.toFixed(4)),
-          netAmountEur: Number(grossAmountEur.toFixed(4)),
-          dividendPerShareLocal: Number(dividendPerShareLocal.toFixed(6)),
-          sharesPaid,
-          assetCurrency: providerCurrency,
-          fxRateToEur: Number(fxRateToEur.toFixed(8)),
-          source: "alphavantage",
-          notes: resolved.symbol ? `Sincronizado automaticamente desde ${resolved.symbol}.` : "Sincronizado automaticamente."
-        });
       }
     }
 
