@@ -2261,7 +2261,7 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <KpiIcon type="savingsRate" />
+                  <KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-emerald-200/80" />
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
                 </div>
                 <InfoHint text="Basada en tu ahorro objetivo del mes actual frente a los ingresos del mes." />
@@ -2274,8 +2274,8 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <KpiIcon type="annualSavings" />
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro anual</p>
+                  <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-sky-200/80" />
+                  <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Ahorro anual</p>
                 </div>
                 <InfoHint text="Suma de tus objetivos de ahorro de los meses del año actual." />
               </div>
@@ -2285,8 +2285,8 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <KpiIcon type="emergencyFund" />
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Fondo de emergencia</p>
+                  <KpiIcon type="emergencyFund" className="h-4 w-4 flex-none text-teal-200/80" />
+                  <p className="text-xs uppercase tracking-[0.22em] text-teal-300">Fondo de emergencia</p>
                 </div>
                 <InfoHint text="Capital reservado fuera de caja general, pero que sigue contando dentro de tu patrimonio." />
               </div>
@@ -2296,8 +2296,8 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <KpiIcon type="debtPayment" />
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Cuota deuda mensual</p>
+                  <KpiIcon type="debtPayment" className="h-4 w-4 flex-none text-amber-200/80" />
+                  <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Cuota deuda mensual</p>
                 </div>
                 <InfoHint text="Carga fija mensual de toda la deuda activa o pausada." />
               </div>
@@ -2307,8 +2307,8 @@ export default function DashboardPage() {
             <section className="rounded-[26px] border border-white/6 bg-[linear-gradient(180deg,rgba(10,24,44,0.98)_0%,rgba(11,28,52,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-1 xl:col-span-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <KpiIcon type="fireTarget" />
-                  <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Objetivo FIRE</p>
+                  <KpiIcon type="fireTarget" className="h-4 w-4 flex-none text-orange-200/80" />
+                  <p className="text-xs uppercase tracking-[0.22em] text-orange-300">Objetivo FIRE</p>
                 </div>
                 <InfoHint text="Calculado con la misma configuracion que tienes en la pagina FIRE." />
               </div>
@@ -2322,6 +2322,7 @@ export default function DashboardPage() {
                 eyebrow="Centro del mes"
                 title="Lo importante antes de entrar al detalle"
                 description="Una lectura rapida para saber si toca actuar o solo seguir el plan."
+                icon="timeline"
               />
 
               <div className="mt-5 grid gap-3 xl:grid-cols-2">
@@ -2370,6 +2371,7 @@ export default function DashboardPage() {
                 eyebrow="Consejo del momento"
                 title="Asesoramiento proactivo"
                 description="Recomendaciones breves y accionables basadas en tu deuda, ahorro, inversiones y plan FIRE."
+                icon="connection"
               />
               <div className="mt-5">
                 {financialGuidance.length > 0 ? (
