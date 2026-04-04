@@ -2128,7 +2128,7 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-          <div className="mt-6 grid gap-4 xl:mt-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
+          <div className="mt-6 grid gap-4 xl:mt-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-start">
             <div>
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
