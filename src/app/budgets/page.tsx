@@ -918,23 +918,23 @@ export default function BudgetsPage() {
         <section className="grid gap-3 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[24px] p-4">
             <div className="flex items-center gap-2">
-              <KpiIcon type="annualSavings" />
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Presupuesto</p>
+              <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-sky-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Presupuesto</p>
             </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalBudget, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Total planificado para el mes seleccionado.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
             <div className="flex items-center gap-2">
-              <KpiIcon type="debtPayment" />
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p>
+              <KpiIcon type="debtPayment" className="h-4 w-4 flex-none text-amber-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Gasto real</p>
             </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(totals.totalActual, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma de los gastos ya registrados en el mes.</p>
           </article>
           <article className="kpi-card rounded-[24px] p-4">
             <div className="flex items-center gap-2">
-              <KpiIcon type="annualSavings" />
+              <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-emerald-200/80" />
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro</p>
             </div>
             <p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${incomeSummary.currentSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(incomeSummary.currentSavings, currency)}</p>
@@ -942,8 +942,8 @@ export default function BudgetsPage() {
           </article>
           <article className="kpi-card rounded-[24px] p-4">
             <div className="flex items-center gap-2">
-              <KpiIcon type="savingsRate" />
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Tasa de ahorro</p>
+              <KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-teal-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-teal-300">Tasa de ahorro</p>
             </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{incomeSummary.currentSavingsRate === null ? "Sin datos" : `${incomeSummary.currentSavingsRate.toFixed(1)}%`}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Ahorro objetivo dividido entre los ingresos del mes seleccionado.</p>
@@ -977,7 +977,7 @@ export default function BudgetsPage() {
             <summary className="list-none cursor-pointer">
               <div className="accordion-summary">
                 <div className="accordion-summary-main">
-                  <SectionHeader eyebrow="Resumen" title="Comparativa mensual" />
+                  <SectionHeader eyebrow="Resumen" title="Comparativa mensual" icon="timeline" />
                 </div>
                 <div className="accordion-summary-side">
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">

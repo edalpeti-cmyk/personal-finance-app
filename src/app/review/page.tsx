@@ -818,10 +818,10 @@ export default function ReviewPage() {
             </section>
 
             <section className="grid gap-3 xl:col-span-12 md:grid-cols-2 xl:grid-cols-4">
-              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="annualSavings" /><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ingresos</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentIncome, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousIncome, currency)}</p></article>
-              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="debtPayment" /><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Gasto real</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentExpenses, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousExpenses, currency)}</p></article>
-              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="annualSavings" /><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro objetivo</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentSavingsTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousSavingsTarget, currency)}</p></article>
-              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="savingsRate" /><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro real</p></div><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${reviewMetrics.actualSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.actualSavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousActualSavings, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-sky-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-sky-300">Ingresos</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentIncome, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousIncome, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="debtPayment" className="h-4 w-4 flex-none text-amber-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-amber-300">Gasto real</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentExpenses, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousExpenses, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-emerald-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Ahorro objetivo</p></div><p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(reviewMetrics.currentSavingsTarget, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousSavingsTarget, currency)}</p></article>
+              <article className="kpi-card rounded-[24px] p-4"><div className="flex items-center gap-2"><KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-teal-200/80" /><p className="text-xs uppercase tracking-[0.22em] text-teal-300">Ahorro real</p></div><p className={`mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none ${reviewMetrics.actualSavings >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.actualSavings, currency)}</p><p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Mes anterior: {formatCurrencyByPreference(reviewMetrics.previousActualSavings, currency)}</p></article>
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
@@ -855,7 +855,7 @@ export default function ReviewPage() {
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-7">
-              <SectionHeader eyebrow="Lectura del mes" title="Donde merece la pena mirar primero" description="Una capa de interpretacion rapida antes de entrar en tablas y formularios." />
+              <SectionHeader eyebrow="Lectura del mes" title="Donde merece la pena mirar primero" description="Una capa de interpretacion rapida antes de entrar en tablas y formularios." icon="timeline" />
               <div className="mt-5 grid gap-3 md:grid-cols-2">
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-400">Desviacion frente al objetivo</p><p className={`mt-3 font-[var(--font-heading)] text-3xl font-semibold ${reviewMetrics.savingsDeltaVsTarget >= 0 ? "text-emerald-300" : "text-red-300"}`}>{formatCurrencyByPreference(reviewMetrics.savingsDeltaVsTarget, currency)}</p><p className="mt-2 text-sm leading-6 text-slate-300">Diferencia entre ahorro real del mes y ahorro objetivo marcado.</p></article>
                 <article className="rounded-[24px] border border-white/8 bg-white/5 p-4"> <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Categoria con mas tension</p>{reviewMetrics.overspent[0] ? (<><p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-white">{reviewMetrics.overspent[0].category}</p><p className="mt-2 text-sm leading-6 text-slate-300">Exceso de {formatCurrencyByPreference(reviewMetrics.overspent[0].delta, currency)} sobre presupuesto.</p></>) : (<p className="mt-3 text-sm leading-6 text-slate-300">No hay categorias por encima del presupuesto en este mes.</p>)}</article>
@@ -866,7 +866,7 @@ export default function ReviewPage() {
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-5">
-              <SectionHeader eyebrow="Checklist" title="Siguiente accion recomendada" description="Atajos rapidos para cerrar el mes sin perder tiempo." />
+              <SectionHeader eyebrow="Checklist" title="Siguiente accion recomendada" description="Atajos rapidos para cerrar el mes sin perder tiempo." icon="connection" />
               <div className="mt-5 grid gap-3">
                 {reviewActions.map((action) => (
                   <article key={action.id} className={`rounded-[24px] border p-4 ${action.completed ? "border-emerald-400/20 bg-emerald-500/10" : "border-white/8 bg-white/5"}`}>
@@ -1024,7 +1024,7 @@ export default function ReviewPage() {
             </section>
 
             <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-              <SectionHeader eyebrow="Historico" title="Ultimos cierres mensuales" description="Un registro rapido para ver que meses ya has dado por cerrados y con que diagnostico." />
+              <SectionHeader eyebrow="Historico" title="Ultimos cierres mensuales" description="Un registro rapido para ver que meses ya has dado por cerrados y con que diagnostico." icon="timeline" />
               {reviewClosures.length === 0 ? (
                 <div className="mt-6">
                   <EmptyStateCard

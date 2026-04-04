@@ -783,23 +783,23 @@ export default function ExpensesPage() {
         <section className="grid gap-4 xl:col-span-7 md:grid-cols-2">
           <article className="kpi-card rounded-[26px] p-6">
             <div className="flex items-center gap-2">
-              <KpiIcon type="debtPayment" />
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Mes actual</p>
+              <KpiIcon type="debtPayment" className="h-4 w-4 flex-none text-amber-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Mes actual</p>
             </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(currentMonthTotal, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe total de gastos del mes en curso.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6">
             <div className="flex items-center gap-2">
-              <KpiIcon type="timeline" />
-              <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Media mensual</p>
+              <KpiIcon type="timeline" className="h-4 w-4 flex-none text-sky-200/80" />
+              <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Media mensual</p>
             </div>
             <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">{formatCurrencyByPreference(averageMonthlyExpense, currency)}</p>
             <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Promedio de los meses con gasto registrado.</p>
           </article>
           <article className="kpi-card rounded-[26px] p-6 md:col-span-2">
             <div className="flex items-center gap-2">
-              <KpiIcon type="connection" />
+              <KpiIcon type="connection" className="h-4 w-4 flex-none text-emerald-200/80" />
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Categoria principal</p>
             </div>
             <p className="mt-4 font-[var(--font-heading)] text-3xl font-semibold leading-tight text-white">{monthlyAnalysis.topCategory?.name ?? "Sin datos"}</p>
@@ -869,7 +869,7 @@ export default function ExpensesPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader eyebrow="Vista por niveles" title="Categorias de gasto" />
+          <SectionHeader eyebrow="Vista por niveles" title="Categorias de gasto" icon="connection" />
 
           <div className="mt-6 grid gap-4 xl:grid-cols-6">
             <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2">
