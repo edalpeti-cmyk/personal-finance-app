@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -940,7 +940,7 @@ export default function InvestmentsPage() {
   }, []);
 
   const formatAssetUnits = useCallback(
-    (value: number, digits: number) => (hideBalances ? "••••" : formatNumber(value, digits)),
+    (value: number, digits: number) => (hideBalances ? "����" : formatNumber(value, digits)),
     [hideBalances]
   );
 
@@ -1178,7 +1178,7 @@ export default function InvestmentsPage() {
 
   const handleDeleteDividend = async (id: string) => {
     if (!userId) return;
-    const confirmed = window.confirm("Se eliminara este registro de dividendo. ¿Quieres continuar?");
+    const confirmed = window.confirm("Se eliminara este registro de dividendo. �Quieres continuar?");
     if (!confirmed) return;
 
     const { error } = await supabase.from("investment_dividends").delete().eq("id", id).eq("user_id", userId);
@@ -2322,10 +2322,10 @@ export default function InvestmentsPage() {
               const pctValue = selectedTypeReturnPctSeries[context.dataIndex] ?? 0;
 
               if ((context.dataset.label ?? "").includes("Rentabilidad")) {
-                return `Rentabilidad: ${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}% · ${formatCurrencyByPreference(eurValue, "EUR")}`;
+                return `Rentabilidad: ${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}% � ${formatCurrencyByPreference(eurValue, "EUR")}`;
               }
 
-              return `Valor: ${formatCurrencyByPreference(rawValue, "EUR")} · ${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}%`;
+              return `Valor: ${formatCurrencyByPreference(rawValue, "EUR")} � ${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}%`;
             }
           }
         }
@@ -2471,7 +2471,7 @@ export default function InvestmentsPage() {
     setSortDirection(field === "asset_name" || field === "asset_type" ? "asc" : "desc");
   };
 
-  const sortLabel = sortDirection === "asc" ? "↑" : "↓";
+  const sortLabel = sortDirection === "asc" ? "?" : "?";
 
   const saveCurrentView = async () => {
     const trimmedName = viewName.trim();
@@ -2593,7 +2593,7 @@ export default function InvestmentsPage() {
         </head>
         <body>
           <h1>Reporte de inversiones</h1>
-          <p class="muted">Generado el ${new Date().toLocaleDateString("es-ES")} · Resumen de cartera, concentracion y rendimiento.</p>
+          <p class="muted">Generado el ${new Date().toLocaleDateString("es-ES")} � Resumen de cartera, concentracion y rendimiento.</p>
 
           <div class="grid">
             <div class="card"><p class="metric-label">Valor total en EUR</p><p class="metric-value">${formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p></div>
@@ -2620,7 +2620,7 @@ export default function InvestmentsPage() {
               <li><strong>Posicion mas debil:</strong> ${worstPerformer ? `${worstPerformer.asset_name} (${worstPerformer.gainPct === null ? "Sin datos" : `${worstPerformer.gainPct >= 0 ? "+" : ""}${formatNumber(worstPerformer.gainPct, 2)}%`})` : "Sin datos"}</li>
             </ul>
             <div style="margin-top:12px;">
-              ${allocationByType.map((item) => `<span class="pill">${item.label}: ${formatCurrencyByPreference(item.value, "EUR")} · ${formatNumber(item.weightPct, 1)}%</span>`).join("")}
+              ${allocationByType.map((item) => `<span class="pill">${item.label}: ${formatCurrencyByPreference(item.value, "EUR")} � ${formatNumber(item.weightPct, 1)}%</span>`).join("")}
             </div>
           </div>
 
@@ -3538,7 +3538,7 @@ export default function InvestmentsPage() {
                                 {formatCurrencyByPreference(sellPreview.netLocal, matchedSellPosition.asset_currency ?? assetCurrency)}
                               </p>
                               <p className="mt-1 text-xs text-slate-400">
-                                Comision: {formatCurrencyByPreference(sellPreview.feeLocal, matchedSellPosition.asset_currency ?? assetCurrency)} · {formatCurrencyByPreference(sellPreview.netEur, "EUR")} en EUR
+                                Comision: {formatCurrencyByPreference(sellPreview.feeLocal, matchedSellPosition.asset_currency ?? assetCurrency)} � {formatCurrencyByPreference(sellPreview.netEur, "EUR")} en EUR
                               </p>
                             </div>
                             <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
@@ -3757,306 +3757,6 @@ export default function InvestmentsPage() {
         </section>
 
         <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
-          <SectionHeader
-            eyebrow="Dividendos"
-            title="Cobros y proximos pagos"
-            description="Registra dividendos cobrados y eventos proximos para seguir bruto, neto, retencion y calendario."
-            icon="annualSavings"
-          />
-
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <article className="kpi-card rounded-[24px] p-4">
-              <div className="flex items-center gap-2">
-                <KpiIcon type="annualSavings" className="h-4 w-4 flex-none text-emerald-200/80" />
-                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Total neto cobrado</p>
-              </div>
-              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
-                {formatCurrencyByPreference(dividendMetrics.totalNetEur, "EUR")}
-              </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Suma neta de todos los dividendos ya cobrados.</p>
-            </article>
-            <article className="kpi-card rounded-[24px] p-4">
-              <div className="flex items-center gap-2">
-                <KpiIcon type="netWorth" className="h-4 w-4 flex-none text-sky-200/80" />
-                <p className="text-xs uppercase tracking-[0.22em] text-sky-300">Total bruto cobrado</p>
-              </div>
-              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
-                {formatCurrencyByPreference(dividendMetrics.totalGrossEur, "EUR")}
-              </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Importe antes de retencion, consolidado en EUR.</p>
-            </article>
-            <article className="kpi-card rounded-[24px] p-4">
-              <div className="flex items-center gap-2">
-                <KpiIcon type="savingsRate" className="h-4 w-4 flex-none text-teal-200/80" />
-                <p className="text-xs uppercase tracking-[0.22em] text-teal-300">Dividendos este año</p>
-              </div>
-              <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold leading-none text-white">
-                {formatCurrencyByPreference(dividendMetrics.yearNetEur, "EUR")}
-              </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">Acumulado neto cobrado en el año natural actual.</p>
-            </article>
-            <article className="kpi-card rounded-[24px] p-4">
-              <div className="flex items-center gap-2">
-                <KpiIcon type="timeline" className="h-4 w-4 flex-none text-amber-200/80" />
-                <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Proximo dividendo</p>
-              </div>
-              <p className="mt-4 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
-                {dividendMetrics.nextDividend ? formatCurrencyByPreference(dividendMetrics.nextDividend.net_amount_eur, "EUR") : "Sin datos"}
-              </p>
-              <p className="mt-4 max-w-[24ch] text-sm leading-6 text-slate-300">
-                {dividendMetrics.nextDividend
-                  ? `${investmentNameById[dividendMetrics.nextDividend.investment_id ?? ""] ?? "Activo"} · ${dividendMetrics.nextDividend.payment_date}`
-                  : "No hay pagos futuros guardados ahora mismo."}
-              </p>
-            </article>
-          </div>
-
-          <section className="mt-6 rounded-[24px] border border-white/8 bg-white/5 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Calendario</p>
-                <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Proximos dividendos</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Informacion automatica estimada segun tus posiciones actuales y el calendario disponible del proveedor.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-                  Total previsto: {formatCurrencyByPreference(upcomingDividendTotalNetEur, "EUR")}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void handleSyncUpcomingDividends()}
-                  disabled={syncingDividends}
-                  className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {syncingDividends ? "Sincronizando..." : "Actualizar proximos dividendos"}
-                </button>
-              </div>
-            </div>
-
-            {upcomingDividendRows.length === 0 ? (
-              <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-slate-950/20 p-4 text-sm text-slate-300">
-                Todavia no hay proximos dividendos sincronizados. Pulsa en <span className="font-medium text-white">Actualizar proximos dividendos</span> para consultarlos automaticamente.
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-3">
-                {upcomingDividendRows.map((row) => (
-                  <article key={`upcoming-${row.id}`} className="rounded-2xl border border-white/8 bg-slate-950/40 px-4 py-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium text-white">{row.assetName}</p>
-                          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
-                            Proximo
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-400">
-                          Pago: {row.payment_date}
-                          {row.ex_dividend_date ? ` · Ex-dividend: ${row.ex_dividend_date}` : ""}
-                          {row.record_date ? ` · Record: ${row.record_date}` : ""}
-                        </p>
-                        <div className="mt-3 grid gap-1 text-xs text-slate-300 sm:grid-cols-2">
-                          <p>Importe estimado: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_local, row.asset_currency)}</span></p>
-                          <p>Importe estimado EUR: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_eur, "EUR")}</span></p>
-                          <p>Acciones estimadas: <span className="font-medium text-white">{row.shares_paid ? formatAssetUnits(Number(row.shares_paid), 4) : "n/d"}</span></p>
-                          <p>Dividendo por accion: <span className="font-medium text-white">{row.dividend_per_share_local !== null ? formatCurrencyByPreference(row.dividend_per_share_local, row.asset_currency) : "n/d"}</span></p>
-                        </div>
-                        {row.source || row.notes ? (
-                          <p className="mt-3 text-xs text-slate-400">
-                            {[row.source, row.notes].filter(Boolean).join(" · ")}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-
-            {failedDividendDiagnostics.length > 0 ? (
-              <div className="mt-5 rounded-2xl border border-amber-400/15 bg-amber-400/5 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Diagnostico</p>
-                    <h4 className="mt-2 text-lg font-semibold text-white">Activos sin calendario sincronizado</h4>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">Aqui vemos si el problema viene del ticker, de la cobertura del proveedor o de que no haya eventos futuros disponibles.</p>
-                  </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-                    {failedDividendDiagnostics.length} sin cobertura
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-3">
-                  {failedDividendDiagnostics.map((row) => (
-                    <article key={`diagnostic-${row.investmentId}`} className="rounded-2xl border border-white/8 bg-slate-950/40 px-4 py-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-medium text-white">{row.assetName}</p>
-                            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
-                              {row.status === "missing_symbol" ? "Sin ticker" : row.status === "unsupported" ? "No compatible" : "Sin datos"}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm text-slate-300">{row.reason}</p>
-                          <p className="mt-2 text-xs text-slate-400">
-                            Simbolos probados: <span className="text-slate-200">{row.attemptedSymbols.length > 0 ? row.attemptedSymbols.join(", ") : "ninguno"}</span>
-                          </p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Proveedor final: <span className="text-slate-200">{row.source ? formatProviderLabel(row.source) : "sin respuesta util"}</span>
-                          </p>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </section>
-
-          <div className="mt-6 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-            <section className="rounded-[24px] border border-white/8 bg-white/5 p-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Nuevo registro</p>
-                <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Registrar dividendo</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-300">Puedes guardar tanto un dividendo cobrado como un pago proximo previsto.</p>
-              </div>
-              <form onSubmit={handleDividendSubmit} className="mt-5 grid gap-4" noValidate>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="grid gap-2 text-sm text-slate-200 sm:col-span-2">
-                    Activo
-                    <select className={inputClass(false)} value={dividendInvestmentId} onChange={(event) => setDividendInvestmentId(event.target.value)}>
-                      <option value="">Selecciona un activo</option>
-                      {investments.map((row) => (
-                        <option key={`dividend-investment-${row.id}`} value={row.id}>
-                          {row.asset_name}{row.asset_symbol ? ` (${row.asset_symbol})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Estado
-                    <select className={inputClass(false)} value={dividendStatus} onChange={(event) => setDividendStatus(event.target.value as InvestmentDividendStatus)}>
-                      {DIVIDEND_STATUSES.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Fecha de pago
-                    <input className={inputClass(false)} type="date" value={dividendPaymentDate} onChange={(event) => setDividendPaymentDate(event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Ex-dividend
-                    <input className={inputClass(false)} type="date" value={dividendExDate} onChange={(event) => setDividendExDate(event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Record date
-                    <input className={inputClass(false)} type="date" value={dividendRecordDate} onChange={(event) => setDividendRecordDate(event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Bruto local
-                    <input className={inputClass(false)} type="number" min="0" step="0.0001" value={dividendGrossAmount} onChange={(event) => setDividendGrossAmount(event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Retencion local
-                    <input className={inputClass(false)} type="number" min="0" step="0.0001" value={dividendWithholding} onChange={(event) => setDividendWithholding(event.target.value)} />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Dividendo por accion
-                    <input className={inputClass(false)} type="number" min="0" step="0.000001" value={dividendPerShare} onChange={(event) => setDividendPerShare(event.target.value)} placeholder="Opcional" />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Acciones pagadas
-                    <input className={inputClass(false)} type="number" min="0" step="0.00000001" value={dividendSharesPaid} onChange={(event) => setDividendSharesPaid(event.target.value)} placeholder="Opcional" />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200">
-                    Fuente
-                    <input className={inputClass(false)} value={dividendSource} onChange={(event) => setDividendSource(event.target.value)} placeholder="Broker, comunicado, etc." />
-                  </label>
-                  <label className="grid gap-2 text-sm text-slate-200 sm:col-span-2">
-                    Notas
-                    <textarea className={inputClass(false)} rows={3} value={dividendNotes} onChange={(event) => setDividendNotes(event.target.value)} placeholder="Opcional" />
-                  </label>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={dividendSaving} type="submit">
-                    {dividendSaving ? "Guardando..." : dividendStatus === "received" ? "Guardar dividendo" : "Guardar proximo pago"}
-                  </button>
-                  <button type="button" onClick={resetDividendForm} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 hover:bg-white/10">
-                    Limpiar
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section className="rounded-[24px] border border-white/8 bg-white/5 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Historial</p>
-                  <h3 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Dividendos guardados</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">Cobros reales y pagos proximos clasificados en una sola vista.</p>
-                </div>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
-                  {dividendRowsWithInvestment.length} registros
-                </span>
-              </div>
-
-              {dividendRowsWithInvestment.length === 0 ? (
-                <div className="mt-5">
-                  <EmptyStateCard
-                    eyebrow="Sin dividendos"
-                    title="Todavia no has registrado pagos"
-                    description="Guarda tus cobros reales o proximos dividendos para construir el historial y el calendario."
-                    actionLabel="Usar este formulario"
-                    actionHref="/investments"
-                    compact
-                  />
-                </div>
-              ) : (
-                <div className="mt-5 grid gap-3">
-                  {dividendRowsWithInvestment.map((row) => (
-                    <article key={row.id} className="rounded-2xl border border-white/8 bg-slate-950/40 px-4 py-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-medium text-white">{row.assetName}</p>
-                            <span className={`rounded-full border px-2 py-0.5 text-[11px] ${row.status === "received" ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>
-                              {row.status === "received" ? "Cobrado" : "Proximo"}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-400">
-                            Pago: {row.payment_date}
-                            {row.ex_dividend_date ? ` · Ex-dividend: ${row.ex_dividend_date}` : ""}
-                            {row.record_date ? ` · Record: ${row.record_date}` : ""}
-                          </p>
-                          <div className="mt-3 grid gap-1 text-xs text-slate-300 sm:grid-cols-2">
-                            <p>Bruto: <span className="font-medium text-white">{formatCurrencyByPreference(row.gross_amount_local, row.asset_currency)}</span></p>
-                            <p>Neto: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_local, row.asset_currency)}</span></p>
-                            <p>EUR neto: <span className="font-medium text-white">{formatCurrencyByPreference(row.net_amount_eur, "EUR")}</span></p>
-                            <p>Retencion: <span className="font-medium text-white">{formatCurrencyByPreference(row.withholding_tax_local, row.asset_currency)}</span></p>
-                            <p>Acciones: <span className="font-medium text-white">{row.shares_paid ? formatAssetUnits(Number(row.shares_paid), 4) : "n/d"}</span></p>
-                            <p>Por accion: <span className="font-medium text-white">{row.dividend_per_share_local !== null ? formatCurrencyByPreference(row.dividend_per_share_local, row.asset_currency) : "n/d"}</span></p>
-                          </div>
-                          {row.source || row.notes ? (
-                            <p className="mt-3 text-xs text-slate-400">
-                              {[row.source, row.notes].filter(Boolean).join(" · ")}
-                            </p>
-                          ) : null}
-                        </div>
-                        <button type="button" onClick={() => void handleDeleteDividend(row.id)} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] font-medium text-red-200 hover:bg-red-500/20">
-                          Eliminar
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        </section>
-
-        <section className="panel rounded-[28px] p-5 text-white xl:col-span-12">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Evolucion</p>
@@ -4193,7 +3893,7 @@ export default function InvestmentsPage() {
                     <span className="text-slate-400">{formatCurrencyByPreference(row.currentValueEur, "EUR")}</span>
                     <span className={row.gainEur >= 0 ? "text-emerald-300" : "text-red-300"}>
                       {formatCurrencyByPreference(row.gainEur, "EUR")}
-                      {row.gainPct === null ? "" : ` · ${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}
+                      {row.gainPct === null ? "" : ` � ${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}
                     </span>
                   </div>
                 </article>
@@ -4792,7 +4492,7 @@ export default function InvestmentsPage() {
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <p className="font-medium text-white">{row.asset_name}</p>
-                            <p className="mt-1 text-sm text-slate-400">{row.asset_symbol ?? "Sin ticker"} · {row.asset_market ?? "AUTO"} · {row.asset_currency}</p>
+                            <p className="mt-1 text-sm text-slate-400">{row.asset_symbol ?? "Sin ticker"} � {row.asset_market ?? "AUTO"} � {row.asset_currency}</p>
                             <div className="mt-3 flex flex-wrap gap-2">
                               {row.weightPct >= 25 ? <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200">Concentrado</span> : null}
                               {(row.gainPct ?? 0) <= -10 ? <span className="rounded-full border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-200">Perdida relevante</span> : null}
@@ -4804,7 +4504,7 @@ export default function InvestmentsPage() {
                                 Plusvalia:{" "}
                                 <span className={row.gainEur >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>
                                   {formatCurrencyByPreference(row.gainEur, "EUR")}
-                                  {row.gainPct === null ? "" : ` · ${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}
+                                  {row.gainPct === null ? "" : ` � ${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}
                                 </span>
                               </p>
                               <p>Rentabilidad: <span className={row.gainPct !== null && row.gainPct >= 0 ? "font-medium text-emerald-300" : "font-medium text-red-300"}>{row.gainPct === null ? "Sin datos" : `${row.gainPct >= 0 ? "+" : ""}${formatNumber(row.gainPct, 2)}%`}</span></p>
@@ -4850,7 +4550,7 @@ export default function InvestmentsPage() {
                 <div>
                   <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Activo</p>
                   <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{selectedAsset.asset_name}</h2>
-                  <p className="mt-2 text-sm text-slate-300">{selectedAsset.asset_symbol ?? "Sin ticker"} · {ASSET_TYPE_LABELS[selectedAsset.asset_type]} · {selectedAsset.asset_currency}</p>
+                  <p className="mt-2 text-sm text-slate-300">{selectedAsset.asset_symbol ?? "Sin ticker"} � {ASSET_TYPE_LABELS[selectedAsset.asset_type]} � {selectedAsset.asset_currency}</p>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
@@ -4929,22 +4629,6 @@ export default function InvestmentsPage() {
                     {selectedAsset.historicalFxRate ? formatNumber(selectedAsset.historicalFxRate, 4) : "n/d"}
                   </p>
                   <p className="mt-2 text-sm leading-5 text-slate-300">Cambio medio historico usado para el coste en EUR.</p>
-                </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Dividendos netos</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
-                    {formatCurrencyByPreference(selectedAssetDividendMetrics.totalNetEur, "EUR")}
-                  </p>
-                  <p className="mt-2 text-sm leading-5 text-slate-300">Total neto cobrado por este activo hasta ahora.</p>
-                </article>
-                <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
-                  <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Proximo dividendo</p>
-                  <p className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold leading-tight text-white">
-                    {selectedAssetDividendMetrics.nextDividend ? formatCurrencyByPreference(selectedAssetDividendMetrics.nextDividend.net_amount_eur, "EUR") : "Sin datos"}
-                  </p>
-                  <p className="mt-2 text-sm leading-5 text-slate-300">
-                    {selectedAssetDividendMetrics.nextDividend ? `Pago previsto el ${selectedAssetDividendMetrics.nextDividend.payment_date}.` : "No hay proximos pagos registrados para este activo."}
-                  </p>
                 </article>
               </div>
 
@@ -5075,7 +4759,7 @@ export default function InvestmentsPage() {
                               Traspaso enlazado
                             </span>
                             <span className="text-xs text-slate-400">
-                              {linkedTransferByTransactionId[transaction.id].category} · {formatCurrencyByPreference(linkedTransferByTransactionId[transaction.id].amount, "EUR")} · {linkedTransferByTransactionId[transaction.id].transfer_date}
+                              {linkedTransferByTransactionId[transaction.id].category} � {formatCurrencyByPreference(linkedTransferByTransactionId[transaction.id].amount, "EUR")} � {linkedTransferByTransactionId[transaction.id].transfer_date}
                             </span>
                           </div>
                         ) : null}
@@ -5104,7 +4788,7 @@ export default function InvestmentsPage() {
                         </div>
                         <div className="mt-2 text-xs text-slate-400">
                           Impacto neto: {formatCurrencyByPreference((Number(transaction.total_eur) || 0) - (Number(transaction.commission_eur) || 0), "EUR")}
-                          {" · "}
+                          {" � "}
                           FX: {transaction.fx_rate_to_eur ? `${formatNumber(Number(transaction.fx_rate_to_eur), 4)} EUR/${transaction.asset_currency}` : "n/d"}
                         </div>
                       </article>
@@ -5124,6 +4808,7 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
 
 
 
