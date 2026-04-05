@@ -289,6 +289,28 @@ async function fetchInvestingDividendFallback(assetName: string, symbol: string)
   return null;
 }
 
+async function getInvestingDiagnosticReason(assetName: string, symbol: string) {
+  const queries = [symbol.replace(/\.[A-Z]+$/, ""), assetName]
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  for (const query of queries) {
+    const path = await searchInvestingEquityPath(query);
+    if (!path) {
+      continue;
+    }
+
+    const html = await fetchInvestingDividendPage(path);
+    if (!html) {
+      return `Investing no devolvio pagina de dividendos para ${path}.`;
+    }
+
+    return `Investing encontro ${path}, pero no devolvio una fila futura utilizable.`;
+  }
+
+  return "Investing no encontro una ficha publica util para este activo.";
+}
+
 async function fetchAlphaVantageDividends(symbol: string) {
   const apiKey = process.env.ALPHAVANTAGE_API_KEY;
   if (!apiKey) {
@@ -431,6 +453,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (!usedSource) {
+        providerAttempts.push(await getInvestingDiagnosticReason(asset.assetName, asset.assetSymbol ?? ""));
         providerAttempts.push("Yahoo sin calendario futuro");
       }
 
