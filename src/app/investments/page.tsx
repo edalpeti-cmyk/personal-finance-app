@@ -49,6 +49,7 @@ type InvestmentFormErrors = {
   assetSymbol?: string;
   quantity?: string;
   commission?: string;
+  manualFxRate?: string;
   averageBuyPrice?: string;
   currentPrice?: string;
   purchaseDate?: string;
@@ -884,6 +885,7 @@ export default function InvestmentsPage() {
   const [transactionMode, setTransactionMode] = useState<TransactionMode>("buy");
   const [quantity, setQuantity] = useState("");
   const [commission, setCommission] = useState("");
+  const [manualFxRate, setManualFxRate] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10));
@@ -1081,6 +1083,7 @@ export default function InvestmentsPage() {
     setAssetMarket("AUTO");
     setQuantity("");
     setCommission("");
+    setManualFxRate("");
     setAverageBuyPrice("");
     setCurrentPrice("");
     setPurchaseDate(new Date().toISOString().slice(0, 10));
@@ -1634,19 +1637,23 @@ export default function InvestmentsPage() {
             const quantityValue = Number(row.quantity) || 0;
             if (quantityValue <= 0) continue;
 
+            const isManualFx = row.fx_provider === "manual" && Number(row.fx_rate_to_eur) > 0;
             const currency = row.asset_currency ?? "EUR";
-            const fxRate = await getRateForDate(row.executed_at, currency);
+            const fxRate = isManualFx ? Number(row.fx_rate_to_eur) : await getRateForDate(row.executed_at, currency);
             const totalLocal = Number(row.total_local) || 0;
             const commissionLocal = Number(row.commission_local ?? 0) || 0;
             const totalEur = Number((totalLocal * fxRate).toFixed(4));
             const commissionEur = Number((commissionLocal * fxRate).toFixed(4));
             const shouldRefreshBaseFields =
-              !row.fx_rate_to_eur ||
-              !row.fx_rate_date ||
-              row.fx_rate_date !== row.executed_at ||
-              row.fx_provider !== "frankfurter" ||
-              Math.abs((Number(row.total_eur) || 0) - totalEur) > 0.01 ||
-              Math.abs((Number(row.commission_eur ?? 0) || 0) - commissionEur) > 0.01;
+              !isManualFx &&
+              (
+                !row.fx_rate_to_eur ||
+                !row.fx_rate_date ||
+                row.fx_rate_date !== row.executed_at ||
+                row.fx_provider !== "frankfurter" ||
+                Math.abs((Number(row.total_eur) || 0) - totalEur) > 0.01 ||
+                Math.abs((Number(row.commission_eur ?? 0) || 0) - commissionEur) > 0.01
+              );
 
             if (row.transaction_type === "buy") {
               openQuantity += quantityValue;
@@ -1693,19 +1700,23 @@ export default function InvestmentsPage() {
         }
 
         for (const row of rowsWithoutInvestment) {
+          const isManualFx = row.fx_provider === "manual" && Number(row.fx_rate_to_eur) > 0;
           const currency = row.asset_currency ?? "EUR";
-          const fxRate = await getRateForDate(row.executed_at, currency);
+          const fxRate = isManualFx ? Number(row.fx_rate_to_eur) : await getRateForDate(row.executed_at, currency);
           const totalLocal = Number(row.total_local) || 0;
           const commissionLocal = Number(row.commission_local ?? 0) || 0;
           const totalEur = Number((totalLocal * fxRate).toFixed(4));
           const commissionEur = Number((commissionLocal * fxRate).toFixed(4));
           const shouldRefreshBaseFields =
-            !row.fx_rate_to_eur ||
-            !row.fx_rate_date ||
-            row.fx_rate_date !== row.executed_at ||
-            row.fx_provider !== "frankfurter" ||
-            Math.abs((Number(row.total_eur) || 0) - totalEur) > 0.01 ||
-            Math.abs((Number(row.commission_eur ?? 0) || 0) - commissionEur) > 0.01;
+            !isManualFx &&
+            (
+              !row.fx_rate_to_eur ||
+              !row.fx_rate_date ||
+              row.fx_rate_date !== row.executed_at ||
+              row.fx_provider !== "frankfurter" ||
+              Math.abs((Number(row.total_eur) || 0) - totalEur) > 0.01 ||
+              Math.abs((Number(row.commission_eur ?? 0) || 0) - commissionEur) > 0.01
+            );
 
           if (!shouldRefreshBaseFields) {
             continue;
@@ -2903,6 +2914,7 @@ export default function InvestmentsPage() {
     const cleanSymbol = assetSymbol.trim();
     const qty = Number(quantity);
     const fee = commission.trim() ? Number(commission) : 0;
+    const manualFx = manualFxRate.trim() ? Number(manualFxRate) : null;
     const avg = Number(averageBuyPrice);
     const curr = currentPrice ? Number(currentPrice) : avg;
     const parsedDate = new Date(`${purchaseDate}T00:00:00`);
@@ -2918,9 +2930,10 @@ export default function InvestmentsPage() {
     if (!Number.isFinite(curr) || curr < 0) nextErrors.currentPrice = "El precio actual debe ser un numero valido >= 0.";
     if (Number.isNaN(parsedDate.getTime())) nextErrors.purchaseDate = "La fecha de compra es obligatoria.";
     else if (parsedDate > today) nextErrors.purchaseDate = "La fecha no puede estar en el futuro.";
+    if (manualFx !== null && (!Number.isFinite(manualFx) || manualFx <= 0)) nextErrors.manualFxRate = "El tipo de cambio manual debe ser mayor que 0.";
 
     setErrors(nextErrors);
-    return { isValid: Object.keys(nextErrors).length === 0, cleanName, cleanSymbol, qty, fee, avg, curr };
+    return { isValid: Object.keys(nextErrors).length === 0, cleanName, cleanSymbol, qty, fee, manualFx, avg, curr };
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -3016,8 +3029,12 @@ export default function InvestmentsPage() {
 
       const salePrice = validation.curr;
       const tradeCurrency = existingPosition.asset_currency ?? assetCurrency;
-      const tradeRatesToEur = await fetchRatesToEurAtDate(purchaseDate);
-      const tradeFxRate = tradeCurrency === "EUR" ? 1 : tradeRatesToEur[tradeCurrency] ?? ratesToEur[tradeCurrency] ?? 1;
+      const tradeRatesToEur = validation.manualFx === null ? await fetchRatesToEurAtDate(purchaseDate) : null;
+      const tradeFxRate =
+        tradeCurrency === "EUR"
+          ? 1
+          : validation.manualFx ?? tradeRatesToEur?.[tradeCurrency] ?? ratesToEur[tradeCurrency] ?? 1;
+      const tradeFxProvider = tradeCurrency === "EUR" ? "position-base" : validation.manualFx !== null ? "manual" : "frankfurter";
       const commissionLocal = Number(validation.fee || 0);
       const totalLocal = Number((validation.qty * salePrice).toFixed(4));
       const totalEur = Number((totalLocal * tradeFxRate).toFixed(4));
@@ -3040,7 +3057,7 @@ export default function InvestmentsPage() {
         asset_currency: tradeCurrency,
         fx_rate_to_eur: Number(tradeFxRate.toFixed(8)),
         fx_rate_date: purchaseDate,
-        fx_provider: "frankfurter",
+        fx_provider: tradeFxProvider,
         commission_local: Number(commissionLocal.toFixed(4)),
         commission_eur: commissionEur,
         realized_gain_eur: realizedGainEur,
@@ -3104,8 +3121,12 @@ export default function InvestmentsPage() {
     }
 
     if (!editingId && transactionInvestmentId) {
-      const tradeRatesToEur = await fetchRatesToEurAtDate(purchaseDate);
-      const tradeFxRate = assetCurrency === "EUR" ? 1 : tradeRatesToEur[assetCurrency] ?? ratesToEur[assetCurrency] ?? 1;
+      const tradeRatesToEur = validation.manualFx === null ? await fetchRatesToEurAtDate(purchaseDate) : null;
+      const tradeFxRate =
+        assetCurrency === "EUR"
+          ? 1
+          : validation.manualFx ?? tradeRatesToEur?.[assetCurrency] ?? ratesToEur[assetCurrency] ?? 1;
+      const tradeFxProvider = assetCurrency === "EUR" ? "position-base" : validation.manualFx !== null ? "manual" : "frankfurter";
       const totalLocal = Number((validation.qty * validation.avg).toFixed(4));
       const commissionLocal = Number((validation.fee || 0).toFixed(4));
       const totalEur = Number((totalLocal * tradeFxRate).toFixed(4));
@@ -3121,7 +3142,7 @@ export default function InvestmentsPage() {
         asset_currency: assetCurrency,
         fx_rate_to_eur: Number(tradeFxRate.toFixed(8)),
         fx_rate_date: purchaseDate,
-        fx_provider: "frankfurter",
+        fx_provider: tradeFxProvider,
         commission_local: commissionLocal,
         commission_eur: commissionEur,
         realized_gain_eur: null,
@@ -3217,6 +3238,7 @@ export default function InvestmentsPage() {
     setAssetMarket(row.asset_market ?? "AUTO");
     setQuantity(String(row.quantity));
     setCommission("");
+    setManualFxRate("");
     setAverageBuyPrice(String(row.average_buy_price));
     setCurrentPrice(row.current_price === null ? "" : String(row.current_price));
     setPurchaseDate(row.purchase_date ?? new Date().toISOString().slice(0, 10));
@@ -3242,6 +3264,53 @@ export default function InvestmentsPage() {
 
     await loadInvestments(userId);
     showToast({ type: "success", text: "Posicion eliminada." });
+  };
+
+  const handleEditTransactionFx = async (transaction: InvestmentTransactionRow) => {
+    if (!userId || transaction.asset_currency === "EUR") {
+      return;
+    }
+
+    const currentFx = transaction.fx_rate_to_eur ? String(Number(transaction.fx_rate_to_eur)) : "";
+    const nextValue = window.prompt(
+      `Indica el tipo de cambio manual en EUR/${transaction.asset_currency} para esta ${transaction.transaction_type === "buy" ? "compra" : "venta"} del ${transaction.executed_at}.`,
+      currentFx
+    );
+
+    if (nextValue === null) {
+      return;
+    }
+
+    const nextFxRate = Number(nextValue.replace(",", "."));
+    if (!Number.isFinite(nextFxRate) || nextFxRate <= 0) {
+      showToast({ type: "error", text: "El tipo de cambio manual debe ser mayor que 0." });
+      return;
+    }
+
+    const totalLocal = Number(transaction.total_local) || 0;
+    const commissionLocal = Number(transaction.commission_local ?? 0) || 0;
+    const totalEur = Number((totalLocal * nextFxRate).toFixed(4));
+    const commissionEur = Number((commissionLocal * nextFxRate).toFixed(4));
+
+    const { error } = await supabase
+      .from("investment_transactions")
+      .update({
+        total_eur: totalEur,
+        commission_eur: commissionEur,
+        fx_rate_to_eur: Number(nextFxRate.toFixed(8)),
+        fx_rate_date: transaction.executed_at,
+        fx_provider: "manual"
+      })
+      .eq("id", transaction.id)
+      .eq("user_id", userId);
+
+    if (error) {
+      showToast({ type: "error", text: "No se pudo actualizar el tipo de cambio manual de la operacion." });
+      return;
+    }
+
+    await Promise.all([loadTransactions(userId), loadRealizedGainTotal(userId)]);
+    showToast({ type: "success", text: "Tipo de cambio manual actualizado para esta operacion." });
   };
 
   const handleRefreshPrices = async (investmentId?: string) => {
@@ -3671,6 +3740,26 @@ export default function InvestmentsPage() {
                 {errors.purchaseDate ? <span className="text-xs text-red-700">{errors.purchaseDate}</span> : null}
               </label>
             </div>
+
+            {assetCurrency !== "EUR" && !editingId ? (
+              <label className="grid gap-2 text-sm text-slate-200">
+                Tipo de cambio manual a EUR
+                <input
+                  className={inputClass(Boolean(errors.manualFxRate))}
+                  type="number"
+                  min="0"
+                  step="0.00000001"
+                  value={manualFxRate}
+                  onChange={(e) => setManualFxRate(e.target.value)}
+                  placeholder="Opcional"
+                />
+                {errors.manualFxRate ? (
+                  <span className="text-xs text-red-700">{errors.manualFxRate}</span>
+                ) : (
+                  <span className="text-xs text-slate-400">Si lo rellenas, la operacion usara ese cambio exacto en vez del historico medio del dia.</span>
+                )}
+              </label>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-sm text-slate-200">
@@ -4773,6 +4862,15 @@ export default function InvestmentsPage() {
                           <div className="text-right">
                             <p className="text-sm font-medium text-white">{formatAssetUnits(Number(transaction.quantity) || 0, 8)} unidades</p>
                             <p className="mt-1 text-xs text-slate-400">{formatCurrencyByPreference(Number(transaction.price_local) || 0, transaction.asset_currency)}</p>
+                            {transaction.asset_currency !== "EUR" ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleEditTransactionFx(transaction)}
+                                className="mt-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-100 hover:bg-white/10"
+                              >
+                                Editar FX
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -4790,6 +4888,7 @@ export default function InvestmentsPage() {
                           Impacto neto: {formatCurrencyByPreference((Number(transaction.total_eur) || 0) - (Number(transaction.commission_eur) || 0), "EUR")}
                           {" � "}
                           FX: {transaction.fx_rate_to_eur ? `${formatNumber(Number(transaction.fx_rate_to_eur), 4)} EUR/${transaction.asset_currency}` : "n/d"}
+                          {transaction.fx_provider === "manual" ? " | Manual" : null}
                         </div>
                       </article>
                     ))}
@@ -4808,6 +4907,7 @@ export default function InvestmentsPage() {
     </>
   );
 }
+
 
 
 
