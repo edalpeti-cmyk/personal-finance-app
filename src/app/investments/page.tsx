@@ -3332,6 +3332,14 @@ export default function InvestmentsPage() {
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const openInlineCreateFormInsideSelectedType = (type: AssetType) => {
+    resetForm();
+    setSelectedType(type);
+    setSelectedAssetId(null);
+    setAssetType(type);
+    setInvestmentFormOpen(true);
+  };
+
   const handleDelete = async (id: string) => {
     if (!userId || !window.confirm("Se eliminara esta posicion. Deseas continuar?")) {
       return;
@@ -4538,7 +4546,7 @@ export default function InvestmentsPage() {
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => openInlineCreateFormForType(selectedType)}
+                    onClick={() => openInlineCreateFormInsideSelectedType(selectedType)}
                     className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20"
                   >
                     Anadir activo
