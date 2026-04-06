@@ -223,6 +223,13 @@ function formatNumber(value: number, digits: number) {
   return Number(value).toFixed(digits);
 }
 
+function formatRangeVariationPct(value: number | null, range: TypeChartRange) {
+  if (value === null) return "n/d";
+  const absValue = Math.abs(value);
+  const digits = range === "daily" || absValue < 0.1 ? 2 : 1;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
+}
+
 function formatCompactList(items: string[], maxVisible = 5) {
   if (items.length <= maxVisible) {
     return items.join(", ");
@@ -3980,7 +3987,7 @@ export default function InvestmentsPage() {
                         : "border-rose-400/20 bg-rose-400/10 text-rose-200"
                   }`}
                 >
-                  {portfolioVariationPct === null ? "n/d" : `${portfolioPositive ? "+" : ""}${portfolioVariationPct.toFixed(1)}%`}
+                  {formatRangeVariationPct(portfolioVariationPct, portfolioRange)}
                 </span>
                 <span
                   className={`text-xs ${
@@ -4669,7 +4676,7 @@ export default function InvestmentsPage() {
                                 : "border-rose-400/20 bg-rose-400/10 text-rose-200"
                           }`}
                         >
-                          {selectedTypeVariationPct === null ? "n/d" : `${selectedTypePositive ? "+" : ""}${selectedTypeVariationPct.toFixed(1)}%`}
+                          {formatRangeVariationPct(selectedTypeVariationPct, selectedTypeRange)}
                         </span>
                         <span
                           className={`text-xs ${
@@ -4940,7 +4947,7 @@ export default function InvestmentsPage() {
                                 : "border-rose-400/20 bg-rose-400/10 text-rose-200"
                           }`}
                         >
-                          {selectedAssetVariationPct === null ? "n/d" : `${selectedAssetPositive ? "+" : ""}${selectedAssetVariationPct.toFixed(1)}%`}
+                          {formatRangeVariationPct(selectedAssetVariationPct, selectedAssetRange)}
                         </span>
                         <span
                           className={`text-xs ${
