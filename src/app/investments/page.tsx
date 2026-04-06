@@ -59,19 +59,6 @@ type ToastState = { type: "success" | "error"; text: string } | null;
 type ProfitFilter = "all" | "positive" | "negative";
 type SortField = "asset_name" | "asset_type" | "currentValueEur" | "gainEur" | "gainPct" | "weightPct";
 type SortDirection = "asc" | "desc";
-type SavedInvestmentView = {
-  name: string;
-  searchTerm: string;
-  typeFilter: AssetType | "all";
-  marketFilter: AssetMarket | "all";
-  profitFilter: ProfitFilter;
-  sortField: SortField;
-  sortDirection: SortDirection;
-};
-type SavedViewRow = {
-  view_name: string;
-  config: SavedInvestmentView;
-};
 type TypeChartRange = "daily" | "weekly" | "monthly" | "six_months" | "annual" | "current_year" | "max";
 type TypeChartMode = "value" | "profitability";
 type ComparisonMode = "weight" | "profitability";
@@ -216,8 +203,6 @@ const TYPE_RANGE_OPTIONS: Array<{ value: TypeChartRange; label: string }> = [
   { value: "current_year", label: "YTD" },
   { value: "max", label: "MAX" }
 ];
-const INVESTMENT_VIEWS_KEY = "investment-saved-views";
-const INVESTMENT_VIEW_SCOPE = "investments";
 const INVESTMENT_COMPARISON_MODE_KEY = "investment-comparison-mode";
 const INVESTMENT_FORM_OPEN_KEY = "investment-form-open";
 const INVESTMENT_PORTFOLIO_RANGE_SESSION_KEY = "investment-portfolio-range";
@@ -958,8 +943,6 @@ export default function InvestmentsPage() {
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
   const [sortField, setSortField] = useState<SortField>("currentValueEur");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [savedViews, setSavedViews] = useState<SavedInvestmentView[]>([]);
-  const [viewName, setViewName] = useState("");
   const [selectedType, setSelectedType] = useState<AssetType | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedAssetHistory, setSelectedAssetHistory] = useState<HistoryPoint[]>([]);
@@ -1018,52 +1001,6 @@ export default function InvestmentsPage() {
     setDividendSource("");
     setDividendNotes("");
   }, []);
-
-  useEffect(() => {
-    const loadSavedViews = async () => {
-      if (!userId) return;
-
-      const raw = window.localStorage.getItem(INVESTMENT_VIEWS_KEY);
-      let localViews: SavedInvestmentView[] = [];
-      if (raw) {
-        try {
-          localViews = JSON.parse(raw) as SavedInvestmentView[];
-        } catch {
-          window.localStorage.removeItem(INVESTMENT_VIEWS_KEY);
-        }
-      }
-
-      const { data, error } = await supabase
-        .from("saved_views")
-        .select("view_name, config")
-        .eq("user_id", userId)
-        .eq("view_scope", INVESTMENT_VIEW_SCOPE)
-        .order("updated_at", { ascending: false });
-
-      if (error) {
-        if (localViews.length > 0) setSavedViews(localViews);
-        return;
-      }
-
-      const remoteViews = ((data as SavedViewRow[] | null) ?? []).map((row) => ({
-        name: row.view_name,
-        searchTerm: row.config.searchTerm ?? "",
-        typeFilter: row.config.typeFilter ?? "all",
-        marketFilter: row.config.marketFilter ?? "all",
-        profitFilter: row.config.profitFilter ?? "all",
-        sortField: row.config.sortField ?? "currentValueEur",
-        sortDirection: row.config.sortDirection ?? "desc"
-      }));
-
-      setSavedViews(remoteViews.length > 0 ? remoteViews : localViews);
-    };
-
-    void loadSavedViews();
-  }, [supabase, userId]);
-
-  useEffect(() => {
-    window.localStorage.setItem(INVESTMENT_VIEWS_KEY, JSON.stringify(savedViews));
-  }, [savedViews]);
 
   useEffect(() => {
     try {
@@ -2543,85 +2480,6 @@ export default function InvestmentsPage() {
   };
 
   const sortLabel = sortDirection === "asc" ? "?" : "?";
-
-  const saveCurrentView = async () => {
-    const trimmedName = viewName.trim();
-    if (trimmedName.length < 2) {
-      showToast({ type: "error", text: "Pon un nombre mas claro para guardar la vista." });
-      return;
-    }
-
-    const nextView: SavedInvestmentView = {
-      name: trimmedName,
-      searchTerm,
-      typeFilter,
-      marketFilter,
-      profitFilter,
-      sortField,
-      sortDirection
-    };
-    const nextViews = (() => {
-      let computed: SavedInvestmentView[] = [];
-      setSavedViews((current) => {
-        computed = [...current.filter((view) => view.name !== trimmedName), nextView];
-        return computed;
-      });
-      return computed;
-    })();
-
-    if (userId) {
-      const { error } = await supabase.from("saved_views").upsert(
-        {
-          user_id: userId,
-          view_scope: INVESTMENT_VIEW_SCOPE,
-          view_name: trimmedName,
-          config: nextView
-        },
-        { onConflict: "user_id,view_scope,view_name" }
-      );
-
-      if (error) {
-        setSavedViews(nextViews.filter((view) => view.name !== trimmedName));
-        showToast({ type: "error", text: "La vista se guardo en local, pero fallo la sincronizacion." });
-        return;
-      }
-    }
-
-    setViewName("");
-    showToast({ type: "success", text: "Vista de cartera guardada." });
-  };
-
-  const applySavedView = (view: SavedInvestmentView) => {
-    setSearchTerm(view.searchTerm);
-    setTypeFilter(view.typeFilter);
-    setMarketFilter(view.marketFilter);
-    setProfitFilter(view.profitFilter);
-    setSortField(view.sortField);
-    setSortDirection(view.sortDirection);
-    showToast({ type: "success", text: `Vista aplicada: ${view.name}.` });
-  };
-
-  const deleteSavedView = async (name: string) => {
-    const previousViews = savedViews;
-    setSavedViews((current) => current.filter((view) => view.name !== name));
-
-    if (userId) {
-      const { error } = await supabase
-        .from("saved_views")
-        .delete()
-        .eq("user_id", userId)
-        .eq("view_scope", INVESTMENT_VIEW_SCOPE)
-        .eq("view_name", name);
-
-      if (error) {
-        setSavedViews(previousViews);
-        showToast({ type: "error", text: "No se pudo borrar la vista guardada." });
-        return;
-      }
-    }
-
-    showToast({ type: "success", text: "Vista guardada eliminada." });
-  };
 
   const handleExportPdfReport = useCallback(() => {
     const reportWindow = window.open("", "_blank", "width=1024,height=780");
