@@ -3325,10 +3325,11 @@ export default function InvestmentsPage() {
 
   const openInlineCreateFormForType = (type: AssetType) => {
     resetForm();
-    setSelectedType(type);
+    setSelectedType(null);
     setSelectedAssetId(null);
     setAssetType(type);
     setInvestmentFormOpen(true);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleDelete = async (id: string) => {
@@ -4401,6 +4402,12 @@ export default function InvestmentsPage() {
               Anadir activo
             </button>
           </div>
+
+          {investmentFormOpen && !selectedType && !selectedAssetId ? (
+            <div className="mt-4">
+              {renderInvestmentFormPanel(`rounded-[28px] border border-white/8 bg-white/5 p-5 text-white ${editingId || editingTransactionId ? "ring-2 ring-teal-400/40" : ""}`)}
+            </div>
+          ) : null}
 
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => void handleCsvImport(e)} />
           <div className="mt-4 flex flex-wrap gap-3">
