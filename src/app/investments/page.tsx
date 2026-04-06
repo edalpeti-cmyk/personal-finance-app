@@ -820,6 +820,64 @@ function buildTransactionCostBasisMap(transactions: InvestmentTransactionRow[]) 
   return map;
 }
 
+function recalculatePositionFromTransactions(rows: InvestmentTransactionRow[]) {
+  let openQuantity = 0;
+  let openCostEur = 0;
+  let openCostLocal = 0;
+  let earliestBuyDate: string | null = null;
+  const realizedGainById = new Map<string, number | null>();
+
+  for (const row of sortTransactionsForCostBasis(rows)) {
+    const quantity = Number(row.quantity) || 0;
+    const totalLocal = Number(row.total_local) || 0;
+    const totalEur = Number(row.total_eur) || 0;
+    const commissionLocal = Number(row.commission_local ?? 0) || 0;
+    const commissionEur = Number(row.commission_eur ?? 0) || 0;
+
+    if (quantity <= 0) {
+      continue;
+    }
+
+    if (row.transaction_type === "buy") {
+      openQuantity += quantity;
+      openCostLocal += totalLocal + commissionLocal;
+      openCostEur += totalEur + commissionEur;
+      earliestBuyDate = earliestBuyDate
+        ? (earliestBuyDate.localeCompare(row.executed_at) <= 0 ? earliestBuyDate : row.executed_at)
+        : row.executed_at;
+      realizedGainById.set(row.id, null);
+      continue;
+    }
+
+    if (quantity > openQuantity + 0.000001) {
+      return {
+        valid: false as const,
+        reason: "La compra editada deja ventas posteriores sin suficiente cantidad para cubrirlas."
+      };
+    }
+
+    const avgCostPerUnitEur = openQuantity > 0 ? openCostEur / openQuantity : 0;
+    const avgCostPerUnitLocal = openQuantity > 0 ? openCostLocal / openQuantity : 0;
+    const soldCostEur = avgCostPerUnitEur * quantity;
+    const soldCostLocal = avgCostPerUnitLocal * quantity;
+    const realizedGainEur = Number((totalEur - commissionEur - soldCostEur).toFixed(4));
+
+    realizedGainById.set(row.id, realizedGainEur);
+    openQuantity = Math.max(0, openQuantity - quantity);
+    openCostEur = Math.max(0, openCostEur - soldCostEur);
+    openCostLocal = Math.max(0, openCostLocal - soldCostLocal);
+  }
+
+  return {
+    valid: true as const,
+    openQuantity: Number(openQuantity.toFixed(8)),
+    openCostLocal: Number(openCostLocal.toFixed(6)),
+    averageBuyPrice: openQuantity > 0 ? Number((openCostLocal / openQuantity).toFixed(6)) : 0,
+    earliestBuyDate,
+    realizedGainById
+  };
+}
+
 function resolveInvestedEurFromPosition(
   row: InvestmentRow,
   costBasis:
@@ -867,6 +925,7 @@ export default function InvestmentsPage() {
   const [saving, setSaving] = useState(false);
   const [refreshingPrices, setRefreshingPrices] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [investments, setInvestments] = useState<InvestmentRow[]>([]);
@@ -1074,6 +1133,7 @@ export default function InvestmentsPage() {
 
   const resetForm = useCallback(() => {
     setEditingId(null);
+    setEditingTransactionId(null);
     setTransactionMode("buy");
     setAssetName("");
     setAssetSymbol("");
@@ -2954,6 +3014,128 @@ export default function InvestmentsPage() {
 
     setSaving(true);
 
+    if (editingTransactionId) {
+      const originalTransaction = transactions.find((row) => row.id === editingTransactionId);
+      if (!originalTransaction || originalTransaction.transaction_type !== "buy" || !originalTransaction.investment_id) {
+        showToast({ type: "error", text: "No se encontro la compra original para editarla." });
+        setSaving(false);
+        return;
+      }
+
+      const linkedInvestment = investments.find((row) => row.id === originalTransaction.investment_id);
+      if (!linkedInvestment) {
+        showToast({ type: "error", text: "No se encontro la posicion asociada a esta compra." });
+        setSaving(false);
+        return;
+      }
+
+      const tradeRatesToEur = validation.manualFx === null ? await fetchRatesToEurAtDate(purchaseDate) : null;
+      const tradeFxRate =
+        assetCurrency === "EUR"
+          ? 1
+          : validation.manualFx ?? tradeRatesToEur?.[assetCurrency] ?? ratesToEur[assetCurrency] ?? 1;
+      const tradeFxProvider = assetCurrency === "EUR" ? "position-base" : validation.manualFx !== null ? "manual" : "frankfurter";
+      const totalLocal = Number((validation.qty * validation.avg).toFixed(4));
+      const commissionLocal = Number((validation.fee || 0).toFixed(4));
+      const totalEur = Number((totalLocal * tradeFxRate).toFixed(4));
+      const commissionEur = Number((commissionLocal * tradeFxRate).toFixed(4));
+
+      const updatedRows = transactions
+        .filter((row) => row.investment_id === originalTransaction.investment_id)
+        .map((row) =>
+          row.id === editingTransactionId
+            ? {
+                ...row,
+                quantity: validation.qty,
+                price_local: validation.avg,
+                total_local: totalLocal,
+                total_eur: totalEur,
+                asset_currency: assetCurrency,
+                fx_rate_to_eur: Number(tradeFxRate.toFixed(8)),
+                fx_rate_date: purchaseDate,
+                fx_provider: tradeFxProvider,
+                commission_local: commissionLocal,
+                commission_eur: commissionEur,
+                realized_gain_eur: null,
+                executed_at: purchaseDate
+              }
+            : row
+        );
+
+      const recalculated = recalculatePositionFromTransactions(updatedRows);
+      if (!recalculated.valid) {
+        showToast({ type: "error", text: recalculated.reason });
+        setSaving(false);
+        return;
+      }
+
+      if (recalculated.openQuantity <= 0.000001) {
+        showToast({ type: "error", text: "Esta edicion dejaria la posicion cerrada. Para ese caso es mejor ajustar antes las ventas o eliminar la compra concreta." });
+        setSaving(false);
+        return;
+      }
+
+      const transactionUpdates = updatedRows.map((row) =>
+        supabase
+          .from("investment_transactions")
+          .update(
+            row.id === editingTransactionId
+              ? {
+                  quantity: row.quantity,
+                  price_local: row.price_local,
+                  total_local: row.total_local,
+                  total_eur: row.total_eur,
+                  asset_currency: row.asset_currency,
+                  fx_rate_to_eur: row.fx_rate_to_eur,
+                  fx_rate_date: row.fx_rate_date,
+                  fx_provider: row.fx_provider,
+                  commission_local: row.commission_local,
+                  commission_eur: row.commission_eur,
+                  realized_gain_eur: null,
+                  executed_at: row.executed_at
+                }
+              : {
+                  realized_gain_eur: recalculated.realizedGainById.get(row.id) ?? null
+                }
+          )
+          .eq("id", row.id)
+          .eq("user_id", userId)
+      );
+
+      const transactionResults = await Promise.all(transactionUpdates);
+      const failedTransactionUpdate = transactionResults.find((result) => result.error);
+      if (failedTransactionUpdate?.error) {
+        setMessage(failedTransactionUpdate.error.message);
+        showToast({ type: "error", text: "No se pudo actualizar la compra concreta." });
+        setSaving(false);
+        return;
+      }
+
+      const { error: investmentUpdateError } = await supabase
+        .from("investments")
+        .update({
+          quantity: recalculated.openQuantity,
+          average_buy_price: recalculated.averageBuyPrice,
+          current_price: validation.curr,
+          purchase_date: recalculated.earliestBuyDate ?? purchaseDate
+        })
+        .eq("id", linkedInvestment.id)
+        .eq("user_id", userId);
+
+      if (investmentUpdateError) {
+        setMessage(investmentUpdateError.message);
+        showToast({ type: "error", text: "La compra se actualizo, pero no se pudo recomponer la posicion agregada." });
+        setSaving(false);
+        return;
+      }
+
+      resetForm();
+      await Promise.all([loadInvestments(userId), loadTransactions(userId), loadRealizedGainTotal(userId)]);
+      showToast({ type: "success", text: "Compra concreta actualizada y posicion recompuesta correctamente." });
+      setSaving(false);
+      return;
+    }
+
     const normalizedIsin = assetIsin.trim().toUpperCase();
     const existingPosition =
       !editingId
@@ -3228,6 +3410,7 @@ export default function InvestmentsPage() {
   const handleEdit = (row: InvestmentRow) => {
     setInvestmentFormOpen(true);
     setEditingId(row.id);
+    setEditingTransactionId(null);
     setAssetName(row.asset_name);
     setAssetSymbol(row.asset_symbol ?? "");
     setAssetIsin(row.asset_isin ?? "");
@@ -3245,6 +3428,41 @@ export default function InvestmentsPage() {
     setErrors({});
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast({ type: "success", text: "Modo edicion activado para esta posicion." });
+  };
+
+  const handleEditTransaction = (transaction: InvestmentTransactionRow) => {
+    if (transaction.transaction_type !== "buy") {
+      showToast({ type: "error", text: "Por ahora solo podemos editar compras concretas desde el historial." });
+      return;
+    }
+
+    const linkedInvestment = investments.find((row) => row.id === transaction.investment_id);
+    if (!linkedInvestment) {
+      showToast({ type: "error", text: "No se encontro la posicion asociada a esta compra." });
+      return;
+    }
+
+    setInvestmentFormOpen(true);
+    setEditingId(null);
+    setEditingTransactionId(transaction.id);
+    setTransactionMode("buy");
+    setAssetName(linkedInvestment.asset_name);
+    setAssetSymbol(linkedInvestment.asset_symbol ?? "");
+    setAssetIsin(linkedInvestment.asset_isin ?? "");
+    setLookupQuery("");
+    setAssetSuggestions([]);
+    setAssetType(linkedInvestment.asset_type);
+    setAssetCurrency(linkedInvestment.asset_currency ?? "EUR");
+    setAssetMarket(linkedInvestment.asset_market ?? "AUTO");
+    setQuantity(String(transaction.quantity));
+    setCommission(transaction.commission_local === null ? "" : String(transaction.commission_local));
+    setManualFxRate(transaction.fx_provider === "manual" && transaction.fx_rate_to_eur ? String(transaction.fx_rate_to_eur) : "");
+    setAverageBuyPrice(String(transaction.price_local));
+    setCurrentPrice(linkedInvestment.current_price === null ? "" : String(linkedInvestment.current_price));
+    setPurchaseDate(transaction.executed_at ?? new Date().toISOString().slice(0, 10));
+    setErrors({});
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast({ type: "success", text: "Formulario cargado para editar esta compra concreta." });
   };
 
   const handleDelete = async (id: string) => {
@@ -3524,12 +3742,12 @@ export default function InvestmentsPage() {
               <div className="accordion-summary-main w-full min-w-0">
                 <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
                 <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
-                  {editingId ? "Editar posicion" : "Nueva posicion"}
+                  {editingTransactionId ? "Editar compra concreta" : editingId ? "Editar posicion" : "Nueva posicion"}
                 </h2>
               </div>
               <div className="accordion-summary-side !w-full !justify-between">
                 <span className="accordion-metric">
-                  {editingId ? "Edicion" : transactionMode === "sell" ? "Venta" : "Compra"}
+                  {editingTransactionId ? "Compra puntual" : editingId ? "Edicion" : transactionMode === "sell" ? "Venta" : "Compra"}
                 </span>
                 <span className="accordion-chevron" aria-hidden="true">
                   v
@@ -3540,7 +3758,7 @@ export default function InvestmentsPage() {
             <div className="accordion-content">
               <div className="flex items-center justify-between gap-3">
                 <div />
-                {editingId ? (
+                {editingId || editingTransactionId ? (
                   <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
                     Cancelar edicion
                   </button>
@@ -3548,7 +3766,7 @@ export default function InvestmentsPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
-            {!editingId ? (
+            {!editingId && !editingTransactionId ? (
               <div className="grid gap-3">
                 <span className="text-sm text-slate-200">Operacion</span>
                 <div className="grid grid-cols-2 gap-3">
@@ -3630,7 +3848,7 @@ export default function InvestmentsPage() {
 
             <label className="grid gap-2 text-sm text-slate-200">
               Tipo de activo
-              <select className={inputClass(false)} value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
+              <select className={inputClass(false)} value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)} disabled={Boolean(editingTransactionId)}>
                 {ASSET_TYPES.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -3641,7 +3859,7 @@ export default function InvestmentsPage() {
 
             <label className="grid gap-2 text-sm text-slate-200">
               Moneda del activo
-              <select className={inputClass(false)} value={assetCurrency} onChange={(e) => setAssetCurrency(e.target.value as AssetCurrency)}>
+              <select className={inputClass(false)} value={assetCurrency} onChange={(e) => setAssetCurrency(e.target.value as AssetCurrency)} disabled={Boolean(editingTransactionId)}>
                 {SUPPORTED_ASSET_CURRENCIES.map((option) => (
                   <option key={option} value={option}>
                     {option}
@@ -3652,7 +3870,7 @@ export default function InvestmentsPage() {
 
             <label className="grid gap-2 text-sm text-slate-200">
               Mercado
-              <select className={inputClass(false)} value={assetMarket} onChange={(e) => setAssetMarket(e.target.value as AssetMarket)}>
+              <select className={inputClass(false)} value={assetMarket} onChange={(e) => setAssetMarket(e.target.value as AssetMarket)} disabled={Boolean(editingTransactionId)}>
                 {MARKET_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -3664,13 +3882,13 @@ export default function InvestmentsPage() {
 
             <label className="grid gap-2 text-sm text-slate-200">
               Nombre
-              <input className={inputClass(Boolean(errors.assetName))} value={assetName} onChange={(e) => setAssetName(e.target.value)} maxLength={80} />
+              <input className={inputClass(Boolean(errors.assetName))} value={assetName} onChange={(e) => setAssetName(e.target.value)} maxLength={80} disabled={Boolean(editingTransactionId)} />
               {errors.assetName ? <span className="text-xs text-red-700">{errors.assetName}</span> : null}
             </label>
 
             <label className="grid gap-2 text-sm text-slate-200">
               ISIN
-              <input className={inputClass(false)} value={assetIsin} onChange={(e) => setAssetIsin(e.target.value.toUpperCase())} maxLength={12} placeholder="Opcional" />
+              <input className={inputClass(false)} value={assetIsin} onChange={(e) => setAssetIsin(e.target.value.toUpperCase())} maxLength={12} placeholder="Opcional" disabled={Boolean(editingTransactionId)} />
               <span className="text-xs text-slate-400">Si eliges una sugerencia con ISIN disponible, este campo se completa automaticamente.</span>
             </label>
 
@@ -3686,10 +3904,11 @@ export default function InvestmentsPage() {
                 }}
                 maxLength={20}
                 placeholder="Ej: SAN, VUSA, BTC-USD o un ISIN"
+                disabled={Boolean(editingTransactionId)}
               />
               <span className="text-xs text-slate-400">Escribe ticker, simbolo o ISIN y elige el activo sugerido. Si no aparece, puedes seguir rellenando a mano.</span>
               {assetLookupLoading ? <span className="text-xs text-emerald-300">Buscando activos...</span> : null}
-              {assetSuggestions.length > 0 ? (
+              {assetSuggestions.length > 0 && !editingTransactionId ? (
                 <div className="grid gap-2 rounded-3xl border border-white/8 bg-white/5 p-3">
                   {assetSuggestions.map((suggestion) => (
                     <button
@@ -3776,7 +3995,7 @@ export default function InvestmentsPage() {
             </div>
 
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
-              {saving ? "Guardando..." : editingId ? "Guardar cambios" : transactionMode === "sell" ? "Registrar venta" : "Anadir activo"}
+              {saving ? "Guardando..." : editingTransactionId ? "Guardar compra" : editingId ? "Guardar cambios" : transactionMode === "sell" ? "Registrar venta" : "Anadir activo"}
             </button>
               </form>
             </div>
@@ -4869,6 +5088,15 @@ export default function InvestmentsPage() {
                                 className="mt-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-100 hover:bg-white/10"
                               >
                                 Editar FX
+                              </button>
+                            ) : null}
+                            {transaction.transaction_type === "buy" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditTransaction(transaction)}
+                                className="mt-2 ml-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-100 hover:bg-white/10"
+                              >
+                                Editar compra
                               </button>
                             ) : null}
                           </div>
