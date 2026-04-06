@@ -4496,13 +4496,6 @@ export default function InvestmentsPage() {
                     >
                       Abrir activos
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => openInlineCreateFormForType(group.type)}
-                      className="ui-chip inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200"
-                    >
-                      Anadir activo
-                    </button>
                   </div>
                 </div>
               ))}
