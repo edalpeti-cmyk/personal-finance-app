@@ -557,6 +557,43 @@ function endOfYear(date: Date) {
   return new Date(date.getFullYear(), 11, 31, 23, 59, 59, 999);
 }
 
+function sortHistoryPoints(history: HistoryPoint[]) {
+  return [...history].sort((a, b) => normalizeDate(a.snapshot_date).getTime() - normalizeDate(b.snapshot_date).getTime());
+}
+
+function formatDailyTimelineLabel(snapshotDate: string, includeTime = false) {
+  const date = normalizeDate(snapshotDate);
+  if (includeTime) {
+    return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
+}
+
+function getDailyHistoryComparisonPoints(history: HistoryPoint[]) {
+  const sorted = sortHistoryPoints(history);
+  if (sorted.length === 0) {
+    return null;
+  }
+
+  const end = sorted[sorted.length - 1];
+  if (sorted.length === 1) {
+    return { start: end, end };
+  }
+
+  const endDayKey = end.snapshot_date.slice(0, 10);
+  const previousDifferentDay = [...sorted]
+    .slice(0, -1)
+    .reverse()
+    .find((point) => point.snapshot_date.slice(0, 10) !== endDayKey);
+
+  if (previousDifferentDay) {
+    return { start: previousDifferentDay, end };
+  }
+
+  return { start: sorted[sorted.length - 2], end };
+}
+
 function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
   const now = new Date();
   const checkpoints: Array<{ date: Date; label: string }> = [];
@@ -587,10 +624,8 @@ function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
   }
 
   if (range === "daily") {
-    const start = addDays(now, -29);
-    for (let cursor = new Date(start); cursor <= now; cursor = addDays(cursor, 1)) {
-      checkpoints.push({ date: endOfDay(cursor), label: cursor.toISOString().slice(5, 10) });
-    }
+    checkpoints.push({ date: endOfDay(addDays(now, -1)), label: addDays(now, -1).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }) });
+    checkpoints.push({ date: endOfDay(now), label: now.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }) });
   }
 
   if (range === "weekly") {
@@ -634,6 +669,30 @@ function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
 function buildTypeHistoryTimeline(history: HistoryPoint[], range: TypeChartRange) {
   if (history.length === 0) {
     return [] as Array<{ label: string; value: number }>;
+  }
+
+  if (range === "daily") {
+    const comparison = getDailyHistoryComparisonPoints(history);
+    if (!comparison) {
+      return [] as Array<{ label: string; value: number }>;
+    }
+
+    const sameDay = comparison.start.snapshot_date.slice(0, 10) === comparison.end.snapshot_date.slice(0, 10);
+    const points = [
+      {
+        label: formatDailyTimelineLabel(comparison.start.snapshot_date, sameDay),
+        value: Number((Number(comparison.start.total_value_eur) || 0).toFixed(2))
+      }
+    ];
+
+    if (comparison.start.snapshot_date !== comparison.end.snapshot_date) {
+      points.push({
+        label: formatDailyTimelineLabel(comparison.end.snapshot_date, sameDay),
+        value: Number((Number(comparison.end.total_value_eur) || 0).toFixed(2))
+      });
+    }
+
+    return points;
   }
 
   const checkpoints = getTypeRangeCheckpoints(range, normalizeDate(history[0].snapshot_date));
@@ -705,6 +764,13 @@ function getHistoryValueAtDate(history: HistoryPoint[], checkpoint: Date) {
 
 function calculateHistoryRangeDelta(history: HistoryPoint[], range: TypeChartRange) {
   if (history.length === 0) return 0;
+
+  if (range === "daily") {
+    const comparison = getDailyHistoryComparisonPoints(history);
+    if (!comparison) return 0;
+    return (Number(comparison.end.total_value_eur) || 0) - (Number(comparison.start.total_value_eur) || 0);
+  }
+
   const now = new Date();
   const startDate = getTypeVariationStartDate(range, now);
   const endDate = endOfDay(now);
@@ -715,6 +781,21 @@ function calculateHistoryRangeDelta(history: HistoryPoint[], range: TypeChartRan
 
 function calculateHistoryRangeVariationPct(history: HistoryPoint[], range: TypeChartRange) {
   if (history.length === 0) return null;
+
+  if (range === "daily") {
+    const comparison = getDailyHistoryComparisonPoints(history);
+    if (!comparison) return null;
+
+    const startValue = Number(comparison.start.total_value_eur) || 0;
+    const endValue = Number(comparison.end.total_value_eur) || 0;
+
+    if (startValue === 0) {
+      return endValue === 0 ? 0 : null;
+    }
+
+    return ((endValue - startValue) / Math.abs(startValue)) * 100;
+  }
+
   const now = new Date();
   const startDate = getTypeVariationStartDate(range, now);
   const endDate = endOfDay(now);
