@@ -601,6 +601,36 @@ function getDailyHistoryComparisonPoints(history: HistoryPoint[]) {
   return { start: sorted[sorted.length - 2], end };
 }
 
+function mergeCurrentValueIntoHistory(history: HistoryPoint[], currentValue: number) {
+  const roundedCurrent = Number(currentValue.toFixed(2));
+  if (!Number.isFinite(roundedCurrent) || roundedCurrent < 0) {
+    return sortHistoryPoints(history);
+  }
+
+  const sorted = sortHistoryPoints(history);
+  if (sorted.length === 0) {
+    return [
+      {
+        snapshot_date: new Date().toISOString(),
+        total_value_eur: roundedCurrent
+      }
+    ];
+  }
+
+  const lastPoint = sorted[sorted.length - 1];
+  if (Math.abs((Number(lastPoint.total_value_eur) || 0) - roundedCurrent) < 0.005) {
+    return sorted;
+  }
+
+  return [
+    ...sorted,
+    {
+      snapshot_date: new Date().toISOString(),
+      total_value_eur: roundedCurrent
+    }
+  ];
+}
+
 function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
   const now = new Date();
   const checkpoints: Array<{ date: Date; label: string }> = [];
@@ -2224,10 +2254,11 @@ export default function InvestmentsPage() {
       nextDividend: upcoming[0] ?? null
     };
   }, [selectedAssetDividends]);
-  const selectedAssetHistorySeries = useMemo(
-    () => (selectedAssetHistory.length > 1 ? selectedAssetHistory : selectedAsset ? buildEstimatedAssetHistory(selectedAsset) : []),
-    [selectedAsset, selectedAssetHistory]
-  );
+  const selectedAssetHistorySeries = useMemo(() => {
+    if (!selectedAsset) return [] as HistoryPoint[];
+    const baseHistory = selectedAssetHistory.length > 1 ? selectedAssetHistory : buildEstimatedAssetHistory(selectedAsset);
+    return mergeCurrentValueIntoHistory(baseHistory, selectedAsset.currentValueEur);
+  }, [selectedAsset, selectedAssetHistory]);
   const selectedAssetEvolution = useMemo(() => {
     if (selectedAssetHistory.length > 1) {
       return {
@@ -2313,22 +2344,15 @@ export default function InvestmentsPage() {
     }),
     [selectedAssetFill, selectedAssetHistory.length, selectedAssetRange, selectedAssetReference, selectedAssetStroke, selectedAssetTimeline]
   );
+  const selectedTypeHistorySeries = useMemo(() => {
+    const baseHistory = selectedTypeHistory.length > 1 ? selectedTypeHistory : buildEstimatedTypeHistory(selectedTypeAssets, ratesToEur);
+    return mergeCurrentValueIntoHistory(baseHistory, selectedTypeSummary.totalValueEur);
+  }, [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeSummary.totalValueEur]);
   const selectedTypeTimeline = useMemo(
-    () => {
-      if (selectedTypeHistory.length > 1) {
-        return buildTypeHistoryTimeline(selectedTypeHistory, selectedTypeRange);
-      }
-
-      const estimated = buildEstimatedTypeEvolution(selectedTypeAssets, ratesToEur);
-      return estimated.labels.map((label, index) => ({ label, value: estimated.values[index] ?? 0 }));
-    },
-    [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeRange]
+    () => buildTypeHistoryTimeline(selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
-  const selectedTypeHistorySeries = useMemo(
-    () => (selectedTypeHistory.length > 1 ? selectedTypeHistory : buildEstimatedTypeHistory(selectedTypeAssets, ratesToEur)),
-    [ratesToEur, selectedTypeAssets, selectedTypeHistory]
-  );
   const selectedTypeVariationPct = useMemo(
     () => calculateHistoryRangeVariationPct(selectedTypeHistorySeries, selectedTypeRange),
     [selectedTypeHistorySeries, selectedTypeRange]
@@ -2840,10 +2864,10 @@ export default function InvestmentsPage() {
     void loadAssetTransactions();
   }, [selectedAssetId, supabase, userId]);
 
-  const portfolioHistorySeries = useMemo(
-    () => (portfolioHistory.length > 1 ? portfolioHistory : buildEstimatedPortfolioHistory(investments, ratesToEur)),
-    [investments, portfolioHistory, ratesToEur]
-  );
+  const portfolioHistorySeries = useMemo(() => {
+    const baseHistory = portfolioHistory.length > 1 ? portfolioHistory : buildEstimatedPortfolioHistory(investments, ratesToEur);
+    return mergeCurrentValueIntoHistory(baseHistory, metrics.totalValueEur);
+  }, [investments, metrics.totalValueEur, portfolioHistory, ratesToEur]);
   const portfolioTimeline = useMemo(
     () => buildTypeHistoryTimeline(portfolioHistorySeries, portfolioRange),
     [portfolioHistorySeries, portfolioRange]
