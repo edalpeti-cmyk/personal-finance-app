@@ -3443,7 +3443,6 @@ export default function InvestmentsPage() {
     }
 
     setInvestmentFormOpen(true);
-    setSelectedAssetId(null);
     setEditingId(null);
     setEditingTransactionId(transaction.id);
     setTransactionMode("buy");
@@ -3464,6 +3463,14 @@ export default function InvestmentsPage() {
     setErrors({});
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast({ type: "success", text: "Formulario cargado para editar esta compra concreta." });
+  };
+
+  const openInlineCreateFormForType = (type: AssetType) => {
+    resetForm();
+    setSelectedType(type);
+    setSelectedAssetId(null);
+    setAssetType(type);
+    setInvestmentFormOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -3688,85 +3695,41 @@ export default function InvestmentsPage() {
     }
   };
 
-  if (authLoading) {
-    return (
-      <>
-        <SideNav />
-        <main className="mx-auto max-w-6xl p-6 md:pl-72">
-          <AuthLoadingState title="Preparando inversiones" description="Estamos validando tu sesion antes de abrir tu cartera." />
-        </main>
-      </>
-    );
-  }
+  const renderInvestmentFormPanel = (panelClassName: string) => (
+    <section ref={formRef} className={panelClassName}>
+      <details
+        className="group"
+        open={investmentFormOpen}
+        onToggle={(event) => setInvestmentFormOpen(event.currentTarget.open)}
+      >
+        <summary className="accordion-summary cursor-pointer list-none !flex-col !items-start !gap-3">
+          <div className="accordion-summary-main w-full min-w-0">
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
+            <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
+              {editingTransactionId ? "Editar compra concreta" : editingId ? "Editar posicion" : "Nueva posicion"}
+            </h2>
+          </div>
+          <div className="accordion-summary-side !w-full !justify-between">
+            <span className="accordion-metric">
+              {editingTransactionId ? "Compra puntual" : editingId ? "Edicion" : transactionMode === "sell" ? "Venta" : "Compra"}
+            </span>
+            <span className="accordion-chevron" aria-hidden="true">
+              v
+            </span>
+          </div>
+        </summary>
 
-  return (
-    <>
-      <SideNav />
-      <main className="mobile-page-shell page-enter relative z-10 mx-auto grid max-w-6xl gap-4 px-4 pb-24 pt-4 md:gap-5 md:p-5 md:pl-72 xl:grid-cols-12">
-        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
-          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Portfolio tracker</p>
-          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Cartera con seguimiento real</h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-            Anade activos, elige la moneda de cada posicion y calcula automaticamente el valor total convertido a EUR.
-          </p>
-        </section>
+        <div className="accordion-content">
+          <div className="flex items-center justify-between gap-3">
+            <div />
+            {editingId || editingTransactionId ? (
+              <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
+                Cancelar edicion
+              </button>
+            ) : null}
+          </div>
 
-        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Estado actual</p>
-          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
-          <p className="mt-3 text-sm leading-6 text-slate-200">Valor total convertido automaticamente a EUR segun la moneda elegida en cada posicion.</p>
-          <button
-            type="button"
-            onClick={() => void handleRefreshPrices()}
-            disabled={refreshingPrices || investments.length === 0}
-            className="mt-6 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {refreshingPrices ? "Actualizando precios..." : "Actualizar precios reales"}
-          </button>
-        </section>
-
-        {toast ? (
-          <section className={`rounded-[24px] p-4 text-sm md:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>
-            {toast.text}
-          </section>
-        ) : null}
-
-        {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section> : null}
-
-        <section ref={formRef} className={`panel self-start rounded-[28px] p-5 text-white xl:col-span-7 ${editingId ? "ring-2 ring-teal-400/40" : ""}`}>
-          <details
-            className="group"
-            open={investmentFormOpen}
-            onToggle={(event) => setInvestmentFormOpen(event.currentTarget.open)}
-          >
-            <summary className="accordion-summary cursor-pointer list-none !flex-col !items-start !gap-3">
-              <div className="accordion-summary-main w-full min-w-0">
-                <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">Formulario</p>
-                <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">
-                  {editingTransactionId ? "Editar compra concreta" : editingId ? "Editar posicion" : "Nueva posicion"}
-                </h2>
-              </div>
-              <div className="accordion-summary-side !w-full !justify-between">
-                <span className="accordion-metric">
-                  {editingTransactionId ? "Compra puntual" : editingId ? "Edicion" : transactionMode === "sell" ? "Venta" : "Compra"}
-                </span>
-                <span className="accordion-chevron" aria-hidden="true">
-                  v
-                </span>
-              </div>
-            </summary>
-
-            <div className="accordion-content">
-              <div className="flex items-center justify-between gap-3">
-                <div />
-                {editingId || editingTransactionId ? (
-                  <button type="button" onClick={resetForm} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
-                    Cancelar edicion
-                  </button>
-                ) : null}
-              </div>
-
-              <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
+          <form onSubmit={handleSubmit} className="mt-6 grid gap-4" noValidate>
             {!editingId && !editingTransactionId ? (
               <div className="grid gap-3">
                 <span className="text-sm text-slate-200">Operacion</span>
@@ -3826,7 +3789,7 @@ export default function InvestmentsPage() {
                                 {formatCurrencyByPreference(sellPreview.netLocal, matchedSellPosition.asset_currency ?? assetCurrency)}
                               </p>
                               <p className="mt-1 text-xs text-slate-400">
-                                Comision: {formatCurrencyByPreference(sellPreview.feeLocal, matchedSellPosition.asset_currency ?? assetCurrency)} � {formatCurrencyByPreference(sellPreview.netEur, "EUR")} en EUR
+                                Comision: {formatCurrencyByPreference(sellPreview.feeLocal, matchedSellPosition.asset_currency ?? assetCurrency)} ï¿½ {formatCurrencyByPreference(sellPreview.netEur, "EUR")} en EUR
                               </p>
                             </div>
                             <div className="rounded-2xl border border-white/8 bg-slate-950/50 px-4 py-3">
@@ -3955,7 +3918,7 @@ export default function InvestmentsPage() {
               </label>
 
               <label className="grid gap-2 text-sm text-slate-200 xl:col-span-2 2xl:col-span-1">
-                {editingId ? "Fecha de compra" : transactionMode === "sell" ? "Fecha de venta" : "Fecha de compra"}
+                {editingId ? "Fecha de compra" : transactionMode === "sell" ? "Fecha de venta" : editingTransactionId ? "Fecha de compra" : "Fecha de compra"}
                 <input className={inputClass(Boolean(errors.purchaseDate))} type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
                 {errors.purchaseDate ? <span className="text-xs text-red-700">{errors.purchaseDate}</span> : null}
               </label>
@@ -3998,12 +3961,58 @@ export default function InvestmentsPage() {
             <button className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" disabled={saving || loading} type="submit">
               {saving ? "Guardando..." : editingTransactionId ? "Guardar compra" : editingId ? "Guardar cambios" : transactionMode === "sell" ? "Registrar venta" : "Anadir activo"}
             </button>
-              </form>
-            </div>
-          </details>
+          </form>
+        </div>
+      </details>
+    </section>
+  );
+
+  if (authLoading) {
+    return (
+      <>
+        <SideNav />
+        <main className="mx-auto max-w-6xl p-6 md:pl-72">
+          <AuthLoadingState title="Preparando inversiones" description="Estamos validando tu sesion antes de abrir tu cartera." />
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SideNav />
+      <main className="mobile-page-shell page-enter relative z-10 mx-auto grid max-w-6xl gap-4 px-4 pb-24 pt-4 md:gap-5 md:p-5 md:pl-72 xl:grid-cols-12">
+        <section className="panel rounded-[30px] p-5 text-white md:p-7 xl:col-span-7">
+          <p className="text-xs uppercase tracking-[0.26em] text-emerald-300">Portfolio tracker</p>
+          <h1 className="mt-3 font-[var(--font-heading)] text-4xl font-semibold tracking-tight text-white">Cartera con seguimiento real</h1>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
+            Anade activos, elige la moneda de cada posicion y calcula automaticamente el valor total convertido a EUR.
+          </p>
         </section>
 
-        <section className="grid gap-3 xl:col-span-5 md:grid-cols-2">
+        <section className="rounded-[30px] border border-emerald-400/10 bg-[linear-gradient(180deg,rgba(7,19,35,0.98)_0%,rgba(9,29,48,0.98)_52%,rgba(10,63,70,0.92)_100%)] p-6 text-white shadow-[0_26px_60px_rgba(2,8,23,0.35)] xl:col-span-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/80">Estado actual</p>
+          <p className="mt-4 font-[var(--font-heading)] text-4xl font-semibold text-white">{formatCurrencyByPreference(metrics.totalValueEur, "EUR")}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">Valor total convertido automaticamente a EUR segun la moneda elegida en cada posicion.</p>
+          <button
+            type="button"
+            onClick={() => void handleRefreshPrices()}
+            disabled={refreshingPrices || investments.length === 0}
+            className="mt-6 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {refreshingPrices ? "Actualizando precios..." : "Actualizar precios reales"}
+          </button>
+        </section>
+
+        {toast ? (
+          <section className={`rounded-[24px] p-4 text-sm md:col-span-12 ${toast.type === "success" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-red-200 bg-red-50 text-red-800"}`}>
+            {toast.text}
+          </section>
+        ) : null}
+
+        {message ? <section className="rounded-[24px] border border-red-200 bg-red-50 p-4 text-sm text-red-800 md:col-span-12">{message}</section> : null}
+
+        <section className="grid gap-3 xl:col-span-12 md:grid-cols-2 xl:grid-cols-4">
           <article className="kpi-card rounded-[24px] p-4">
             <div className="flex items-center gap-2">
               <KpiIcon type="netWorth" className="h-4 w-4 flex-none text-sky-200/80" />
@@ -4595,13 +4604,8 @@ export default function InvestmentsPage() {
           {!loading && groupedAssetTypes.length > 0 ? (
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {groupedAssetTypes.map((group) => (
-                <button
+                <div
                   key={group.type}
-                  type="button"
-                  onClick={() => {
-                    setSelectedType(group.type);
-                    setSelectedAssetId(null);
-                  }}
                   className="rounded-[28px] border border-white/8 bg-white/5 p-5 text-left transition hover:border-emerald-400/20 hover:bg-white/10"
                 >
                   <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">{group.label}</p>
@@ -4620,10 +4624,27 @@ export default function InvestmentsPage() {
                     ) : null}
                     <p>Principal: <span className="font-medium text-white">{group.topAsset ?? "Sin datos"}</span></p>
                   </div>
-                  <div className="ui-chip mt-5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
-                    Abrir activos
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedType(group.type);
+                        setSelectedAssetId(null);
+                        setInvestmentFormOpen(false);
+                      }}
+                      className="ui-chip inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200"
+                    >
+                      Abrir activos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openInlineCreateFormForType(group.type)}
+                      className="ui-chip inline-flex rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200"
+                    >
+                      Anadir activo
+                    </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           ) : null}
@@ -4662,12 +4683,27 @@ export default function InvestmentsPage() {
                   <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">{ASSET_TYPE_LABELS[selectedType]}</h2>
                   <p className="mt-2 text-sm text-slate-300">{selectedTypeAssets.length} activos en este grupo</p>
                 </div>
-                <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); }} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
-                  Cerrar
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openInlineCreateFormForType(selectedType)}
+                    className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20"
+                  >
+                    Anadir activo
+                  </button>
+                  <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); }} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10">
+                    Cerrar
+                  </button>
+                </div>
               </div>
 
               <div className="mt-6 flex-1 overflow-y-auto pr-1">
+                {investmentFormOpen && !selectedAssetId ? (
+                  <div className="mb-4">
+                    {renderInvestmentFormPanel(`rounded-[28px] border border-white/8 bg-white/5 p-5 text-white ${editingId || editingTransactionId ? "ring-2 ring-teal-400/40" : ""}`)}
+                  </div>
+                ) : null}
+
                 <section className="rounded-3xl border border-white/8 bg-white/5 p-4">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <article className="rounded-2xl border border-white/8 bg-slate-950/40 p-3">
@@ -4824,7 +4860,7 @@ export default function InvestmentsPage() {
                             <button type="button" onClick={() => setSelectedAssetId(row.id)} className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20">
                               Ver detalle
                             </button>
-                            <button type="button" onClick={() => { setSelectedType(null); setSelectedAssetId(null); handleEdit(row); }} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">
+                            <button type="button" onClick={() => { setSelectedAssetId(null); handleEdit(row); }} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">
                               Editar
                             </button>
                             <button
@@ -4885,6 +4921,12 @@ export default function InvestmentsPage() {
               </div>
 
               <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+              {editingTransactionId ? (
+                <div className="mb-4">
+                  {renderInvestmentFormPanel("rounded-[28px] border border-white/8 bg-white/5 p-4 text-white ring-2 ring-teal-400/30")}
+                </div>
+              ) : null}
+
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <article className="rounded-3xl border border-white/8 bg-white/5 p-3.5">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cantidad</p>
