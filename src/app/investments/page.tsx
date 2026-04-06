@@ -3443,6 +3443,7 @@ export default function InvestmentsPage() {
     }
 
     setInvestmentFormOpen(true);
+    setSelectedAssetId(null);
     setEditingId(null);
     setEditingTransactionId(transaction.id);
     setTransactionMode("buy");
