@@ -4530,31 +4530,18 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <div className="flex min-w-[280px] flex-1 gap-2">
-              <input
-                className={inputClass(false)}
-                value={viewName}
-                onChange={(e) => setViewName(e.target.value)}
-                placeholder="Guardar vista de cartera"
-              />
-              <button
-                type="button"
-                onClick={() => void saveCurrentView()}
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-100 transition hover:bg-white/10"
-              >
-                Guardar vista
-              </button>
-            </div>
-            {savedViews.map((view) => (
-              <div key={view.name} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-                <button type="button" onClick={() => applySavedView(view)} className="text-xs text-slate-200 transition hover:text-white">
-                  {view.name}
-                </button>
-                <button type="button" onClick={() => void deleteSavedView(view.name)} className="text-[11px] text-slate-400 transition hover:text-red-300">
-                  x
-                </button>
-              </div>
-            ))}
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setSelectedType(null);
+                setSelectedAssetId(null);
+                setInvestmentFormOpen(true);
+              }}
+              className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+            >
+              Anadir activo
+            </button>
           </div>
 
           <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => void handleCsvImport(e)} />
