@@ -67,6 +67,9 @@ type HistoryPoint = {
   snapshot_date: string;
   total_value_eur: number;
 };
+type HistoryPointWithInvestment = HistoryPoint & {
+  investment_id: string;
+};
 type InvestmentTransactionRow = {
   id: string;
   investment_id: string | null;
@@ -533,6 +536,34 @@ function collapseTypeHistoryToDailyLatest(history: Array<HistoryPoint & { invest
         total_value_eur: Number(total.toFixed(2))
       };
     });
+}
+
+function buildRollingAggregateHistory(history: HistoryPointWithInvestment[]) {
+  const sorted = [...history].sort((a, b) => normalizeDate(a.snapshot_date).getTime() - normalizeDate(b.snapshot_date).getTime());
+  const latestByInvestment = new Map<string, number>();
+  const points: HistoryPoint[] = [];
+  let runningTotal = 0;
+
+  for (const row of sorted) {
+    const nextValue = Number(row.total_value_eur) || 0;
+    const previousValue = latestByInvestment.get(row.investment_id) ?? 0;
+    latestByInvestment.set(row.investment_id, nextValue);
+    runningTotal += nextValue - previousValue;
+
+    const normalizedTotal = Number(runningTotal.toFixed(2));
+    const lastPoint = points[points.length - 1];
+
+    if (lastPoint && lastPoint.snapshot_date === row.snapshot_date) {
+      lastPoint.total_value_eur = normalizedTotal;
+    } else {
+      points.push({
+        snapshot_date: row.snapshot_date,
+        total_value_eur: normalizedTotal
+      });
+    }
+  }
+
+  return points;
 }
 
 function addDays(date: Date, days: number) {
@@ -2753,7 +2784,7 @@ export default function InvestmentsPage() {
         return;
       }
 
-      setPortfolioHistory(collapseTypeHistoryToDailyLatest((data as Array<HistoryPoint & { investment_id: string }>) ?? []));
+      setPortfolioHistory(buildRollingAggregateHistory((data as HistoryPointWithInvestment[]) ?? []));
     };
 
     void loadPortfolioHistory();
@@ -2779,7 +2810,7 @@ export default function InvestmentsPage() {
         return;
       }
 
-      setSelectedTypeHistory(collapseTypeHistoryToDailyLatest((data as Array<HistoryPoint & { investment_id: string }>) ?? []));
+      setSelectedTypeHistory(buildRollingAggregateHistory((data as HistoryPointWithInvestment[]) ?? []));
     };
 
     void loadTypeHistory();
@@ -2804,7 +2835,7 @@ export default function InvestmentsPage() {
         return;
       }
 
-      setSelectedAssetHistory(collapseHistoryToDailyLatest((data as HistoryPoint[]) ?? []));
+      setSelectedAssetHistory(sortHistoryPoints((data as HistoryPoint[]) ?? []));
     };
 
     void loadAssetHistory();
