@@ -662,60 +662,6 @@ function mergeCurrentValueIntoHistory(history: HistoryPoint[], currentValue: num
   ];
 }
 
-function getLatestHistoryValueAtOrBefore(history: HistoryPoint[], checkpoint: Date) {
-  const sorted = sortHistoryPoints(history);
-  let latestValue: number | null = null;
-
-  for (const point of sorted) {
-    if (normalizeDate(point.snapshot_date) <= checkpoint) {
-      latestValue = Number(point.total_value_eur) || 0;
-    } else {
-      break;
-    }
-  }
-
-  return latestValue;
-}
-
-function getAggregateHistoryValueAtOrBefore(history: HistoryPointWithInvestment[], checkpoint: Date) {
-  if (history.length === 0) {
-    return null;
-  }
-
-  const sorted = [...history].sort((a, b) => normalizeDate(a.snapshot_date).getTime() - normalizeDate(b.snapshot_date).getTime());
-  const latestByInvestment = new Map<string, number>();
-
-  for (const point of sorted) {
-    if (normalizeDate(point.snapshot_date) <= checkpoint) {
-      latestByInvestment.set(point.investment_id, Number(point.total_value_eur) || 0);
-    } else {
-      break;
-    }
-  }
-
-  if (latestByInvestment.size === 0) {
-    return null;
-  }
-
-  return Array.from(latestByInvestment.values()).reduce((sum, value) => sum + value, 0);
-}
-
-function buildDailyTimelineFromFixedValues(startValue: number, endValue: number) {
-  const now = new Date();
-  const yesterday = addDays(now, -1);
-
-  return [
-    {
-      label: yesterday.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }),
-      value: Number(startValue.toFixed(2))
-    },
-    {
-      label: now.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }),
-      value: Number(endValue.toFixed(2))
-    }
-  ];
-}
-
 function getTypeRangeCheckpoints(range: TypeChartRange, firstDate: Date) {
   const now = new Date();
   const checkpoints: Array<{ date: Date; label: string }> = [];
@@ -1152,10 +1098,8 @@ export default function InvestmentsPage() {
   const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [linkedTransferByTransactionId, setLinkedTransferByTransactionId] = useState<Record<string, LinkedTransferSummary>>({});
   const [portfolioHistory, setPortfolioHistory] = useState<HistoryPoint[]>([]);
-  const [portfolioHistoryRaw, setPortfolioHistoryRaw] = useState<HistoryPointWithInvestment[]>([]);
   const [portfolioRange, setPortfolioRange] = useState<TypeChartRange>("daily");
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
-  const [selectedTypeHistoryRaw, setSelectedTypeHistoryRaw] = useState<HistoryPointWithInvestment[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("daily");
   const [selectedAssetRange, setSelectedAssetRange] = useState<TypeChartRange>("daily");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
@@ -2386,47 +2330,16 @@ export default function InvestmentsPage() {
     [selectedAssetHistory]
   );
   const selectedAssetTimeline = useMemo(
-    () => {
-      if (selectedAssetRange === "daily" && selectedAsset) {
-        const yesterdayValue = getLatestHistoryValueAtOrBefore(selectedAssetHistory, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue !== null) {
-          return buildDailyTimelineFromFixedValues(yesterdayValue, selectedAsset.currentValueEur);
-        }
-      }
-
-      return buildTypeHistoryTimeline(selectedAssetHistorySeries, selectedAssetRange);
-    },
-    [selectedAsset, selectedAsset?.currentValueEur, selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () => buildTypeHistoryTimeline(selectedAssetRange === "daily" ? selectedAssetHistory : selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetVariationPct = useMemo(
-    () => {
-      if (selectedAssetRange === "daily" && selectedAsset) {
-        const yesterdayValue = getLatestHistoryValueAtOrBefore(selectedAssetHistory, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue === null) {
-          return calculateHistoryRangeVariationPct(selectedAssetHistorySeries, selectedAssetRange);
-        }
-        if (yesterdayValue === 0) {
-          return selectedAsset.currentValueEur === 0 ? 0 : null;
-        }
-        return ((selectedAsset.currentValueEur - yesterdayValue) / Math.abs(yesterdayValue)) * 100;
-      }
-
-      return calculateHistoryRangeVariationPct(selectedAssetHistorySeries, selectedAssetRange);
-    },
-    [selectedAsset, selectedAsset?.currentValueEur, selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () => calculateHistoryRangeVariationPct(selectedAssetRange === "daily" ? selectedAssetHistory : selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetVariationAmount = useMemo(
-    () => {
-      if (selectedAssetRange === "daily" && selectedAsset) {
-        const yesterdayValue = getLatestHistoryValueAtOrBefore(selectedAssetHistory, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue !== null) {
-          return selectedAsset.currentValueEur - yesterdayValue;
-        }
-      }
-
-      return calculateHistoryRangeDelta(selectedAssetHistorySeries, selectedAssetRange);
-    },
-    [selectedAsset, selectedAsset?.currentValueEur, selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () => calculateHistoryRangeDelta(selectedAssetRange === "daily" ? selectedAssetHistory : selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetPositive = (selectedAssetVariationPct ?? 0) >= 0;
   const selectedAssetStroke = selectedAssetPositive ? "#34d399" : "#f87171";
@@ -2467,48 +2380,17 @@ export default function InvestmentsPage() {
     return mergeCurrentValueIntoHistory(baseHistory, selectedTypeSummary.totalValueEur);
   }, [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeSummary.totalValueEur]);
   const selectedTypeTimeline = useMemo(
-    () => {
-      if (selectedTypeRange === "daily") {
-        const yesterdayValue = getAggregateHistoryValueAtOrBefore(selectedTypeHistoryRaw, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue !== null) {
-          return buildDailyTimelineFromFixedValues(yesterdayValue, selectedTypeSummary.totalValueEur);
-        }
-      }
-
-      return buildTypeHistoryTimeline(selectedTypeHistorySeries, selectedTypeRange);
-    },
-    [selectedTypeHistoryRaw, selectedTypeHistorySeries, selectedTypeRange, selectedTypeSummary.totalValueEur]
+    () => buildTypeHistoryTimeline(selectedTypeRange === "daily" ? selectedTypeHistory : selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeHistory, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
   const selectedTypeVariationPct = useMemo(
-    () => {
-      if (selectedTypeRange === "daily") {
-        const yesterdayValue = getAggregateHistoryValueAtOrBefore(selectedTypeHistoryRaw, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue === null) {
-          return calculateHistoryRangeVariationPct(selectedTypeHistorySeries, selectedTypeRange);
-        }
-        if (yesterdayValue === 0) {
-          return selectedTypeSummary.totalValueEur === 0 ? 0 : null;
-        }
-        return ((selectedTypeSummary.totalValueEur - yesterdayValue) / Math.abs(yesterdayValue)) * 100;
-      }
-
-      return calculateHistoryRangeVariationPct(selectedTypeHistorySeries, selectedTypeRange);
-    },
-    [selectedTypeHistoryRaw, selectedTypeHistorySeries, selectedTypeRange, selectedTypeSummary.totalValueEur]
+    () => calculateHistoryRangeVariationPct(selectedTypeRange === "daily" ? selectedTypeHistory : selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeHistory, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeVariationAmount = useMemo(
-    () => {
-      if (selectedTypeRange === "daily") {
-        const yesterdayValue = getAggregateHistoryValueAtOrBefore(selectedTypeHistoryRaw, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue !== null) {
-          return selectedTypeSummary.totalValueEur - yesterdayValue;
-        }
-      }
-
-      return calculateHistoryRangeDelta(selectedTypeHistorySeries, selectedTypeRange);
-    },
-    [selectedTypeHistoryRaw, selectedTypeHistorySeries, selectedTypeRange, selectedTypeSummary.totalValueEur]
+    () => calculateHistoryRangeDelta(selectedTypeRange === "daily" ? selectedTypeHistory : selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeHistory, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypePositive = (selectedTypeVariationPct ?? 0) >= 0;
   const selectedTypeStroke = selectedTypePositive ? "#34d399" : "#f87171";
@@ -2888,7 +2770,6 @@ export default function InvestmentsPage() {
     const loadPortfolioHistory = async () => {
       if (!userId) {
         setPortfolioHistory([]);
-        setPortfolioHistoryRaw([]);
         return;
       }
 
@@ -2900,12 +2781,10 @@ export default function InvestmentsPage() {
 
       if (error) {
         setPortfolioHistory([]);
-        setPortfolioHistoryRaw([]);
         return;
       }
 
       const nextRows = (data as HistoryPointWithInvestment[]) ?? [];
-      setPortfolioHistoryRaw(nextRows);
       setPortfolioHistory(buildRollingAggregateHistory(nextRows));
     };
 
@@ -2916,7 +2795,6 @@ export default function InvestmentsPage() {
     const loadTypeHistory = async () => {
       if (!selectedType || !userId || selectedTypeAssets.length === 0) {
         setSelectedTypeHistory([]);
-        setSelectedTypeHistoryRaw([]);
         return;
       }
 
@@ -2930,12 +2808,10 @@ export default function InvestmentsPage() {
 
       if (error) {
         setSelectedTypeHistory([]);
-        setSelectedTypeHistoryRaw([]);
         return;
       }
 
       const nextRows = (data as HistoryPointWithInvestment[]) ?? [];
-      setSelectedTypeHistoryRaw(nextRows);
       setSelectedTypeHistory(buildRollingAggregateHistory(nextRows));
     };
 
@@ -3026,47 +2902,16 @@ export default function InvestmentsPage() {
     return mergeCurrentValueIntoHistory(baseHistory, metrics.totalValueEur);
   }, [investments, metrics.totalValueEur, portfolioHistory, ratesToEur]);
   const portfolioTimeline = useMemo(
-    () => {
-      if (portfolioRange === "daily") {
-        const yesterdayValue = getAggregateHistoryValueAtOrBefore(portfolioHistoryRaw, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue !== null) {
-          return buildDailyTimelineFromFixedValues(yesterdayValue, metrics.totalValueEur);
-        }
-      }
-
-      return buildTypeHistoryTimeline(portfolioHistorySeries, portfolioRange);
-    },
-    [metrics.totalValueEur, portfolioHistoryRaw, portfolioHistorySeries, portfolioRange]
+    () => buildTypeHistoryTimeline(portfolioRange === "daily" ? portfolioHistory : portfolioHistorySeries, portfolioRange),
+    [portfolioHistory, portfolioHistorySeries, portfolioRange]
   );
   const portfolioVariationPct = useMemo(
-    () => {
-      if (portfolioRange === "daily") {
-        const yesterdayValue = getAggregateHistoryValueAtOrBefore(portfolioHistoryRaw, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue === null) {
-          return calculateHistoryRangeVariationPct(portfolioHistorySeries, portfolioRange);
-        }
-        if (yesterdayValue === 0) {
-          return metrics.totalValueEur === 0 ? 0 : null;
-        }
-        return ((metrics.totalValueEur - yesterdayValue) / Math.abs(yesterdayValue)) * 100;
-      }
-
-      return calculateHistoryRangeVariationPct(portfolioHistorySeries, portfolioRange);
-    },
-    [metrics.totalValueEur, portfolioHistoryRaw, portfolioHistorySeries, portfolioRange]
+    () => calculateHistoryRangeVariationPct(portfolioRange === "daily" ? portfolioHistory : portfolioHistorySeries, portfolioRange),
+    [portfolioHistory, portfolioHistorySeries, portfolioRange]
   );
   const portfolioVariationAmount = useMemo(
-    () => {
-      if (portfolioRange === "daily") {
-        const yesterdayValue = getAggregateHistoryValueAtOrBefore(portfolioHistoryRaw, endOfDay(addDays(new Date(), -1)));
-        if (yesterdayValue !== null) {
-          return metrics.totalValueEur - yesterdayValue;
-        }
-      }
-
-      return calculateHistoryRangeDelta(portfolioHistorySeries, portfolioRange);
-    },
-    [metrics.totalValueEur, portfolioHistoryRaw, portfolioHistorySeries, portfolioRange]
+    () => calculateHistoryRangeDelta(portfolioRange === "daily" ? portfolioHistory : portfolioHistorySeries, portfolioRange),
+    [portfolioHistory, portfolioHistorySeries, portfolioRange]
   );
   const portfolioPositive = (portfolioVariationPct ?? 0) >= 0;
   const portfolioStroke = portfolioPositive ? "#34d399" : "#f87171";
