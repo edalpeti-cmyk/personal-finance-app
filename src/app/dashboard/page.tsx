@@ -1274,6 +1274,42 @@ export default function DashboardPage() {
       .reduce((sum, row) => sum + convertToEur((Number(row.quantity) || 0) * (Number(row.current_price ?? row.average_buy_price) || 0), row.asset_currency, ratesToEur), 0);
     return (nonEurValue / metrics.investmentsValue) * 100;
   }, [investmentRows, metrics, ratesToEur]);
+  const recentAverageMonthlySavingsTarget = useMemo(() => {
+    const previousMonths = monthlyTrendPoints.slice(0, -1).map((point) => point.savingsTarget).filter((value) => value > 0);
+    if (previousMonths.length === 0) {
+      return null;
+    }
+
+    return previousMonths.reduce((sum, value) => sum + value, 0) / previousMonths.length;
+  }, [monthlyTrendPoints]);
+  const savingsMomentumPct = useMemo(() => {
+    if (!recentAverageMonthlySavingsTarget || recentAverageMonthlySavingsTarget <= 0) {
+      return null;
+    }
+
+    return ((currentMonthSavingsTarget - recentAverageMonthlySavingsTarget) / Math.abs(recentAverageMonthlySavingsTarget)) * 100;
+  }, [currentMonthSavingsTarget, recentAverageMonthlySavingsTarget]);
+  const coachFireDelayYears = useMemo(() => {
+    if (!metrics || metrics.fireTarget <= 0 || metrics.fireProgress <= 0) {
+      return null;
+    }
+
+    const currentAnnualContribution = Math.max(currentMonthSavingsTarget * 12, 0);
+    const referenceAnnualContribution = Math.max((recentAverageMonthlySavingsTarget ?? 0) * 12, 0);
+    if (currentAnnualContribution <= 0 || referenceAnnualContribution <= currentAnnualContribution) {
+      return null;
+    }
+
+    const fireCurrentWorth = (metrics.fireTarget * metrics.fireProgress) / 100;
+    const yearsAtCurrentPace = estimateYearsToFire(fireCurrentWorth, metrics.fireTarget, currentAnnualContribution, 0.05);
+    const yearsAtRecentPace = estimateYearsToFire(fireCurrentWorth, metrics.fireTarget, referenceAnnualContribution, 0.05);
+    if (yearsAtCurrentPace === null || yearsAtRecentPace === null) {
+      return null;
+    }
+
+    const delay = yearsAtCurrentPace - yearsAtRecentPace;
+    return delay > 0 ? delay : null;
+  }, [currentMonthSavingsTarget, metrics, recentAverageMonthlySavingsTarget]);
   const financialGuidance = useMemo(() => {
     if (!metrics) return [];
     return generateFinancialGuidance(
@@ -1292,11 +1328,15 @@ export default function DashboardPage() {
         topInvestmentWeight: topConcentration?.weight ?? 0,
         nonEurExposurePct,
         fireTarget: metrics.fireTarget,
-        fireProgress: metrics.fireProgress
+        fireProgress: metrics.fireProgress,
+        yearsToFire: metrics.yearsToFire,
+        recentAverageMonthlySavings: recentAverageMonthlySavingsTarget,
+        savingsMomentumPct,
+        fireDelayYears: coachFireDelayYears
       },
       guidancePreferences
     );
-  }, [currentMonthExpenses, currentMonthIncome, currentMonthSavingsTarget, guidancePreferences, investmentRows.length, metrics, nonEurExposurePct, pricedInvestmentCount, topConcentration]);
+  }, [coachFireDelayYears, currentMonthExpenses, currentMonthIncome, currentMonthSavingsTarget, guidancePreferences, investmentRows.length, metrics, nonEurExposurePct, pricedInvestmentCount, recentAverageMonthlySavingsTarget, savingsMomentumPct, topConcentration]);
 
 
   const dismissReminder = useCallback((reminderId: string) => {
@@ -2388,9 +2428,9 @@ export default function DashboardPage() {
 
             <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
               <SectionHeader
-                eyebrow="Consejo del momento"
-                title="Asesoramiento proactivo"
-                description="Recomendaciones breves y accionables basadas en tu deuda, ahorro, inversiones y plan FIRE."
+                eyebrow="Coach financiero"
+                title="Lo que mas impacta ahora"
+                description="Lecturas directas y accionables sobre ahorro, deuda, cartera y FIRE, priorizadas por impacto real."
                 icon="connection"
               />
               <div className="mt-5">
