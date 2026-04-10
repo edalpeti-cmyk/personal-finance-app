@@ -1407,22 +1407,6 @@ export default function DashboardPage() {
 
     return "Fase avanzada. Ahora mantener el ritmo importa mas que buscar movimientos bruscos.";
   }, [metrics]);
-  const heroHeadline = metrics
-    ? metrics.fireTarget <= 0
-      ? "Tu plan FIRE aun no esta calculado"
-      : metrics.yearsToFire === null
-        ? "Tu plan aun no llega a FIRE con el ritmo actual"
-        : `Te faltan ${metrics.yearsToFire} anos para ser libre financieramente`
-    : "Estamos preparando tu hoja de ruta FIRE";
-  const heroSubtext = metrics
-    ? metrics.fireTarget <= 0
-      ? "Completa tu configuracion FIRE para convertir el dashboard en un coach de horizonte y decisiones."
-      : heroFireScenarioYears !== null
-        ? `Pero podrias bajarlo a ${heroFireScenarioYears} anos con pequenos cambios sostenibles en ahorro, gasto o aportacion.`
-        : "Tu progreso depende ahora mismo de mantener ritmo y elegir bien la siguiente palanca de mejora."
-    : "En cuanto carguen tus datos veras el horizonte estimado, el progreso y las palancas con mas impacto.";
-  const heroNetWorthLabel = metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--";
-  const heroFireTargetLabel = metrics ? (metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular") : "--";
   const heroFireProgressLabel = metrics ? `${metrics.fireProgress.toFixed(2)}%` : "--";
   const financialGuidance = useMemo(() => {
     if (!metrics) return [];
@@ -2287,33 +2271,16 @@ export default function DashboardPage() {
         <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_62%,rgba(10,63,70,0.78)_100%)] p-5 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:rounded-[30px] md:p-8 xl:col-span-12">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Libre financiera</p>
+              <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Vista general</p>
               <h1 className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold tracking-tight text-white sm:text-4xl">
-                {heroHeadline}
+                Tu sistema financiero, de un vistazo
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/72">
-                {heroSubtext}
+                Patrimonio, ahorro, progreso FIRE e ideas accionables en una sola pantalla para decidir con rapidez.
               </p>
-              <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-white/80">
-                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5">
-                  Patrimonio actual: <span className="font-medium text-white">{heroNetWorthLabel}</span>
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5">
-                  Objetivo: <span className="font-medium text-white">{heroFireTargetLabel}</span>
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5">
-                  Progreso: <span className="font-medium text-white">{heroFireProgressLabel}</span>
-                </span>
-              </div>
             </div>
             <div className="flex flex-wrap justify-end gap-3">
               <PwaInstallButton />
-              <Link
-                href="/fire"
-                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400"
-              >
-                Ver como reducir anos
-              </Link>
               <button
                 type="button"
                 onClick={() => setHideBalances(!hideBalances)}
@@ -2405,40 +2372,6 @@ export default function DashboardPage() {
                   ? "Todavia no hay suficiente base para medir el crecimiento del mes."
                   : `Este mes has crecido ${activeRangeVariation >= 0 ? "+" : ""}${activeRangeVariation.toFixed(1)}% (${activeRangeDelta >= 0 ? "+" : ""}${formatCurrencyByPreference(activeRangeDelta, currency)}).`}
               </p>
-              <div className="mt-6 rounded-[24px] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Como avanzar mas rapido</p>
-                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tres palancas con impacto real</h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
-                      Simulaciones simples para ver que cambio reduce mas anos en tu horizonte FIRE.
-                    </p>
-                  </div>
-                  <Link href="/fire" className="rounded-full border border-white/12 bg-white/6 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/10">
-                    Aplicar escenario
-                  </Link>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  {fireScenarioCards.length > 0 ? (
-                    fireScenarioCards.map((card) => (
-                      <article key={card.id} className="rounded-[20px] border border-white/8 bg-slate-950/20 p-4">
-                        <div className="flex items-center gap-2">
-                          <KpiIcon type={card.icon} className="h-4 w-4 flex-none text-emerald-200/80" />
-                          <p className="text-xs uppercase tracking-[0.18em] text-white/60">{card.title}</p>
-                        </div>
-                        <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-emerald-200">{card.impactLabel}</p>
-                        <p className="mt-2 text-sm leading-6 text-white/72">{card.detail}</p>
-                      </article>
-                    ))
-                  ) : (
-                    <article className="rounded-[20px] border border-white/8 bg-slate-950/20 p-4 sm:col-span-3">
-                      <p className="text-sm leading-6 text-white/72">
-                        En cuanto tengamos objetivo FIRE y un ritmo anual suficiente, aqui veras escenarios concretos de ahorro, gasto y rentabilidad.
-                      </p>
-                    </article>
-                  )}
-                </div>
-              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
@@ -2633,6 +2566,43 @@ export default function DashboardPage() {
                     <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Panel estable</p>
                     <p className="mt-3 text-sm leading-6 text-white/84">
                       Ahora mismo no hay recomendaciones prioritarias activas con tu configuracion. Puedes activarlas o afinarlas desde Configuracion.
+                    </p>
+                  </article>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+              <SectionHeader
+                eyebrow="Palancas de mejora"
+                title="Como avanzar mas rapido"
+                description="Escenarios simples para ver que cambios reducen mas anos en tu horizonte FIRE."
+                icon="timeline"
+              />
+              <div className="mt-5 flex items-start justify-between gap-4">
+                <p className="max-w-3xl text-sm leading-6 text-white/72">
+                  Estas simulaciones no cambian tus datos. Solo te ayudan a ver que palanca tiene mas impacto antes de decidir.
+                </p>
+                <Link href="/fire" className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">
+                  Aplicar escenario
+                </Link>
+              </div>
+              <div className="mt-5 grid gap-3 xl:grid-cols-3">
+                {fireScenarioCards.length > 0 ? (
+                  fireScenarioCards.map((card) => (
+                    <article key={card.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                      <div className="flex items-center gap-2">
+                        <KpiIcon type={card.icon} className="h-4 w-4 flex-none text-emerald-200/80" />
+                        <p className="text-xs uppercase tracking-[0.18em] text-white/60">{card.title}</p>
+                      </div>
+                      <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-emerald-200">{card.impactLabel}</p>
+                      <p className="mt-2 text-sm leading-6 text-white/72">{card.detail}</p>
+                    </article>
+                  ))
+                ) : (
+                  <article className="rounded-[24px] border border-white/8 bg-white/6 p-4 xl:col-span-3">
+                    <p className="text-sm leading-6 text-white/72">
+                      En cuanto tengamos objetivo FIRE y un ritmo anual suficiente, aqui veras escenarios concretos de ahorro, gasto y rentabilidad.
                     </p>
                   </article>
                 )}
