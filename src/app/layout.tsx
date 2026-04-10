@@ -6,8 +6,8 @@ import SettingsPanel from "@/components/settings-panel";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "Personal Finance App",
-  description: "App de finanzas personales con Next.js + Supabase",
+  title: "Libre",
+  description: "Libre, tu app de finanzas personales con Next.js + Supabase",
   manifest: "/manifest.webmanifest",
   themeColor: "#091426",
   icons: {
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Finance"
+    title: "Libre"
   },
   other: {
     "mobile-web-app-capable": "yes",

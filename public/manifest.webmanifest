@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Personal Finance App",
-  "short_name": "Finance",
-  "description": "Controla patrimonio, inversiones, deuda y objetivos desde el movil como una app.",
+  "name": "Libre",
+  "short_name": "Libre",
+  "description": "Libre te ayuda a controlar patrimonio, inversiones, deuda y objetivos desde el movil como una app.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
