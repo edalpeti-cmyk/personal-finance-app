@@ -2572,36 +2572,36 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 xl:col-span-12">
+            <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(8,22,39,0.98)_0%,rgba(9,33,47,0.96)_100%)] p-4 text-white shadow-[0_18px_40px_rgba(2,8,23,0.42)] md:col-span-2 sm:p-5 xl:col-span-12">
               <SectionHeader
                 eyebrow="Palancas de mejora"
                 title="Como avanzar mas rapido"
-                description="Escenarios simples para ver que cambios reducen mas anos en tu horizonte FIRE."
+                description="Escenarios rapidos para ver que cambio recorta mas tiempo en tu horizonte FIRE."
                 icon="timeline"
               />
-              <div className="mt-5 flex items-start justify-between gap-4">
-                <p className="max-w-3xl text-sm leading-6 text-white/72">
-                  Estas simulaciones no cambian tus datos. Solo te ayudan a ver que palanca tiene mas impacto antes de decidir.
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <p className="max-w-3xl text-sm leading-6 text-white/68">
+                  No cambian tus datos. Te ayudan a decidir donde merece la pena actuar primero.
                 </p>
-                <Link href="/fire" className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10">
+                <Link href="/fire" className="rounded-full border border-white/12 bg-white/6 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/10">
                   Aplicar escenario
                 </Link>
               </div>
-              <div className="mt-5 grid gap-3 xl:grid-cols-3">
+              <div className="mt-4 grid gap-3 xl:grid-cols-3">
                 {fireScenarioCards.length > 0 ? (
                   fireScenarioCards.map((card) => (
-                    <article key={card.id} className="rounded-[24px] border border-white/8 bg-white/6 p-4">
+                    <article key={card.id} className="rounded-[22px] border border-white/8 bg-white/6 p-3.5">
                       <div className="flex items-center gap-2">
                         <KpiIcon type={card.icon} className="h-4 w-4 flex-none text-emerald-200/80" />
                         <p className="text-xs uppercase tracking-[0.18em] text-white/60">{card.title}</p>
                       </div>
-                      <p className="mt-3 font-[var(--font-heading)] text-3xl font-semibold text-emerald-200">{card.impactLabel}</p>
-                      <p className="mt-2 text-sm leading-6 text-white/72">{card.detail}</p>
+                      <p className="mt-2.5 font-[var(--font-heading)] text-2xl font-semibold text-emerald-200">{card.impactLabel}</p>
+                      <p className="mt-1.5 text-sm leading-6 text-white/70">{card.detail}</p>
                     </article>
                   ))
                 ) : (
-                  <article className="rounded-[24px] border border-white/8 bg-white/6 p-4 xl:col-span-3">
-                    <p className="text-sm leading-6 text-white/72">
+                  <article className="rounded-[22px] border border-white/8 bg-white/6 p-3.5 xl:col-span-3">
+                    <p className="text-sm leading-6 text-white/70">
                       En cuanto tengamos objetivo FIRE y un ritmo anual suficiente, aqui veras escenarios concretos de ahorro, gasto y rentabilidad.
                     </p>
                   </article>
