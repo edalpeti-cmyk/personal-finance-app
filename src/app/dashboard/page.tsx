@@ -20,7 +20,7 @@ import AuthLoadingState from "@/components/auth-loading-state";
 import SideNav from "@/components/side-nav";
 import EmptyStateCard from "@/components/empty-state-card";
 import InfoHint from "@/components/info-hint";
-import KpiIcon from "@/components/kpi-icon";
+import KpiIcon, { type KpiIconType } from "@/components/kpi-icon";
 import PwaInstallButton from "@/components/pwa-install-button";
 import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
@@ -85,6 +85,8 @@ type DashboardMetrics = {
   grossWorth: number;
   usesCashBaseline: boolean;
   cashBaselineDate: string | null;
+  fireNetWorth: number;
+  fireExpectedReturn: number;
 };
 type DashboardAlert = {
   id: DashboardAlertRuleKey | "stable_panel";
@@ -133,6 +135,14 @@ type MonthlyTrendPoint = {
   label: string;
   income: number;
   savingsTarget: number;
+};
+type FireScenarioCard = {
+  id: string;
+  icon: KpiIconType;
+  title: string;
+  impactLabel: string;
+  detail: string;
+  href: string;
 };
 type AiInsightDebug = {
   monthlyIncome: number;
@@ -1310,6 +1320,110 @@ export default function DashboardPage() {
     const delay = yearsAtCurrentPace - yearsAtRecentPace;
     return delay > 0 ? delay : null;
   }, [currentMonthSavingsTarget, metrics, recentAverageMonthlySavingsTarget]);
+  const heroFireScenarioYears = useMemo(() => {
+    if (!metrics || metrics.fireTarget <= 0 || metrics.yearsToFire === null) {
+      return null;
+    }
+
+    const betterAnnualContribution = Math.max((recentAverageMonthlySavingsTarget ?? currentMonthSavingsTarget) * 12, metrics.annualSavings, currentMonthSavingsTarget * 12);
+    if (betterAnnualContribution <= 0) {
+      return null;
+    }
+
+    const scenarioYears = estimateYearsToFire(metrics.fireNetWorth, metrics.fireTarget, betterAnnualContribution, metrics.fireExpectedReturn);
+    if (scenarioYears === null || scenarioYears >= metrics.yearsToFire) {
+      return null;
+    }
+
+    return scenarioYears;
+  }, [currentMonthSavingsTarget, metrics, recentAverageMonthlySavingsTarget]);
+  const fireScenarioCards = useMemo<FireScenarioCard[]>(() => {
+    if (!metrics || metrics.fireTarget <= 0 || metrics.yearsToFire === null) {
+      return [];
+    }
+
+    const currentYears = metrics.yearsToFire;
+    const nextCards: FireScenarioCard[] = [];
+
+    const plus100Contribution = Math.max(metrics.annualSavings + 1200, 1200);
+    const plus100Years = estimateYearsToFire(metrics.fireNetWorth, metrics.fireTarget, plus100Contribution, metrics.fireExpectedReturn);
+    if (plus100Years !== null && plus100Years < currentYears) {
+      nextCards.push({
+        id: "save-more",
+        icon: "annualSavings",
+        title: "Si ahorras +100€/mes",
+        impactLabel: `reduces ${currentYears - plus100Years} ano${currentYears - plus100Years === 1 ? "" : "s"}`,
+        detail: `Pasarias de ${currentYears} a ${plus100Years} anos estimados.`,
+        href: "/budgets"
+      });
+    }
+
+    const higherReturnYears = estimateYearsToFire(metrics.fireNetWorth, metrics.fireTarget, Math.max(metrics.annualSavings, currentMonthSavingsTarget * 12), 0.07);
+    if (higherReturnYears !== null && higherReturnYears < currentYears) {
+      nextCards.push({
+        id: "higher-return",
+        icon: "timeline",
+        title: "Si mejoras rentabilidad al 7%",
+        impactLabel: `reduces ${currentYears - higherReturnYears} ano${currentYears - higherReturnYears === 1 ? "" : "s"}`,
+        detail: `Con la misma aportacion anual, el horizonte bajaria a ${higherReturnYears} anos.`,
+        href: "/investments"
+      });
+    }
+
+    const reducedAnnualExpenses = metrics.annualExpenses * 0.9;
+    const lowerTarget = reducedAnnualExpenses > 0 ? reducedAnnualExpenses / 0.04 : 0;
+    const releasedContribution = Math.max(metrics.annualSavings + metrics.annualExpenses * 0.1, metrics.annualSavings);
+    const lowerExpenseYears =
+      lowerTarget > 0 ? estimateYearsToFire(metrics.fireNetWorth, lowerTarget, releasedContribution, metrics.fireExpectedReturn) : null;
+    if (lowerExpenseYears !== null && lowerExpenseYears < currentYears) {
+      nextCards.push({
+        id: "lower-expenses",
+        icon: "ratio",
+        title: "Si reduces gasto un 10%",
+        impactLabel: `reduces ${currentYears - lowerExpenseYears} ano${currentYears - lowerExpenseYears === 1 ? "" : "s"}`,
+        detail: `Tu objetivo FIRE bajaria y aportarias mas margen al mismo tiempo.`,
+        href: "/expenses"
+      });
+    }
+
+    return nextCards.slice(0, 3);
+  }, [currentMonthSavingsTarget, metrics]);
+  const firePhaseCopy = useMemo(() => {
+    if (!metrics) {
+      return "Estas construyendo la base financiera. La consistencia de hoy es la que crea traccion despues.";
+    }
+
+    if (metrics.fireProgress < 10) {
+      return "Fase inicial. Aqui el progreso parece lento, pero esta etapa construye la base que luego acelera todo.";
+    }
+
+    if (metrics.fireProgress < 35) {
+      return "Fase de traccion. Ya no estas empezando de cero: cada mes consistente empieza a recortar tiempo real.";
+    }
+
+    if (metrics.fireProgress < 65) {
+      return "Fase de aceleracion. La combinacion de patrimonio y aportaciones ya tiene un impacto visible en el horizonte.";
+    }
+
+    return "Fase avanzada. Ahora mantener el ritmo importa mas que buscar movimientos bruscos.";
+  }, [metrics]);
+  const heroHeadline = metrics
+    ? metrics.fireTarget <= 0
+      ? "Tu plan FIRE aun no esta calculado"
+      : metrics.yearsToFire === null
+        ? "Tu plan aun no llega a FIRE con el ritmo actual"
+        : `Te faltan ${metrics.yearsToFire} anos para ser libre financieramente`
+    : "Estamos preparando tu hoja de ruta FIRE";
+  const heroSubtext = metrics
+    ? metrics.fireTarget <= 0
+      ? "Completa tu configuracion FIRE para convertir el dashboard en un coach de horizonte y decisiones."
+      : heroFireScenarioYears !== null
+        ? `Pero podrias bajarlo a ${heroFireScenarioYears} anos con pequenos cambios sostenibles en ahorro, gasto o aportacion.`
+        : "Tu progreso depende ahora mismo de mantener ritmo y elegir bien la siguiente palanca de mejora."
+    : "En cuanto carguen tus datos veras el horizonte estimado, el progreso y las palancas con mas impacto.";
+  const heroNetWorthLabel = metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--";
+  const heroFireTargetLabel = metrics ? (metrics.fireTarget > 0 ? formatCurrencyByPreference(metrics.fireTarget, currency) : "Sin calcular") : "--";
+  const heroFireProgressLabel = metrics ? `${metrics.fireProgress.toFixed(2)}%` : "--";
   const financialGuidance = useMemo(() => {
     if (!metrics) return [];
     return generateFinancialGuidance(
@@ -2136,7 +2250,9 @@ export default function DashboardPage() {
         fireIncludedWealthValue,
         grossWorth,
         usesCashBaseline: Boolean(cashBaseline?.baseline_date),
-        cashBaselineDate: cashBaseline?.baseline_date ?? null
+        cashBaselineDate: cashBaseline?.baseline_date ?? null,
+        fireNetWorth,
+        fireExpectedReturn
       });
 
       await persistSnapshot(userId, totalNetWorth, cashPosition, investmentsValue);
@@ -2171,14 +2287,33 @@ export default function DashboardPage() {
         <section className="rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(9,20,38,0.98)_0%,rgba(12,27,49,0.96)_62%,rgba(10,63,70,0.78)_100%)] p-5 text-white shadow-[0_24px_64px_rgba(2,8,23,0.5)] md:col-span-2 md:rounded-[30px] md:p-8 xl:col-span-12">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Vista general</p>
-              <h1 className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold tracking-tight text-white sm:text-4xl">Tu sistema financiero, de un vistazo</h1>
+              <p className="font-[var(--font-heading)] text-xs uppercase tracking-[0.26em] text-emerald-300">Libre financiera</p>
+              <h1 className="mt-3 font-[var(--font-heading)] text-[2rem] font-semibold tracking-tight text-white sm:text-4xl">
+                {heroHeadline}
+              </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-white/72">
-                Patrimonio, ahorro, progreso FIRE e ideas accionables en una sola pantalla para decidir con rapidez.
+                {heroSubtext}
               </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-white/80">
+                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5">
+                  Patrimonio actual: <span className="font-medium text-white">{heroNetWorthLabel}</span>
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5">
+                  Objetivo: <span className="font-medium text-white">{heroFireTargetLabel}</span>
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5">
+                  Progreso: <span className="font-medium text-white">{heroFireProgressLabel}</span>
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap justify-end gap-3">
               <PwaInstallButton />
+              <Link
+                href="/fire"
+                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400"
+              >
+                Ver como reducir anos
+              </Link>
               <button
                 type="button"
                 onClick={() => setHideBalances(!hideBalances)}
@@ -2190,6 +2325,40 @@ export default function DashboardPage() {
           </div>
           <div className="mt-6 grid gap-4 xl:mt-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-start">
             <div>
+              <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-amber-300">Como avanzar mas rapido</p>
+                    <h2 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold text-white">Tres palancas con impacto real</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/64">
+                      Simulaciones simples para ver que cambio reduce mas anos en tu horizonte FIRE.
+                    </p>
+                  </div>
+                  <Link href="/fire" className="rounded-full border border-white/12 bg-white/6 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/10">
+                    Aplicar escenario
+                  </Link>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {fireScenarioCards.length > 0 ? (
+                    fireScenarioCards.map((card) => (
+                      <article key={card.id} className="rounded-[20px] border border-white/8 bg-slate-950/20 p-4">
+                        <div className="flex items-center gap-2">
+                          <KpiIcon type={card.icon} className="h-4 w-4 flex-none text-emerald-200/80" />
+                          <p className="text-xs uppercase tracking-[0.18em] text-white/60">{card.title}</p>
+                        </div>
+                        <p className="mt-3 font-[var(--font-heading)] text-2xl font-semibold text-emerald-200">{card.impactLabel}</p>
+                        <p className="mt-2 text-sm leading-6 text-white/72">{card.detail}</p>
+                      </article>
+                    ))
+                  ) : (
+                    <article className="rounded-[20px] border border-white/8 bg-slate-950/20 p-4 sm:col-span-3">
+                      <p className="text-sm leading-6 text-white/72">
+                        En cuanto tengamos objetivo FIRE y un ritmo anual suficiente, aqui veras escenarios concretos de ahorro, gasto y rentabilidad.
+                      </p>
+                    </article>
+                  )}
+                </div>
+              </div>
               <div className="rounded-[24px] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -2263,7 +2432,12 @@ export default function DashboardPage() {
                 {metrics ? formatCurrencyByPreference(metrics.totalNetWorth, currency) : "--"}
               </p>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-white/76">
-                Patrimonio neto combinando caja, inversiones, bienes patrimoniales y la deuda pendiente que ya has registrado.
+                Estas construyendo tu base. Aqui es donde todo empieza.
+              </p>
+              <p className={`mt-2 text-sm ${activeRangeVariation === null ? "text-white/56" : timelinePositive ? "text-emerald-200/90" : "text-rose-200/90"}`}>
+                {activeRangeVariation === null
+                  ? "Todavia no hay suficiente base para medir el crecimiento del mes."
+                  : `Este mes has crecido ${activeRangeVariation >= 0 ? "+" : ""}${activeRangeVariation.toFixed(1)}% (${activeRangeDelta >= 0 ? "+" : ""}${formatCurrencyByPreference(activeRangeDelta, currency)}).`}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -2287,6 +2461,11 @@ export default function DashboardPage() {
               <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/54">Deuda</p>
                 <p className="mt-2 text-xl font-semibold sm:text-2xl">{metrics ? formatCurrencyByPreference(metrics.debtTotal, currency) : "--"}</p>
+              </div>
+              <div className="rounded-2xl border border-white/8 bg-white/6 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/54">Progreso FIRE</p>
+                <p className="mt-2 text-xl font-semibold sm:text-2xl">{heroFireProgressLabel}</p>
+                <p className="mt-2 text-xs leading-5 text-white/60">{firePhaseCopy}</p>
               </div>
             </div>
           </div>
