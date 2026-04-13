@@ -2329,17 +2329,21 @@ export default function InvestmentsPage() {
     }),
     [selectedAssetHistory]
   );
+  const selectedAssetDailyHistory = useMemo(
+    () => collapseHistoryToDailyLatest(selectedAssetHistory),
+    [selectedAssetHistory]
+  );
   const selectedAssetTimeline = useMemo(
-    () => buildTypeHistoryTimeline(selectedAssetRange === "daily" ? selectedAssetHistory : selectedAssetHistorySeries, selectedAssetRange),
-    [selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () => buildTypeHistoryTimeline(selectedAssetRange === "daily" ? selectedAssetDailyHistory : selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetDailyHistory, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetVariationPct = useMemo(
-    () => calculateHistoryRangeVariationPct(selectedAssetRange === "daily" ? selectedAssetHistory : selectedAssetHistorySeries, selectedAssetRange),
-    [selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () => calculateHistoryRangeVariationPct(selectedAssetRange === "daily" ? selectedAssetDailyHistory : selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetDailyHistory, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetVariationAmount = useMemo(
-    () => calculateHistoryRangeDelta(selectedAssetRange === "daily" ? selectedAssetHistory : selectedAssetHistorySeries, selectedAssetRange),
-    [selectedAssetHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () => calculateHistoryRangeDelta(selectedAssetRange === "daily" ? selectedAssetDailyHistory : selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetDailyHistory, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetPositive = (selectedAssetVariationPct ?? 0) >= 0;
   const selectedAssetStroke = selectedAssetPositive ? "#34d399" : "#f87171";
@@ -2379,18 +2383,22 @@ export default function InvestmentsPage() {
     const baseHistory = selectedTypeHistory.length > 1 ? selectedTypeHistory : buildEstimatedTypeHistory(selectedTypeAssets, ratesToEur);
     return mergeCurrentValueIntoHistory(baseHistory, selectedTypeSummary.totalValueEur);
   }, [ratesToEur, selectedTypeAssets, selectedTypeHistory, selectedTypeSummary.totalValueEur]);
+  const selectedTypeDailyHistory = useMemo(
+    () => collapseHistoryToDailyLatest(selectedTypeHistory),
+    [selectedTypeHistory]
+  );
   const selectedTypeTimeline = useMemo(
-    () => buildTypeHistoryTimeline(selectedTypeRange === "daily" ? selectedTypeHistory : selectedTypeHistorySeries, selectedTypeRange),
-    [selectedTypeHistory, selectedTypeHistorySeries, selectedTypeRange]
+    () => buildTypeHistoryTimeline(selectedTypeRange === "daily" ? selectedTypeDailyHistory : selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeDailyHistory, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
   const selectedTypeVariationPct = useMemo(
-    () => calculateHistoryRangeVariationPct(selectedTypeRange === "daily" ? selectedTypeHistory : selectedTypeHistorySeries, selectedTypeRange),
-    [selectedTypeHistory, selectedTypeHistorySeries, selectedTypeRange]
+    () => calculateHistoryRangeVariationPct(selectedTypeRange === "daily" ? selectedTypeDailyHistory : selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeDailyHistory, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeVariationAmount = useMemo(
-    () => calculateHistoryRangeDelta(selectedTypeRange === "daily" ? selectedTypeHistory : selectedTypeHistorySeries, selectedTypeRange),
-    [selectedTypeHistory, selectedTypeHistorySeries, selectedTypeRange]
+    () => calculateHistoryRangeDelta(selectedTypeRange === "daily" ? selectedTypeDailyHistory : selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeDailyHistory, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypePositive = (selectedTypeVariationPct ?? 0) >= 0;
   const selectedTypeStroke = selectedTypePositive ? "#34d399" : "#f87171";
@@ -2901,17 +2909,21 @@ export default function InvestmentsPage() {
     const baseHistory = portfolioHistory.length > 1 ? portfolioHistory : buildEstimatedPortfolioHistory(investments, ratesToEur);
     return mergeCurrentValueIntoHistory(baseHistory, metrics.totalValueEur);
   }, [investments, metrics.totalValueEur, portfolioHistory, ratesToEur]);
+  const portfolioDailyHistory = useMemo(
+    () => collapseHistoryToDailyLatest(portfolioHistory),
+    [portfolioHistory]
+  );
   const portfolioTimeline = useMemo(
-    () => buildTypeHistoryTimeline(portfolioRange === "daily" ? portfolioHistory : portfolioHistorySeries, portfolioRange),
-    [portfolioHistory, portfolioHistorySeries, portfolioRange]
+    () => buildTypeHistoryTimeline(portfolioRange === "daily" ? portfolioDailyHistory : portfolioHistorySeries, portfolioRange),
+    [portfolioDailyHistory, portfolioHistorySeries, portfolioRange]
   );
   const portfolioVariationPct = useMemo(
-    () => calculateHistoryRangeVariationPct(portfolioRange === "daily" ? portfolioHistory : portfolioHistorySeries, portfolioRange),
-    [portfolioHistory, portfolioHistorySeries, portfolioRange]
+    () => calculateHistoryRangeVariationPct(portfolioRange === "daily" ? portfolioDailyHistory : portfolioHistorySeries, portfolioRange),
+    [portfolioDailyHistory, portfolioHistorySeries, portfolioRange]
   );
   const portfolioVariationAmount = useMemo(
-    () => calculateHistoryRangeDelta(portfolioRange === "daily" ? portfolioHistory : portfolioHistorySeries, portfolioRange),
-    [portfolioHistory, portfolioHistorySeries, portfolioRange]
+    () => calculateHistoryRangeDelta(portfolioRange === "daily" ? portfolioDailyHistory : portfolioHistorySeries, portfolioRange),
+    [portfolioDailyHistory, portfolioHistorySeries, portfolioRange]
   );
   const portfolioPositive = (portfolioVariationPct ?? 0) >= 0;
   const portfolioStroke = portfolioPositive ? "#34d399" : "#f87171";
