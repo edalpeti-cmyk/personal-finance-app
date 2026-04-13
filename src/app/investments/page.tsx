@@ -877,6 +877,56 @@ function calculateHistoryRangeVariationPct(history: HistoryPoint[], range: TypeC
   return ((endValue - startValue) / Math.abs(startValue)) * 100;
 }
 
+function buildDailyLiveComparisonTimeline(
+  currentEntries: Array<{ id: string; value: number }>,
+  historyRows: HistoryPointWithInvestment[]
+) {
+  if (currentEntries.length === 0) {
+    return null;
+  }
+
+  const yesterdayEnd = endOfDay(addDays(new Date(), -1));
+  const currentById = new Map(
+    currentEntries.map((entry) => [entry.id, Number(entry.value.toFixed(2))])
+  );
+  const previousById = new Map<string, { timestamp: number; value: number }>();
+
+  for (const row of historyRows) {
+    if (!currentById.has(row.investment_id)) continue;
+
+    const timestamp = normalizeDate(row.snapshot_date).getTime();
+    if (timestamp > yesterdayEnd.getTime()) continue;
+
+    const current = previousById.get(row.investment_id);
+    if (!current || timestamp >= current.timestamp) {
+      previousById.set(row.investment_id, {
+        timestamp,
+        value: Number(row.total_value_eur || 0)
+      });
+    }
+  }
+
+  const startTotal = Array.from(currentById.keys()).reduce((sum, id) => {
+    return sum + Number(previousById.get(id)?.value ?? 0);
+  }, 0);
+  const endTotal = Array.from(currentById.values()).reduce((sum, value) => sum + value, 0);
+
+  return {
+    startValue: Number(startTotal.toFixed(2)),
+    endValue: Number(endTotal.toFixed(2)),
+    points: [
+      {
+        label: addDays(new Date(), -1).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }),
+        value: Number(startTotal.toFixed(2))
+      },
+      {
+        label: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" }),
+        value: Number(endTotal.toFixed(2))
+      }
+    ]
+  };
+}
+
 function sortTransactionsForCostBasis(transactions: InvestmentTransactionRow[]) {
   return [...transactions].sort((a, b) => {
     const byDate = (a.executed_at ?? "").localeCompare(b.executed_at ?? "");
@@ -1098,8 +1148,10 @@ export default function InvestmentsPage() {
   const [selectedAssetTransactions, setSelectedAssetTransactions] = useState<InvestmentTransactionRow[]>([]);
   const [linkedTransferByTransactionId, setLinkedTransferByTransactionId] = useState<Record<string, LinkedTransferSummary>>({});
   const [portfolioHistory, setPortfolioHistory] = useState<HistoryPoint[]>([]);
+  const [portfolioHistoryRaw, setPortfolioHistoryRaw] = useState<HistoryPointWithInvestment[]>([]);
   const [portfolioRange, setPortfolioRange] = useState<TypeChartRange>("daily");
   const [selectedTypeHistory, setSelectedTypeHistory] = useState<HistoryPoint[]>([]);
+  const [selectedTypeHistoryRaw, setSelectedTypeHistoryRaw] = useState<HistoryPointWithInvestment[]>([]);
   const [selectedTypeRange, setSelectedTypeRange] = useState<TypeChartRange>("daily");
   const [selectedAssetRange, setSelectedAssetRange] = useState<TypeChartRange>("daily");
   const [selectedTypeChartMode, setSelectedTypeChartMode] = useState<TypeChartMode>("value");
@@ -2333,17 +2385,44 @@ export default function InvestmentsPage() {
     () => collapseHistoryToDailyLatest(selectedAssetHistory),
     [selectedAssetHistory]
   );
+  const selectedAssetDailyLiveComparison = useMemo(
+    () =>
+      selectedAsset
+        ? buildDailyLiveComparisonTimeline(
+            [{ id: selectedAsset.id, value: selectedAsset.currentValueEur }],
+            selectedAssetHistory.map((point) => ({ ...point, investment_id: selectedAsset.id }))
+          )
+        : null,
+    [selectedAsset, selectedAssetHistory]
+  );
   const selectedAssetTimeline = useMemo(
-    () => buildTypeHistoryTimeline(selectedAssetRange === "daily" ? selectedAssetDailyHistory : selectedAssetHistorySeries, selectedAssetRange),
-    [selectedAssetDailyHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () =>
+      selectedAssetRange === "daily"
+        ? selectedAssetDailyLiveComparison?.points ?? buildTypeHistoryTimeline(selectedAssetDailyHistory, selectedAssetRange)
+        : buildTypeHistoryTimeline(selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetDailyHistory, selectedAssetDailyLiveComparison, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetVariationPct = useMemo(
-    () => calculateHistoryRangeVariationPct(selectedAssetRange === "daily" ? selectedAssetDailyHistory : selectedAssetHistorySeries, selectedAssetRange),
-    [selectedAssetDailyHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () =>
+      selectedAssetRange === "daily"
+        ? selectedAssetDailyLiveComparison
+          ? selectedAssetDailyLiveComparison.startValue === 0
+            ? selectedAssetDailyLiveComparison.endValue === 0
+              ? 0
+              : null
+            : ((selectedAssetDailyLiveComparison.endValue - selectedAssetDailyLiveComparison.startValue) / Math.abs(selectedAssetDailyLiveComparison.startValue)) * 100
+          : calculateHistoryRangeVariationPct(selectedAssetDailyHistory, selectedAssetRange)
+        : calculateHistoryRangeVariationPct(selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetDailyHistory, selectedAssetDailyLiveComparison, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetVariationAmount = useMemo(
-    () => calculateHistoryRangeDelta(selectedAssetRange === "daily" ? selectedAssetDailyHistory : selectedAssetHistorySeries, selectedAssetRange),
-    [selectedAssetDailyHistory, selectedAssetHistorySeries, selectedAssetRange]
+    () =>
+      selectedAssetRange === "daily"
+        ? selectedAssetDailyLiveComparison
+          ? selectedAssetDailyLiveComparison.endValue - selectedAssetDailyLiveComparison.startValue
+          : calculateHistoryRangeDelta(selectedAssetDailyHistory, selectedAssetRange)
+        : calculateHistoryRangeDelta(selectedAssetHistorySeries, selectedAssetRange),
+    [selectedAssetDailyHistory, selectedAssetDailyLiveComparison, selectedAssetHistorySeries, selectedAssetRange]
   );
   const selectedAssetPositive = (selectedAssetVariationPct ?? 0) >= 0;
   const selectedAssetStroke = selectedAssetPositive ? "#34d399" : "#f87171";
@@ -2387,18 +2466,43 @@ export default function InvestmentsPage() {
     () => collapseHistoryToDailyLatest(selectedTypeHistory),
     [selectedTypeHistory]
   );
+  const selectedTypeDailyLiveComparison = useMemo(
+    () =>
+      buildDailyLiveComparisonTimeline(
+        selectedTypeAssets.map((row) => ({ id: row.id, value: row.currentValueEur })),
+        selectedTypeHistoryRaw
+      ),
+    [selectedTypeAssets, selectedTypeHistoryRaw]
+  );
   const selectedTypeTimeline = useMemo(
-    () => buildTypeHistoryTimeline(selectedTypeRange === "daily" ? selectedTypeDailyHistory : selectedTypeHistorySeries, selectedTypeRange),
-    [selectedTypeDailyHistory, selectedTypeHistorySeries, selectedTypeRange]
+    () =>
+      selectedTypeRange === "daily"
+        ? selectedTypeDailyLiveComparison?.points ?? buildTypeHistoryTimeline(selectedTypeDailyHistory, selectedTypeRange)
+        : buildTypeHistoryTimeline(selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeDailyHistory, selectedTypeDailyLiveComparison, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeUsesRealHistory = selectedTypeHistory.length > 1;
   const selectedTypeVariationPct = useMemo(
-    () => calculateHistoryRangeVariationPct(selectedTypeRange === "daily" ? selectedTypeDailyHistory : selectedTypeHistorySeries, selectedTypeRange),
-    [selectedTypeDailyHistory, selectedTypeHistorySeries, selectedTypeRange]
+    () =>
+      selectedTypeRange === "daily"
+        ? selectedTypeDailyLiveComparison
+          ? selectedTypeDailyLiveComparison.startValue === 0
+            ? selectedTypeDailyLiveComparison.endValue === 0
+              ? 0
+              : null
+            : ((selectedTypeDailyLiveComparison.endValue - selectedTypeDailyLiveComparison.startValue) / Math.abs(selectedTypeDailyLiveComparison.startValue)) * 100
+          : calculateHistoryRangeVariationPct(selectedTypeDailyHistory, selectedTypeRange)
+        : calculateHistoryRangeVariationPct(selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeDailyHistory, selectedTypeDailyLiveComparison, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypeVariationAmount = useMemo(
-    () => calculateHistoryRangeDelta(selectedTypeRange === "daily" ? selectedTypeDailyHistory : selectedTypeHistorySeries, selectedTypeRange),
-    [selectedTypeDailyHistory, selectedTypeHistorySeries, selectedTypeRange]
+    () =>
+      selectedTypeRange === "daily"
+        ? selectedTypeDailyLiveComparison
+          ? selectedTypeDailyLiveComparison.endValue - selectedTypeDailyLiveComparison.startValue
+          : calculateHistoryRangeDelta(selectedTypeDailyHistory, selectedTypeRange)
+        : calculateHistoryRangeDelta(selectedTypeHistorySeries, selectedTypeRange),
+    [selectedTypeDailyHistory, selectedTypeDailyLiveComparison, selectedTypeHistorySeries, selectedTypeRange]
   );
   const selectedTypePositive = (selectedTypeVariationPct ?? 0) >= 0;
   const selectedTypeStroke = selectedTypePositive ? "#34d399" : "#f87171";
@@ -2789,10 +2893,12 @@ export default function InvestmentsPage() {
 
       if (error) {
         setPortfolioHistory([]);
+        setPortfolioHistoryRaw([]);
         return;
       }
 
       const nextRows = (data as HistoryPointWithInvestment[]) ?? [];
+      setPortfolioHistoryRaw(nextRows);
       setPortfolioHistory(buildRollingAggregateHistory(nextRows));
     };
 
@@ -2816,10 +2922,12 @@ export default function InvestmentsPage() {
 
       if (error) {
         setSelectedTypeHistory([]);
+        setSelectedTypeHistoryRaw([]);
         return;
       }
 
       const nextRows = (data as HistoryPointWithInvestment[]) ?? [];
+      setSelectedTypeHistoryRaw(nextRows);
       setSelectedTypeHistory(buildRollingAggregateHistory(nextRows));
     };
 
@@ -2913,17 +3021,42 @@ export default function InvestmentsPage() {
     () => collapseHistoryToDailyLatest(portfolioHistory),
     [portfolioHistory]
   );
+  const portfolioDailyLiveComparison = useMemo(
+    () =>
+      buildDailyLiveComparisonTimeline(
+        enrichedInvestments.map((row) => ({ id: row.id, value: row.currentValueEur })),
+        portfolioHistoryRaw
+      ),
+    [enrichedInvestments, portfolioHistoryRaw]
+  );
   const portfolioTimeline = useMemo(
-    () => buildTypeHistoryTimeline(portfolioRange === "daily" ? portfolioDailyHistory : portfolioHistorySeries, portfolioRange),
-    [portfolioDailyHistory, portfolioHistorySeries, portfolioRange]
+    () =>
+      portfolioRange === "daily"
+        ? portfolioDailyLiveComparison?.points ?? buildTypeHistoryTimeline(portfolioDailyHistory, portfolioRange)
+        : buildTypeHistoryTimeline(portfolioHistorySeries, portfolioRange),
+    [portfolioDailyHistory, portfolioDailyLiveComparison, portfolioHistorySeries, portfolioRange]
   );
   const portfolioVariationPct = useMemo(
-    () => calculateHistoryRangeVariationPct(portfolioRange === "daily" ? portfolioDailyHistory : portfolioHistorySeries, portfolioRange),
-    [portfolioDailyHistory, portfolioHistorySeries, portfolioRange]
+    () =>
+      portfolioRange === "daily"
+        ? portfolioDailyLiveComparison
+          ? portfolioDailyLiveComparison.startValue === 0
+            ? portfolioDailyLiveComparison.endValue === 0
+              ? 0
+              : null
+            : ((portfolioDailyLiveComparison.endValue - portfolioDailyLiveComparison.startValue) / Math.abs(portfolioDailyLiveComparison.startValue)) * 100
+          : calculateHistoryRangeVariationPct(portfolioDailyHistory, portfolioRange)
+        : calculateHistoryRangeVariationPct(portfolioHistorySeries, portfolioRange),
+    [portfolioDailyHistory, portfolioDailyLiveComparison, portfolioHistorySeries, portfolioRange]
   );
   const portfolioVariationAmount = useMemo(
-    () => calculateHistoryRangeDelta(portfolioRange === "daily" ? portfolioDailyHistory : portfolioHistorySeries, portfolioRange),
-    [portfolioDailyHistory, portfolioHistorySeries, portfolioRange]
+    () =>
+      portfolioRange === "daily"
+        ? portfolioDailyLiveComparison
+          ? portfolioDailyLiveComparison.endValue - portfolioDailyLiveComparison.startValue
+          : calculateHistoryRangeDelta(portfolioDailyHistory, portfolioRange)
+        : calculateHistoryRangeDelta(portfolioHistorySeries, portfolioRange),
+    [portfolioDailyHistory, portfolioDailyLiveComparison, portfolioHistorySeries, portfolioRange]
   );
   const portfolioPositive = (portfolioVariationPct ?? 0) >= 0;
   const portfolioStroke = portfolioPositive ? "#34d399" : "#f87171";
