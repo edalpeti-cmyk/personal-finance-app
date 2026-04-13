@@ -907,7 +907,9 @@ function buildDailyLiveComparisonTimeline(
   }
 
   const startTotal = Array.from(currentById.keys()).reduce((sum, id) => {
-    return sum + Number(previousById.get(id)?.value ?? 0);
+    const previousValue = previousById.get(id)?.value;
+    const currentValue = Number(currentById.get(id) ?? 0);
+    return sum + Number((previousValue ?? currentValue).toFixed(2));
   }, 0);
   const endTotal = Array.from(currentById.values()).reduce((sum, value) => sum + value, 0);
 
