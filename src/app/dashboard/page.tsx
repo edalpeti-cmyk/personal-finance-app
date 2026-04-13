@@ -481,6 +481,19 @@ function getSnapshotValueAtDate(snapshots: SnapshotRow[], checkpoint: Date) {
   return latestValue;
 }
 
+function mergeCurrentValueIntoDailyTimeline(points: TimelinePoint[], currentValue: number) {
+  if (points.length === 0) {
+    return points;
+  }
+
+  const nextPoints = [...points];
+  nextPoints[nextPoints.length - 1] = {
+    ...nextPoints[nextPoints.length - 1],
+    value: Number(currentValue.toFixed(2))
+  };
+  return nextPoints;
+}
+
 function calculateRangeVariationPct(
   range: ChartRange,
   snapshots: SnapshotRow[],
@@ -592,23 +605,43 @@ export default function DashboardPage() {
   const cashflowEvents = useMemo(() => buildCashflowEvents(incomeRows, expenseRows), [incomeRows, expenseRows]);
   const timelinePoints = useMemo(() => {
     if (snapshotRows.length > 1) {
-      return buildSnapshotTimeline(snapshotRows, chartRange, dateFormat);
+      const points = buildSnapshotTimeline(snapshotRows, chartRange, dateFormat);
+      if (chartRange === "daily" && metrics) {
+        return mergeCurrentValueIntoDailyTimeline(points, metrics.totalNetWorth);
+      }
+      return points;
     }
 
     return buildCashflowTimeline(cashflowEvents, chartRange, dateFormat);
-  }, [cashflowEvents, chartRange, dateFormat, snapshotRows]);
+  }, [cashflowEvents, chartRange, dateFormat, metrics, snapshotRows]);
 
   const timelineRangeVariations = useMemo(() => {
     return Object.fromEntries(
-      RANGE_OPTIONS.map((option) => [option.value, calculateRangeVariationPct(option.value, snapshotRows, cashflowEvents)])
+      RANGE_OPTIONS.map((option) => {
+        if (option.value === "daily" && snapshotRows.length > 1 && metrics) {
+          const startValue = getSnapshotValueAtDate(snapshotRows, endOfDay(addDays(new Date(), -1)));
+          const endValue = metrics.totalNetWorth;
+          const variation = startValue === 0 ? (endValue === 0 ? 0 : null) : ((endValue - startValue) / Math.abs(startValue)) * 100;
+          return [option.value, variation];
+        }
+
+        return [option.value, calculateRangeVariationPct(option.value, snapshotRows, cashflowEvents)];
+      })
     ) as Record<ChartRange, number | null>;
-  }, [cashflowEvents, snapshotRows]);
+  }, [cashflowEvents, metrics, snapshotRows]);
 
   const timelineRangeDeltas = useMemo(() => {
     return Object.fromEntries(
-      RANGE_OPTIONS.map((option) => [option.value, calculateRangeDeltaAmount(option.value, snapshotRows, cashflowEvents)])
+      RANGE_OPTIONS.map((option) => {
+        if (option.value === "daily" && snapshotRows.length > 1 && metrics) {
+          const startValue = getSnapshotValueAtDate(snapshotRows, endOfDay(addDays(new Date(), -1)));
+          return [option.value, metrics.totalNetWorth - startValue];
+        }
+
+        return [option.value, calculateRangeDeltaAmount(option.value, snapshotRows, cashflowEvents)];
+      })
     ) as Record<ChartRange, number>;
-  }, [cashflowEvents, snapshotRows]);
+  }, [cashflowEvents, metrics, snapshotRows]);
 
   const activeRangeVariation = timelineRangeVariations[chartRange];
   const activeRangeDelta = timelineRangeDeltas[chartRange];
