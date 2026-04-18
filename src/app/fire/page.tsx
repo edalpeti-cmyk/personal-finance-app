@@ -21,6 +21,7 @@ import SectionHeader from "@/components/section-header";
 import { useTheme } from "@/components/theme-provider";
 import { type AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
 import { formatCurrencyByPreference } from "@/lib/preferences-format";
+import { computeSharedFinancialMetrics } from "@/lib/shared-financial-metrics";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -57,9 +58,27 @@ type FireSettingsRow = {
 };
 type DebtRow = {
   outstanding_balance: number;
+  monthly_payment?: number | null;
   currency: AssetCurrency | null;
   status: "active" | "paused" | "closed";
   include_in_fire: boolean;
+};
+type IncomeRow = { amount: number; income_date: string };
+type ExpenseRow = { amount: number; expense_date: string };
+type InvestmentRow = {
+  quantity: number;
+  average_buy_price: number;
+  current_price: number | null;
+  asset_currency: AssetCurrency | null;
+};
+type CashBaselineRow = {
+  baseline_amount: number;
+  baseline_date: string;
+};
+type InternalTransferRow = {
+  amount: number;
+  transfer_date: string;
+  transfer_type: "investment" | "emergency_fund";
 };
 type WealthAssetRow = {
   current_estimated_value: number;
@@ -94,6 +113,7 @@ export default function FirePage() {
   const [tableOpen, setTableOpen] = useState(false);
   const [debtTotal, setDebtTotal] = useState(0);
   const [fireAssetTotal, setFireAssetTotal] = useState(0);
+  const [liveFireBaseNetWorth, setLiveFireBaseNetWorth] = useState<number | null>(null);
 
   useEffect(() => {
     const storedTableOpen = window.localStorage.getItem(FIRE_TABLE_OPEN_KEY);
@@ -112,14 +132,19 @@ export default function FirePage() {
         return;
       }
 
-      const [settingsResult, debtsResult, wealthAssetsResult] = await Promise.all([
+      const [settingsResult, debtsResult, wealthAssetsResult, expensesResult, incomeResult, investmentsResult, cashBaselineResult, transfersResult] = await Promise.all([
         supabase
           .from("fire_settings")
           .select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("debts").select("outstanding_balance, currency, status, include_in_fire").eq("user_id", userId),
-        supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_fire").eq("user_id", userId)
+        supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_fire").eq("user_id", userId),
+        supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_fire").eq("user_id", userId),
+        supabase.from("expenses").select("amount, expense_date").eq("user_id", userId),
+        supabase.from("income").select("amount, income_date").eq("user_id", userId),
+        supabase.from("investments").select("quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
+        supabase.from("cash_baseline_settings").select("baseline_amount, baseline_date").eq("user_id", userId).maybeSingle(),
+        supabase.from("internal_transfers").select("amount, transfer_date, transfer_type").eq("user_id", userId).in("transfer_type", ["investment", "emergency_fund"])
       ]);
 
       const data = settingsResult.data;
@@ -133,6 +158,27 @@ export default function FirePage() {
         .reduce((sum, row) => sum + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, FALLBACK_RATES_TO_EUR), 0);
       setDebtTotal(registeredDebt);
       setFireAssetTotal(fireAssets);
+
+      const liveShared = computeSharedFinancialMetrics({
+        expenseRows: (expensesResult.data as ExpenseRow[] | null) ?? [],
+        incomeRows: (incomeResult.data as IncomeRow[] | null) ?? [],
+        investmentRows: (investmentsResult.data as InvestmentRow[] | null) ?? [],
+        debtRows: debtRows.map((row) => ({
+          ...row,
+          monthly_payment: row.monthly_payment ?? null,
+          include_in_net_worth: false
+        })),
+        savingsTargetRows: [],
+        budgetSavingsRows: [],
+        cashBaseline: (cashBaselineResult.data as CashBaselineRow | null) ?? null,
+        transferRows: ((transfersResult.data as InternalTransferRow[] | null) ?? []).filter(
+          (row): row is InternalTransferRow => row.transfer_type === "investment" || row.transfer_type === "emergency_fund"
+        ),
+        wealthAssetRows: [],
+        fireSettings: null,
+        ratesToEur: FALLBACK_RATES_TO_EUR
+      });
+      setLiveFireBaseNetWorth(liveShared.cashPosition + liveShared.investmentsValue + liveShared.emergencyFundReserved);
 
       if (!error && data) {
         const row = data as FireSettingsRow;
@@ -399,6 +445,25 @@ export default function FirePage() {
             <label className="grid gap-2 text-sm text-slate-200">
               Patrimonio base financiero antes de deuda (EUR)
               <input className={inputClass(Boolean(errors.currentNetWorth))} type="number" min="0" step="0.01" value={currentNetWorth} onChange={(e) => setCurrentNetWorth(e.target.value)} onBlur={() => validateField("currentNetWorth")} />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 transition hover:border-emerald-300/40 hover:bg-emerald-400/10"
+                  type="button"
+                  onClick={() => {
+                    if (liveFireBaseNetWorth !== null) {
+                      setCurrentNetWorth(liveFireBaseNetWorth.toFixed(2));
+                      setSaveMessage("Se ha copiado la base financiera viva del dashboard. Guarda para dejarla fija en FIRE.");
+                    }
+                  }}
+                >
+                  Usar patrimonio actual del dashboard
+                </button>
+                {liveFireBaseNetWorth !== null ? (
+                  <span className="text-xs text-slate-400">
+                    Base viva: {formatCurrencyByPreference(liveFireBaseNetWorth, currency)}
+                  </span>
+                ) : null}
+              </div>
               {errors.currentNetWorth ? <span className="text-xs text-red-300">{errors.currentNetWorth}</span> : null}
               {!errors.currentNetWorth ? <span className="text-xs text-slate-400">Bienes FIRE: {formatCurrencyByPreference(fireAssetTotal, currency)} · deuda registrada: {formatCurrencyByPreference(debtTotal, currency)} · patrimonio neto FIRE: {formatCurrencyByPreference(effectiveCurrentNetWorth, currency)}</span> : null}
             </label>
