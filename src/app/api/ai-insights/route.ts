@@ -3,19 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateRuleBasedInsights, type FinancialSnapshot } from "@/lib/ai-insights";
 import { type AssetCurrency, convertToEur, fetchRatesToEur } from "@/lib/currency-rates";
+import { buildSnapshotMetrics } from "@/lib/financial-snapshots";
 
 type ExpenseRow = { amount: number; expense_date: string; category: string };
-type IncomeRow = { amount: number; income_date: string };
 type InvestmentRow = { asset_name: string; quantity: number; average_buy_price: number; current_price: number | null; asset_currency: string | null };
-type DebtRow = { outstanding_balance: number; monthly_payment: number | null; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
-type SavingsTargetRow = { savings_target: number; month: string };
-type FireSettingsRow = {
-  annual_expenses: number;
-  current_net_worth: number;
-  annual_contribution: number;
-  expected_return: number;
-  current_age: number;
-};
 type AiInsightDebug = {
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -46,18 +37,6 @@ function isSameMonth(dateString: string, now: Date) {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 }
 
-function isWithinLast12Months(dateString: string, now: Date) {
-  const date = new Date(`${dateString}T00:00:00`);
-  const cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
-  cutoff.setMonth(cutoff.getMonth() - 11);
-  return date >= cutoff;
-}
-
-function isCurrentYear(dateString: string, now: Date) {
-  const date = new Date(`${dateString}T00:00:00`);
-  return date.getFullYear() === now.getFullYear();
-}
-
 function parseInsightsFromText(rawText: string) {
   const trimmed = rawText.trim();
 
@@ -79,74 +58,21 @@ function parseInsightsFromText(rawText: string) {
 
 async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
   const supabase = createAdminClient();
-  const ratesToEur = await fetchRatesToEur();
+  const [baseMetrics, ratesToEur] = await Promise.all([buildSnapshotMetrics(supabase, userId), fetchRatesToEur()]);
 
-  const [{ data: expenses }, { data: income }, { data: investments }, { data: debts }, { data: savingsTargets }, { data: fireSettings }] = await Promise.all([
+  const [{ data: expenses }, { data: investments }] = await Promise.all([
     supabase.from("expenses").select("amount, expense_date, category").eq("user_id", userId),
-    supabase.from("income").select("amount, income_date").eq("user_id", userId),
-    supabase.from("investments").select("asset_name, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId),
-    supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", userId),
-    supabase.from("monthly_savings_targets").select("savings_target, month").eq("user_id", userId),
-    supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return, current_age").eq("user_id", userId).maybeSingle()
+    supabase.from("investments").select("asset_name, quantity, average_buy_price, current_price, asset_currency").eq("user_id", userId)
   ]);
 
   const now = new Date();
   const expenseRows = (expenses as ExpenseRow[]) ?? [];
-  const incomeRows = (income as IncomeRow[]) ?? [];
   const investmentRows = (investments as InvestmentRow[]) ?? [];
-  const debtRows = (debts as DebtRow[]) ?? [];
-  const savingsTargetRows = (savingsTargets as SavingsTargetRow[]) ?? [];
-  const currentFireSettings = (fireSettings as FireSettingsRow | null) ?? null;
-
-  const monthlyExpenses = expenseRows.reduce(
-    (acc, row) => (isSameMonth(row.expense_date, now) ? acc + Number(row.amount) : acc),
-    0
-  );
-  const monthlyIncome = incomeRows.reduce((acc, row) => (isSameMonth(row.income_date, now) ? acc + Number(row.amount) : acc), 0);
-  const monthlySavingsTarget = savingsTargetRows.reduce(
-    (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.savings_target) : acc),
-    0
-  );
-  const savingsRate = monthlyIncome > 0 ? (monthlySavingsTarget / monthlyIncome) * 100 : null;
-
-  const annualExpenses = expenseRows.reduce(
-    (acc, row) => (isWithinLast12Months(row.expense_date, now) ? acc + Number(row.amount) : acc),
-    0
-  );
-  const annualIncome = incomeRows.reduce(
-    (acc, row) => (isWithinLast12Months(row.income_date, now) ? acc + Number(row.amount) : acc),
-    0
-  );
-  const annualSavings = savingsTargetRows.reduce(
-    (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.savings_target) : acc),
-    0
-  );
-
   const investmentsValue = investmentRows.reduce((acc, row) => {
     const qty = Number(row.quantity) || 0;
     const price = Number(row.current_price ?? row.average_buy_price) || 0;
     return acc + convertToEur(qty * price, row.asset_currency, ratesToEur);
   }, 0);
-  const monthlyDebtPayment = debtRows
-    .filter((row) => row.status !== "closed" && row.include_in_net_worth)
-    .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
-  const debtToIncomeRatio = monthlyIncome > 0 ? (monthlyDebtPayment / monthlyIncome) * 100 : null;
-
-  const totalIncomeAllTime = incomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
-  const totalExpensesAllTime = expenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-  const cashPosition = totalIncomeAllTime - totalExpensesAllTime;
-  const debtTotal = debtRows
-    .filter((row) => row.status !== "closed" && row.include_in_net_worth)
-    .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
-  const totalNetWorth = cashPosition + investmentsValue - debtTotal;
-
-  const fireAnnualExpenses =
-    currentFireSettings?.annual_expenses && currentFireSettings.annual_expenses > 0 ? currentFireSettings.annual_expenses : annualExpenses;
-  const fireNetWorth =
-    currentFireSettings && currentFireSettings.current_net_worth >= 0 ? Math.max(currentFireSettings.current_net_worth - debtTotal, 0) : totalNetWorth;
-
-  const fireTarget = fireAnnualExpenses > 0 ? fireAnnualExpenses / 0.04 : 0;
-  const fireProgress = fireTarget > 0 ? Math.min((fireNetWorth / fireTarget) * 100, 100) : 0;
   const investmentValues = investmentRows.map((row) => {
     const qty = Number(row.quantity) || 0;
     const price = Number(row.current_price ?? row.average_buy_price) || 0;
@@ -180,19 +106,21 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
     .slice(0, 3);
 
   return {
-    monthlyIncome,
-    monthlyExpenses,
-    monthlySavingsTarget,
-    annualIncome,
-    annualExpenses,
-    annualSavings,
-    savingsRate,
-    hasAnyIncome: incomeRows.length > 0,
-    hasCurrentMonthIncome: monthlyIncome > 0,
-    debtTotal,
-    monthlyDebtPayment,
-    debtToIncomeRatio,
-    netWorth: fireNetWorth,
+    monthlyIncome: baseMetrics.monthlyIncome,
+    monthlyExpenses: baseMetrics.monthlyExpenses,
+    monthlySavingsTarget: baseMetrics.savingsRate !== null && baseMetrics.monthlyIncome > 0
+      ? (baseMetrics.savingsRate / 100) * baseMetrics.monthlyIncome
+      : 0,
+    annualIncome: baseMetrics.annualIncome,
+    annualExpenses: baseMetrics.annualExpenses,
+    annualSavings: baseMetrics.annualSavings,
+    savingsRate: baseMetrics.savingsRate,
+    hasAnyIncome: baseMetrics.annualIncome > 0 || baseMetrics.monthlyIncome > 0,
+    hasCurrentMonthIncome: baseMetrics.monthlyIncome > 0,
+    debtTotal: baseMetrics.debtTotal,
+    monthlyDebtPayment: baseMetrics.monthlyDebtPayment,
+    debtToIncomeRatio: baseMetrics.monthlyIncome > 0 ? (baseMetrics.monthlyDebtPayment / baseMetrics.monthlyIncome) * 100 : null,
+    netWorth: baseMetrics.totalNetWorth,
     investmentsValue,
     investmentCount,
     pricedInvestmentCount,
@@ -200,8 +128,8 @@ async function getSnapshot(userId: string): Promise<FinancialSnapshot> {
     topInvestmentName: topInvestment?.name ?? null,
     topInvestmentWeight,
     nonEurExposurePct,
-    fireTarget,
-    fireProgress,
+    fireTarget: baseMetrics.fireTarget,
+    fireProgress: baseMetrics.fireProgress,
     topExpenseCategories
   };
 }

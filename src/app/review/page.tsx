@@ -16,7 +16,14 @@ import { DEFAULT_GUIDANCE_PREFERENCES, generateFinancialGuidance, type GuidanceC
 
 type IncomeRow = { amount: number; income_date: string };
 type ExpenseRow = { amount: number; category: string; expense_date: string };
-type DebtRow = { outstanding_balance: number; monthly_payment: number; currency: AssetCurrency | null; status: "active" | "paused" | "closed"; include_in_net_worth: boolean };
+type DebtRow = {
+  outstanding_balance: number;
+  monthly_payment: number;
+  currency: AssetCurrency | null;
+  status: "active" | "paused" | "closed";
+  include_in_net_worth: boolean;
+  include_in_fire: boolean;
+};
 type BudgetRow = { category: string; budget_amount: number; month: string };
 type SavingsTargetRow = { month: string; savings_target: number };
 type BudgetSavingsRow = {
@@ -49,7 +56,9 @@ type WealthAssetRow = {
 };
 type FireSettingsRow = {
   annual_expenses: number;
+  current_net_worth: number;
   annual_contribution: number;
+  expected_return: number;
 };
 type GoalRow = {
   id: string;
@@ -174,8 +183,8 @@ export default function ReviewPage() {
       supabase.from("monthly_savings_targets").select("month, savings_target").eq("user_id", uid),
       supabase.from("investments").select("asset_name, current_price, average_buy_price, quantity, asset_currency").eq("user_id", uid),
       supabase.from("wealth_assets").select("current_estimated_value, ownership_pct, currency, include_in_net_worth, include_in_fire").eq("user_id", uid),
-      supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth").eq("user_id", uid),
-      supabase.from("fire_settings").select("annual_expenses, annual_contribution").eq("user_id", uid).maybeSingle(),
+      supabase.from("debts").select("outstanding_balance, monthly_payment, currency, status, include_in_net_worth, include_in_fire").eq("user_id", uid),
+      supabase.from("fire_settings").select("annual_expenses, current_net_worth, annual_contribution, expected_return").eq("user_id", uid).maybeSingle(),
       supabase.from("financial_goals").select("id, goal_name, goal_type, target_amount, current_amount, monthly_contribution, status, priority, linked_category, linked_account").eq("user_id", uid).in("status", ["active", "paused"]).order("priority", { ascending: true }),
       supabase.from("monthly_review_tasks").select("task_key, completed").eq("user_id", uid).eq("review_month", monthToDate(selectedMonth)),
       supabase.from("monthly_review_closures").select("review_month, status, conclusion_title, conclusion_summary, manual_note, closed_at").eq("user_id", uid).order("review_month", { ascending: false }).limit(6),
@@ -284,6 +293,9 @@ export default function ReviewPage() {
     const debtTotal = debtRows
       .filter((row) => row.status !== "closed" && row.include_in_net_worth)
       .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const fireDebtTotal = debtRows
+      .filter((row) => row.status !== "closed" && row.include_in_fire)
+      .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
     const monthlyDebtPayment = debtRows
       .filter((row) => row.status !== "closed" && row.include_in_net_worth)
       .reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
@@ -301,8 +313,12 @@ export default function ReviewPage() {
     const emergencyFundReserved = internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "emergency_fund" ? Number(row.amount || 0) : 0), 0);
     const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
     const totalNetWorth = cashPosition + investmentValue + wealthAssetsValue + emergencyFundReserved - debtTotal;
+    const fireNetWorth =
+      fireSettings && Number(fireSettings.current_net_worth) >= 0
+        ? Math.max(Number(fireSettings.current_net_worth || 0) + fireIncludedWealthValue - fireDebtTotal, 0)
+        : totalNetWorth;
     const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
-    const fireProgress = fireTarget > 0 ? ((totalNetWorth + fireIncludedWealthValue - wealthAssetsValue) / fireTarget) * 100 : 0;
+    const fireProgress = fireTarget > 0 ? Math.min((fireNetWorth / fireTarget) * 100, 100) : 0;
     const activeGoals = goalRows.filter((row) => row.status === "active");
     const topGoals = [...activeGoals]
       .map((goal) => ({
@@ -332,6 +348,7 @@ export default function ReviewPage() {
       pricesConnected,
       investmentCount: investmentRows.length,
       totalNetWorth,
+      fireNetWorth,
       fireTarget,
       fireProgress,
       topGoals,
