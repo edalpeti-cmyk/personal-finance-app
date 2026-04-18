@@ -27,6 +27,7 @@ import { useTheme } from "@/components/theme-provider";
 import { formatCurrencyByPreference, formatDateByPreference } from "@/lib/preferences-format";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
 import { DEFAULT_GUIDANCE_PREFERENCES, generateFinancialGuidance, type GuidanceCategory, type GuidancePreferenceMap } from "@/lib/financial-guidance";
+import { computeSharedFinancialMetrics } from "@/lib/shared-financial-metrics";
 
 type ExpenseRow = { amount: number; expense_date: string };
 type IncomeRow = { amount: number; income_date: string };
@@ -2157,122 +2158,61 @@ export default function DashboardPage() {
       const savingsTargetRows = (savingsTargetsResult.data as SavingsTargetRow[]) ?? [];
       const fireSettings = (fireSettingsResult.data as FireSettingsRow | null) ?? null;
       const cashBaseline = (cashBaselineResult.data as CashBaselineSettingsRow | null) ?? null;
-      const transferRows = (transfersResult.data as InternalTransferRow[]) ?? [];
+      const transferRows = ((transfersResult.data as InternalTransferRow[]) ?? []).filter(
+        (row): row is InternalTransferRow & { transfer_type: "investment" | "emergency_fund" } =>
+          row.transfer_type === "investment" || row.transfer_type === "emergency_fund"
+      );
       const wealthAssetRows = (wealthAssetsResult.data as WealthAssetRow[]) ?? [];
 
       setExpenseRows(nextExpenseRows);
       setIncomeRows(nextIncomeRows);
       setInvestmentRows(investmentRows);
       setSavingsTargetRows(savingsTargetRows);
-      setBudgetSavingsRows((budgetSavingsResult.data as BudgetSavingsRow[]) ?? []);
+      const nextBudgetSavingsRows = (budgetSavingsResult.data as BudgetSavingsRow[]) ?? [];
+      setBudgetSavingsRows(nextBudgetSavingsRows);
 
-      const investmentsValue = investmentRows.reduce((acc, row) => {
-        const qty = Number(row.quantity) || 0;
-        const price = Number(row.current_price ?? row.average_buy_price) || 0;
-        return acc + convertToEur(qty * price, row.asset_currency, ratesToEur);
-      }, 0);
+      const shared = computeSharedFinancialMetrics({
+        now,
+        expenseRows: nextExpenseRows,
+        incomeRows: nextIncomeRows,
+        investmentRows,
+        debtRows,
+        savingsTargetRows,
+        budgetSavingsRows: nextBudgetSavingsRows,
+        cashBaseline,
+        transferRows,
+        wealthAssetRows,
+        fireSettings,
+        ratesToEur
+      });
 
-      const baselineStart = cashBaseline?.baseline_date ? `${cashBaseline.baseline_date}T00:00:00` : null;
-      const incomeFromBaseline = baselineStart
-        ? nextIncomeRows.reduce((acc, row) => acc + (new Date(`${row.income_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
-        : nextIncomeRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const expensesFromBaseline = baselineStart
-        ? nextExpenseRows.reduce((acc, row) => acc + (new Date(`${row.expense_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
-        : nextExpenseRows.reduce((acc, row) => acc + Number(row.amount), 0);
-      const investmentTransfersFromBaseline = baselineStart
-        ? transferRows.reduce((acc, row) => acc + (row.transfer_type === "investment" && new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount) : 0), 0)
-        : transferRows.reduce((acc, row) => acc + (row.transfer_type === "investment" ? Number(row.amount) : 0), 0);
-      const emergencyFundReserved = transferRows.reduce((acc, row) => acc + (row.transfer_type === "emergency_fund" ? Number(row.amount) : 0), 0);
-      const wealthAssetsValue = wealthAssetRows
-        .filter((row) => row.include_in_net_worth)
-        .reduce((acc, row) => acc + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, ratesToEur), 0);
-      const fireIncludedWealthValue = wealthAssetRows
-        .filter((row) => row.include_in_fire)
-        .reduce((acc, row) => acc + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, ratesToEur), 0);
-      const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
-      const debtTotal = debtRows
-        .filter((row) => row.status !== "closed" && row.include_in_net_worth)
-        .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
-      const fireDebtTotal = debtRows
-        .filter((row) => row.status !== "closed" && row.include_in_fire)
-        .reduce((acc, row) => acc + convertToEur(Number(row.outstanding_balance || 0), row.currency, ratesToEur), 0);
-      const monthlyDebtPayment = debtRows
-        .filter((row) => row.status !== "closed" && row.include_in_net_worth)
-        .reduce((acc, row) => acc + convertToEur(Number(row.monthly_payment || 0), row.currency, ratesToEur), 0);
-      const grossWorth = cashPosition + investmentsValue + emergencyFundReserved + wealthAssetsValue;
-      const totalNetWorth = grossWorth - debtTotal;
-
-      const monthExpenses = nextExpenseRows.reduce(
-        (acc, row) => (isSameMonth(row.expense_date, now) ? acc + Number(row.amount) : acc),
-        0
-      );
-      const monthIncome = nextIncomeRows.reduce(
-        (acc, row) => (isSameMonth(row.income_date, now) ? acc + Number(row.amount) : acc),
-        0
-      );
-      const monthSavingsTarget = savingsTargetRows.reduce(
-        (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.savings_target) : acc),
-        0
-      );
-      const monthBudgetSavings = (((budgetSavingsResult.data as BudgetSavingsRow[] | null) ?? [])).reduce(
-        (acc, row) => (isSameMonth(row.month, now) ? acc + Number(row.budget_amount || 0) : acc),
-        0
-      );
-      const totalMonthSavings = monthSavingsTarget + monthBudgetSavings;
-      const savingsRate = monthIncome > 0 ? (totalMonthSavings / monthIncome) * 100 : null;
-
-      const annualExpenses = nextExpenseRows.reduce(
-        (acc, row) => (isWithinLast12Months(row.expense_date, now) ? acc + Number(row.amount) : acc),
-        0
-      );
-      const annualSavings = savingsTargetRows.reduce(
-        (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.savings_target) : acc),
-        0
-      );
-      const annualBudgetSavings = (((budgetSavingsResult.data as BudgetSavingsRow[] | null) ?? [])).reduce(
-        (acc, row) => (isCurrentYear(row.month, now) ? acc + Number(row.budget_amount || 0) : acc),
-        0
-      );
-      const totalAnnualSavings = annualSavings + annualBudgetSavings;
-
-      const fireAnnualExpenses = fireSettings?.annual_expenses && fireSettings.annual_expenses > 0 ? fireSettings.annual_expenses : annualExpenses;
-      const fireNetWorth =
-        fireSettings && fireSettings.current_net_worth >= 0
-          ? Math.max(fireSettings.current_net_worth + fireIncludedWealthValue - fireDebtTotal, 0)
-          : totalNetWorth;
-      const fireAnnualContribution = fireSettings && fireSettings.annual_contribution >= 0 ? fireSettings.annual_contribution : Math.max(totalAnnualSavings, 0);
-      const fireExpectedReturn =
-        fireSettings && fireSettings.expected_return >= -20 && fireSettings.expected_return <= 30
-          ? fireSettings.expected_return / 100
-          : 0.05;
-
-      const fireTarget = fireAnnualExpenses > 0 ? fireAnnualExpenses / 0.04 : 0;
-      const fireProgress = fireTarget > 0 ? Math.min((fireNetWorth / fireTarget) * 100, 100) : 0;
-      const yearsToFire = fireTarget > 0 ? estimateYearsToFire(fireNetWorth, fireTarget, fireAnnualContribution, fireExpectedReturn) : null;
+      const fireTarget = shared.fireAnnualExpenses > 0 ? shared.fireAnnualExpenses / 0.04 : 0;
+      const fireProgress = fireTarget > 0 ? Math.min((shared.fireNetWorth / fireTarget) * 100, 100) : 0;
+      const yearsToFire = fireTarget > 0 ? estimateYearsToFire(shared.fireNetWorth, fireTarget, shared.fireAnnualContribution, shared.fireExpectedReturn) : null;
 
       setMetrics({
-        totalNetWorth,
-        savingsRate,
+        totalNetWorth: shared.totalNetWorth,
+        savingsRate: shared.savingsRate,
         fireTarget,
         fireProgress,
         yearsToFire,
-        annualExpenses,
-        annualSavings: totalAnnualSavings,
-        cashPosition,
-        investmentsValue,
-        debtTotal,
-        monthlyDebtPayment,
-        emergencyFundReserved,
-        wealthAssetsValue,
-        fireIncludedWealthValue,
-        grossWorth,
+        annualExpenses: shared.annualExpenses,
+        annualSavings: shared.totalAnnualSavings,
+        cashPosition: shared.cashPosition,
+        investmentsValue: shared.investmentsValue,
+        debtTotal: shared.debtTotal,
+        monthlyDebtPayment: shared.monthlyDebtPayment,
+        emergencyFundReserved: shared.emergencyFundReserved,
+        wealthAssetsValue: shared.wealthAssetsValue,
+        fireIncludedWealthValue: shared.fireIncludedWealthValue,
+        grossWorth: shared.grossWorth,
         usesCashBaseline: Boolean(cashBaseline?.baseline_date),
         cashBaselineDate: cashBaseline?.baseline_date ?? null,
-        fireNetWorth,
-        fireExpectedReturn
+        fireNetWorth: shared.fireNetWorth,
+        fireExpectedReturn: shared.fireExpectedReturn
       });
 
-      await persistSnapshot(userId, totalNetWorth, cashPosition, investmentsValue);
+      await persistSnapshot(userId, shared.totalNetWorth, shared.cashPosition, shared.investmentsValue);
       setLoading(false);
     };
 

@@ -13,6 +13,7 @@ import { useTheme } from "@/components/theme-provider";
 import { AssetCurrency, convertToEur, FALLBACK_RATES_TO_EUR } from "@/lib/currency-rates";
 import { formatCurrencyByPreference, formatMonthByPreference } from "@/lib/preferences-format";
 import { DEFAULT_GUIDANCE_PREFERENCES, generateFinancialGuidance, type GuidanceCategory, type GuidancePreferenceMap } from "@/lib/financial-guidance";
+import { computeSharedFinancialMetrics } from "@/lib/shared-financial-metrics";
 
 type IncomeRow = { amount: number; income_date: string };
 type ExpenseRow = { amount: number; category: string; expense_date: string };
@@ -280,44 +281,28 @@ export default function ReviewPage() {
       .filter((row) => row.delta > 0)
       .sort((a, b) => b.delta - a.delta);
 
-    const investmentValue = investmentRows.reduce((sum, row) => {
-      const unit = Number(row.current_price ?? row.average_buy_price ?? 0);
-      return sum + convertToEur(unit * Number(row.quantity || 0), row.asset_currency, FALLBACK_RATES_TO_EUR);
-    }, 0);
-    const wealthAssetsValue = wealthAssetRows
-      .filter((row) => row.include_in_net_worth)
-      .reduce((sum, row) => sum + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, FALLBACK_RATES_TO_EUR), 0);
-    const fireIncludedWealthValue = wealthAssetRows
-      .filter((row) => row.include_in_fire)
-      .reduce((sum, row) => sum + convertToEur(Number(row.current_estimated_value || 0) * (Number(row.ownership_pct || 0) / 100), row.currency, FALLBACK_RATES_TO_EUR), 0);
-    const debtTotal = debtRows
-      .filter((row) => row.status !== "closed" && row.include_in_net_worth)
-      .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
-    const fireDebtTotal = debtRows
-      .filter((row) => row.status !== "closed" && row.include_in_fire)
-      .reduce((sum, row) => sum + convertToEur(Number(row.outstanding_balance || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
-    const monthlyDebtPayment = debtRows
-      .filter((row) => row.status !== "closed" && row.include_in_net_worth)
-      .reduce((sum, row) => sum + convertToEur(Number(row.monthly_payment || 0), row.currency, FALLBACK_RATES_TO_EUR), 0);
+    const shared = computeSharedFinancialMetrics({
+      expenseRows,
+      incomeRows,
+      investmentRows,
+      debtRows,
+      savingsTargetRows: savingsTargets,
+      budgetSavingsRows,
+      cashBaseline,
+      transferRows: internalTransferRows,
+      wealthAssetRows,
+      fireSettings,
+      ratesToEur: FALLBACK_RATES_TO_EUR
+    });
+    const investmentValue = shared.investmentsValue;
+    const debtTotal = shared.debtTotal;
+    const monthlyDebtPayment = shared.monthlyDebtPayment;
     const pricesConnected = investmentRows.filter((row) => row.current_price !== null).length;
-    const baselineStart = cashBaseline?.baseline_date ? `${cashBaseline.baseline_date}T00:00:00` : null;
-    const incomeFromBaseline = baselineStart
-      ? incomeRows.reduce((sum, row) => sum + (new Date(`${row.income_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount || 0) : 0), 0)
-      : incomeRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-    const expensesFromBaseline = baselineStart
-      ? expenseRows.reduce((sum, row) => sum + (new Date(`${row.expense_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount || 0) : 0), 0)
-      : expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-    const investmentTransfersFromBaseline = baselineStart
-      ? internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "investment" && new Date(`${row.transfer_date}T00:00:00`) >= new Date(baselineStart) ? Number(row.amount || 0) : 0), 0)
-      : internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "investment" ? Number(row.amount || 0) : 0), 0);
-    const emergencyFundReserved = internalTransferRows.reduce((sum, row) => sum + (row.transfer_type === "emergency_fund" ? Number(row.amount || 0) : 0), 0);
-    const cashPosition = (cashBaseline ? Number(cashBaseline.baseline_amount || 0) : 0) + incomeFromBaseline - expensesFromBaseline - investmentTransfersFromBaseline - emergencyFundReserved;
-    const totalNetWorth = cashPosition + investmentValue + wealthAssetsValue + emergencyFundReserved - debtTotal;
-    const fireNetWorth =
-      fireSettings && Number(fireSettings.current_net_worth) >= 0
-        ? Math.max(Number(fireSettings.current_net_worth || 0) + fireIncludedWealthValue - fireDebtTotal, 0)
-        : totalNetWorth;
-    const fireTarget = fireSettings ? Number(fireSettings.annual_expenses || 0) / 0.04 : 0;
+    const cashPosition = shared.cashPosition;
+    const totalNetWorth = shared.totalNetWorth;
+    const fireNetWorth = shared.fireNetWorth;
+    const wealthAssetsValue = shared.wealthAssetsValue;
+    const fireTarget = shared.fireAnnualExpenses > 0 ? shared.fireAnnualExpenses / 0.04 : 0;
     const fireProgress = fireTarget > 0 ? Math.min((fireNetWorth / fireTarget) * 100, 100) : 0;
     const activeGoals = goalRows.filter((row) => row.status === "active");
     const topGoals = [...activeGoals]
@@ -342,7 +327,7 @@ export default function ReviewPage() {
       debtTotal,
       wealthAssetsValue,
       cashPosition,
-      emergencyFundReserved,
+      emergencyFundReserved: shared.emergencyFundReserved,
       monthlyDebtPayment,
       debtPaymentRatio: currentIncome > 0 ? (monthlyDebtPayment / currentIncome) * 100 : null,
       pricesConnected,
